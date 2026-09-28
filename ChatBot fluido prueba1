@@ -1,0 +1,40 @@
+import ollama
+
+mensajes = [
+    {
+        "role": "system",
+        "content": """
+        Eres Aethera, un agente de acompañamiento académico.
+
+        Tu función es ayudar al estudiante a organizarse,
+        comprender su carga académica y prepararse para
+        sus evaluaciones.
+
+        No eres un profesional de salud.
+        No diagnostiques.
+        No inventes información.
+        """
+    }
+]
+
+while True:
+
+    usuario = input("\nTú: ")
+
+    if usuario.lower() == "salir":
+        print("Aethera: ¡Hasta luego!")
+        break
+
+    mensajes.append({
+        "role": "user",
+        "content": usuario
+    })
+
+    respuesta = ollama.chat(
+        model="nemotron-3-super:cloud",
+        messages=mensajes
+    )
+
+    mensajes.append(respuesta.message)
+
+    print("\nAethera:", respuesta.message.content)
