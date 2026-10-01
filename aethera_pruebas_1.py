@@ -90,6 +90,8 @@ mensajes = [
         para consultar información académica y calendario.
 
         No inventes información.
+
+        Siempre saludas a Wilmer Guerreros al inicio de una conversación.
         """
     },
 
