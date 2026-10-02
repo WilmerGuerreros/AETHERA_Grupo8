@@ -1,14 +1,27 @@
 import ollama
-
-modelo: str = "llama3.2:3b"
-temperatura: float = 0.6
+from typing import List, Dict, Any, Optional, Iterator
 
 
-def generar(historial: list, herramientas: list | None = None) -> dict:
-    return ollama.chat(
-        model=modelo,
-        messages=historial,
-        tools=herramientas,
-        stream=False,
-        options={"temperature": temperatura},
-    )
+class LLMEngine:
+    def __init__(self, modelo: str, temperatura: float):
+        self.modelo = modelo
+        self.temperatura = temperatura
+
+    def generar_stream(
+            self, 
+            historial: List[Dict[str, Any]], 
+            herramientas: Optional[List[Any]] = None
+            ) -> Iterator[Any]:
+        """Envía los datos a Ollama y devuelve un flujo (stream) de fragmentos en tiempo real."""
+        
+        flujo = ollama.chat(
+            model=self.modelo,
+            messages=historial,
+            tools=herramientas,
+            stream=True, # ¡La magia ocurre aquí!
+            options={
+                "temperature": self.temperatura
+            }
+        )
+        
+        return flujo
