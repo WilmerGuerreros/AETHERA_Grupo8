@@ -4,7 +4,12 @@ from tools import LISTA_HERRAMIENTAS
 
 
 def iniciar_app():
-    motor = LLMEngine("llama3.2:3b", 0.6)
+    configuracion = {
+        'temperature': 0.2,
+        'num_ctx': 8196 #2^n
+    }
+    
+    motor = LLMEngine("llama3.2:3b", configuracion)
     system = """
 Eres GuIA, un asistente que ayuda a los estudiantes de 
 AETHERA.
