@@ -28,7 +28,7 @@ class ChatSession:
 
             self.historial.append({"role": "user", "content": usuario})
             
-            print("GuIA> ", end="", flush=True) # Preparamos el inicio de la línea
+            print("GuIA> ", end="", flush=True)
             
             texto_completo: str = ""
             flujo_respuesta = self.motor.generar_stream(self.historial)
