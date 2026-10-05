@@ -9,7 +9,7 @@ def iniciar_app():
         'num_ctx': 8196 #2^n
     }
     
-    motor = LLMEngine("llama3.2:3b", configuracion)
+    motor = LLMEngine("qwen2.5:7b", configuracion)
     system = """
 Eres GuIA, un asistente que ayuda a los estudiantes de 
 AETHERA.
