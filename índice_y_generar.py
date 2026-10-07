@@ -1,6 +1,6 @@
 import json
 from config_de_carpetas import carpeta_indice, carpeta_resumen 
-from resumen_por_memoria import generar_resumen_memoria 
+from resumen_por_memoria import generar_resumen_memoria
 
 def cargar_indice():
 

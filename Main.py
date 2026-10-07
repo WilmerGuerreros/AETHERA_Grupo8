@@ -1,6 +1,8 @@
 from LLMEngine import LLMEngine
 from ChatSession import ChatSession
+from guardar_historial_con_fecha import guardar_historial
 from tools import LISTA_HERRAMIENTAS
+from memoria_inicial import mensajes
 
 
 def iniciar_app():
@@ -9,23 +11,19 @@ def iniciar_app():
         'num_ctx': 8196 #2^n
     }
     
-    motor = LLMEngine("qwen2.5:7b", configuracion)
-    system = """
-Eres GuIA, un asistente que ayuda a los estudiantes de 
-AETHERA.
-"""
-    historial = [
-        {
-            'role': 'system',
-            'content': system,
-        }
-    ]
-    chat = ChatSession(motor, historial, LISTA_HERRAMIENTAS)
+    motor = LLMEngine("nemotron-3-super:cloud", configuracion)
+    chat = ChatSession(
+        motor,
+        mensajes,
+        LISTA_HERRAMIENTAS,
+        al_completar_turno=lambda usuario, respuesta: guardar_historial(
+            usuario,
+            respuesta,
+            motor.modelo,
+        ),
+    )
     chat.iniciar_chat()
 
 
 if __name__ == "__main__":
-    iniciar_app() 
-
-
-#aaaaaaaaaaaaaaaaaaaaaaaaaa
+    iniciar_app()

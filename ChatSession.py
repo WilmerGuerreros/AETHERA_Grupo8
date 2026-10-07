@@ -1,3 +1,5 @@
+from typing import Callable, Optional
+
 from LLMEngine import LLMEngine
 
 
@@ -7,10 +9,12 @@ class ChatSession:
         motor: LLMEngine,
         historial: list,
         lista_herramientas: dict,
+        al_completar_turno: Optional[Callable[[str, str], None]] = None,
     ):
         self.motor = motor
         self.historial = historial
         self.lista_herramientas = lista_herramientas
+        self.al_completar_turno = al_completar_turno
 
 #---------------- METODO DE BUCLE DEL CHAT --------------
     def iniciar_chat(self):
@@ -35,7 +39,8 @@ class ChatSession:
 #---------------- METODO DE BUCLE DE HERRAMIENTAS ----------------
     def _procesar_respuesta(self):
         """Maneja el stream y la ejecución cíclica de herramientas si el modelo las solicita."""
-        
+        usuario = self.historial[-1]["content"]
+
         while True:
             print("GuIA> ", end="", flush=True)
             
@@ -74,6 +79,8 @@ class ChatSession:
 
             # 3. Si el modelo no pidió ninguna herramienta, terminamos el turno
             if not herramientas_solicitadas:
+                if self.al_completar_turno is not None:
+                    self.al_completar_turno(usuario, texto_completo)
                 break
 
             # 4. Si pidió herramientas, las ejecutamos en local
