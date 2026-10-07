@@ -3,7 +3,7 @@ import datetime
 def obtener_fecha_hora() -> str:
     """
     Obtiene la fecha y hora actual exacta del sistema en tiempo real. 
-    Útil cuando el usuario pregunta qué hora es, qué día es hoy, o necesitas ubicarte temporalmente.
+    úsalo cuando requieras ubicarte temporalmente.
     """
     ahora = datetime.datetime.now()
     

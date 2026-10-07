@@ -99,7 +99,3 @@ Returns:
                     pass
 
     return eventos_encontrados
-
-
-# Mantiene disponible el nombre usado antes de registrar la herramienta en el agente.
-consultar_calendario_academico = calendario_academico
