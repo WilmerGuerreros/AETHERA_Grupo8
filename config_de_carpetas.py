@@ -1,7 +1,3 @@
-from pathlib import Path
-from datetime import datetime
-import json
-import ollama
 
 
 carpeta_memoria = Path("MEMORIA DE AETHERA AI")

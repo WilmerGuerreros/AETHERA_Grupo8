@@ -1,4 +1,4 @@
-import config_de_carpetas
+from config_de_carpetas import obtener_ultimo_archivo 
 
 def inicializar_memoria():
 
