@@ -1,4 +1,5 @@
-
+import os 
+from pathlib import Path 
 
 carpeta_memoria = Path("MEMORIA DE AETHERA AI")
 

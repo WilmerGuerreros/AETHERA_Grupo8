@@ -1,5 +1,7 @@
 import ollama 
-
+from config_de_carpetas import carpeta_resumen 
+from config_de_carpetas import carpeta_historial 
+from config_de_carpetas import carpeta_indice 
 
 def generar_resumen(archivo_historial, numero_seccion):
 
