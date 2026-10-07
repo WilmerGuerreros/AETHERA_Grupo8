@@ -1,3 +1,4 @@
+import ollama 
 
 
 def generar_resumen(archivo_historial, numero_seccion):
