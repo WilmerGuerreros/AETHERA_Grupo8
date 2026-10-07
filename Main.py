@@ -1,8 +1,8 @@
 from LLMEngine import LLMEngine
 from ChatSession import ChatSession
-from guardar_historial_con_fecha import guardar_historial
+from memoria.guardar_historial import guardar_historial
 from tools import LISTA_HERRAMIENTAS
-from memoria_inicial import mensajes
+from memoria.contexto_inicial import mensajes
 
 SYSTEM_PROMPT = """Eres un Asistente de Bienestar Universitario empático y estructurado. Tu objetivo es ayudar a los estudiantes a manejar el estrés, la carga académica y la salud mental mediante escucha activa, clasificación de su estado y orientación práctica. No eres un psicólogo clínico, sino un guía de primera línea.
 

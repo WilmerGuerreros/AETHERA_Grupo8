@@ -26,7 +26,3 @@ def generar_resumen(archivo_historial, numero_seccion, modelo="qwen2.5:7b"):
     with open(archivo_resumen, "w", encoding="utf-8") as resumen:
         resumen.write(respuesta.message.content)
     return archivo_resumen
-
-
-def generar_resumen_memoria(archivo_historial, numero_seccion, modelo="qwen2.5:7b"):
-    return generar_resumen(archivo_historial, numero_seccion, modelo)

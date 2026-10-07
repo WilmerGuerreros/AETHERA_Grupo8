@@ -1,0 +1,1 @@
+"""Operaciones de memoria persistente de Aethera."""

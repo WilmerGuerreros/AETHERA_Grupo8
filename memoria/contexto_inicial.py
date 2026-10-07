@@ -1,8 +1,6 @@
-from retomar_memoria_escritura import (
-    inicializar_memoria,
-    obtener_ultimas_interacciones,
-    obtener_ultimo_resumen,
-)
+from .inicializar_memoria import inicializar_memoria
+from .obtener_ultimas_interacciones import obtener_ultimas_interacciones
+from .obtener_ultimo_resumen import obtener_ultimo_resumen
 
 
 numero_seccion, contador_mensajes = inicializar_memoria()
