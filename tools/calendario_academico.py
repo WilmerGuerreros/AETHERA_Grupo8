@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Obtiene la carpeta 'tools' (donde está la herramienta)
@@ -8,38 +8,38 @@ TOOLS_DIR = Path(__file__).resolve().parent
 # .parent sube a la raíz ('mi_proyecto') e ingresa a 'Resources/D7_calendar.ics'
 RUTA_RECURSOS = TOOLS_DIR.parent / "Resources" / "D7_calendar.ics"
 
-def consultar_eventos_calendario(fecha_inicio: str, fecha_fin: str, etiqueta: str) -> list[dict]:
+def calendario_academico(fecha_inicio: str, fecha_fin: str, tipo: str) -> list[dict]:
     """
-Consulta y filtra los eventos registrados en el calendario académico dentro de un rango temporal específico.
+Consulta eventos del calendario académico en un rango de fechas inclusivo.
 
 Args:
-    fecha_inicio (str): Fecha de inicio del intervalo a consultar en formato 'YYYY-MM-DD' (ej: '2026-01-01').
-    fecha_fin (str): Fecha de término del intervalo a consultar en formato 'YYYY-MM-DD' (ej: '2026-03-31').
-    etiqueta (str): Categoría específica del evento a filtrar. Las opciones válidas registradas en el sistema son:
-        - 'any': Recupera todos los eventos dentro del intervalo sin filtrar por categoría.
-        - 'period_start': Inicios de períodos académicos[cite: 1].
-        - 'evaluation_week': Semanas de evaluaciones intermedias y finales[cite: 1].
-        - 'wellbeing_activity': Semanas de pausa y actividades de bienestar[cite: 1].
-        - 'period_end': Cierres de períodos académicos[cite: 1].
-        - 'university_activity': Encuentros estudiantiles y actividades universitarias específicas[cite: 1].
+    fecha_inicio (str): Fecha inicial en formato 'YYYY-MM-DD'.
+    fecha_fin (str): Fecha final en formato 'YYYY-MM-DD'.
+    tipo (str): Categoría exacta: 'period_start' (inicios), 'evaluation_week' (exámenes), 'wellbeing_activity' (pausas), 'period_end' (cierres), 'university_activity' (encuentros) o 'any' (todos).
 
 Returns:
-    list[dict]: Lista de objetos donde cada elemento representa un evento que cumple con los criterios solicitados.
-        Estructura de cada diccionario:
-        - 'resumen' (str): Título o descripción breve del evento[cite: 1].
-        - 'categoria' (str): Etiqueta asignada en el calendario[cite: 1].
-        - 'fecha_inicio' (str): Fecha en que inicia el evento en formato 'YYYY-MM-DD'[cite: 1].
-        - 'fecha_fin' (str): Fecha en que concluye el evento en formato 'YYYY-MM-DD'[cite: 1].
-        - 'periodo_id' (str): Identificador del período académico asociado (ej: 'PER_2026_1')[cite: 1].
-        - 'distrito_id' (str): Identificador del distrito al que pertenece el evento o 'ALL' si aplica a toda la institución[cite: 1].
-        
-        En caso de error en los parámetros o la ruta del recurso, retorna una lista con un diccionario indicando la clave 'error'.
+    list[dict]: Lista de eventos con claves: 'resumen', 'categoria', 'fecha_inicio', 'fecha_fin', 'periodo_id', 'distrito_id'. Si falla, retorna [{'error': 'motivo'}].
 """
     try:
         dt_inicio_busqueda = datetime.strptime(fecha_inicio, "%Y-%m-%d")
         dt_fin_busqueda = datetime.strptime(fecha_fin, "%Y-%m-%d")
     except ValueError:
         return [{"error": "Las fechas deben tener el formato YYYY-MM-DD."}]
+
+    if dt_inicio_busqueda > dt_fin_busqueda:
+        return [{"error": "La fecha de inicio no puede ser posterior a la fecha de fin."}]
+
+    tipo_normalizado = tipo.strip().lower()
+    categorias_validas = {
+        "any",
+        "period_start",
+        "evaluation_week",
+        "wellbeing_activity",
+        "period_end",
+        "university_activity",
+    }
+    if tipo_normalizado not in categorias_validas:
+        return [{"error": f"Categoría inválida: {tipo}. Usa una de estas opciones: {', '.join(sorted(categorias_validas))}."}]
 
     if not os.path.exists(RUTA_RECURSOS):
         return [{"error": f"No se encontró el archivo en la ruta: {RUTA_RECURSOS}"}]
@@ -65,21 +65,22 @@ Returns:
             
             # Sombra/Comprobación: si es 'any', ignora el filtro por categoría
             coincide_etiqueta = (
-                etiqueta.lower() == "any" or 
-                etiqueta.lower() in categoria_evento.lower()
+                tipo_normalizado == "any" or
+                tipo_normalizado == categoria_evento.lower()
             )
 
             dt_start_evento = evento_actual.get("_DTSTART_OBJ")
             dt_end_evento = evento_actual.get("_DTEND_OBJ")
 
             if coincide_etiqueta and dt_start_evento and dt_end_evento:
-                # Comprobar si hay solapamiento con el intervalo
-                if dt_start_evento <= dt_fin_busqueda and dt_end_evento >= dt_inicio_busqueda:
+                # En eventos de día completo, DTEND es exclusivo según el formato ICS.
+                fecha_fin_evento = dt_end_evento - timedelta(days=1)
+                if dt_start_evento <= dt_fin_busqueda and fecha_fin_evento >= dt_inicio_busqueda:
                     eventos_encontrados.append({
                         "resumen": evento_actual.get("SUMMARY"),
                         "categoria": evento_actual.get("CATEGORIES"),
                         "fecha_inicio": dt_start_evento.strftime("%Y-%m-%d"),
-                        "fecha_fin": dt_end_evento.strftime("%Y-%m-%d"),
+                        "fecha_fin": fecha_fin_evento.strftime("%Y-%m-%d"),
                         "periodo_id": evento_actual.get("X-AETHERA-PERIOD-ID"),
                         "distrito_id": evento_actual.get("X-AETHERA-DISTRICT-ID")
                     })
@@ -98,3 +99,7 @@ Returns:
                     pass
 
     return eventos_encontrados
+
+
+# Mantiene disponible el nombre usado antes de registrar la herramienta en el agente.
+consultar_calendario_academico = calendario_academico
