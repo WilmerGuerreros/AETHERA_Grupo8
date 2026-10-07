@@ -2,7 +2,6 @@ from LLMEngine import LLMEngine
 from ChatSession import ChatSession
 from tools import LISTA_HERRAMIENTAS
 
-
 def iniciar_app():
     configuracion = {
         'temperature': 0.2,
@@ -22,6 +21,8 @@ AETHERA.
     ]
     chat = ChatSession(motor, historial, LISTA_HERRAMIENTAS)
     chat.iniciar_chat()
+
+
 
 
 if __name__ == "__main__":
