@@ -60,8 +60,9 @@ def buscar_servicios_ayuda(
     Args:
         categoria: Uno de 'academic_pressure', 'social_support',
             'career_concern', 'sleep_and_routine' o 'service_navigation'.
-        distrito: Identificador opcional del distrito, por ejemplo 'DIST_GAIA'.
-            Si se omite, se devuelven los servicios de todos los distritos.
+        distrito: Identificador opcional: 'DIST_GAIA', 'DIST_HORIZON',
+            'DIST_NEBULA', 'DIST_QUANTUM' o 'DIST_VECTOR'. Si se omite,
+            se devuelven los servicios de todos los distritos.
 
     Returns:
         Un diccionario con la categoría, los servicios relacionados y una nota

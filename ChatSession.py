@@ -37,7 +37,7 @@ class ChatSession:
         """Maneja el stream y la ejecución cíclica de herramientas si el modelo las solicita."""
         
         while True:
-            print("GuIA> ", end="", flush=True)
+            print("\nAETHERA> ", end="", flush=True)
             
             texto_completo = ""
             herramientas_solicitadas = []
