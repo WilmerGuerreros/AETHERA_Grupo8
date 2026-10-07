@@ -8,7 +8,6 @@ from retomar_memoria_escritura import inicializar_memoria
 
 numero_seccion, contador_mensajes = inicializar_memoria()
 
-    
 def guardar_historial(usuario, respuesta, modelo="qwen2.5:7b"):
 
     global numero_seccion
@@ -96,4 +95,6 @@ def guardar_historial(usuario, respuesta, modelo="qwen2.5:7b"):
             f"[Memoria] Nueva sección: "
             f"HISTORIAL_{numero_seccion:04d}"
         )
+
+
 
