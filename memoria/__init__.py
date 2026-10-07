@@ -1,1 +1,1 @@
-"""Operaciones de memoria persistente de Aethera."""
+"""Funciones de memoria persistente, organizadas por operación."""

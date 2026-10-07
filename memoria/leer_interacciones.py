@@ -1,3 +1,4 @@
+from .guardar_interaccion import guardar_interaccion
 def leer_interacciones(archivo):
     if not archivo.exists():
         return []
@@ -10,11 +11,7 @@ def leer_interacciones(archivo):
         for linea in historial:
             linea = linea.rstrip("\n")
             if linea.startswith("=" * 10):
-                if usuario is not None and respuesta is not None:
-                    interacciones.append({
-                        "usuario": "\n".join(usuario).strip(),
-                        "aethera": "\n".join(respuesta).strip(),
-                    })
+                guardar_interaccion(interacciones, usuario, respuesta)
                 usuario = None
                 respuesta = None
             elif linea.startswith("Usuario:"):
@@ -26,10 +23,5 @@ def leer_interacciones(archivo):
             elif usuario is not None:
                 usuario.append(linea)
 
-    if usuario is not None and respuesta is not None:
-        interacciones.append({
-            "usuario": "\n".join(usuario).strip(),
-            "aethera": "\n".join(respuesta).strip(),
-        })
-
+    guardar_interaccion(interacciones, usuario, respuesta)
     return interacciones
