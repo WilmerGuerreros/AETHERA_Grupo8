@@ -2,7 +2,6 @@ from LLMEngine import LLMEngine
 from ChatSession import ChatSession
 from tools import LISTA_HERRAMIENTAS
 
-
 def iniciar_app():
     configuracion = {
         'temperature': 0.2,
@@ -45,5 +44,9 @@ REGLAS DE TONO Y ESTILO:
     chat.iniciar_chat()
 
 
+
+
 if __name__ == "__main__":
-    iniciar_app()
+    iniciar_app() 
+
+
