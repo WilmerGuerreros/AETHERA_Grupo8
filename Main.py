@@ -5,7 +5,7 @@ from tools import LISTA_HERRAMIENTAS
 def iniciar_app():
     configuracion = {
         'temperature': 0.2,
-        'num_ctx': 8196 #2^n
+        'num_ctx': 16384 #2^n
     }
     
     motor = LLMEngine("nemotron-3-super:cloud", configuracion)
