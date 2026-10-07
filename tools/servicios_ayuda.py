@@ -65,8 +65,8 @@ def buscar_servicios_ayuda(
             se devuelven los servicios de todos los distritos.
 
     Returns:
-        Un diccionario con la categoría, los servicios relacionados y una nota
-        de seguridad. Cada servicio incluye ubicación, horario, canales,
+        Un diccionario con la categoría y los servicios relacionados.
+        Cada servicio incluye ubicación, horario, canales,
         elegibilidad e información requerida para derivar.
     """
     if (
@@ -175,8 +175,4 @@ def buscar_servicios_ayuda(
         "categoria": categoria_normalizada,
         "distrito": distrito_normalizado,
         "servicios": servicios,
-        "nota_seguridad": (
-            "Orientación sintética y no clínica; requiere revisión humana. "
-            "No diagnostica ni reemplaza la atención profesional."
-        ),
     }
