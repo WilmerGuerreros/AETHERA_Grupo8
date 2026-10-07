@@ -1,3 +1,5 @@
+
+
 def generar_resumen(archivo_historial, numero_seccion):
 
     print("\nGenerando resumen de memoria...")
