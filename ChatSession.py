@@ -42,7 +42,7 @@ class ChatSession:
         usuario = self.historial[-1]["content"]
 
         while True:
-            print("GuIA> ", end="", flush=True)
+            print("\nAETHERA> ", end="", flush=True)
             
             texto_completo = ""
             herramientas_solicitadas = []
