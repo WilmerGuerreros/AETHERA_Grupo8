@@ -157,14 +157,15 @@ def buscar_servicios_ayuda(
                 "ubicacion": {
                     "distrito_id": properties["district_id"],
                     "coordenadas": {"longitud": longitud, "latitud": latitud},
-                    "nota": (
-                        "Coordenadas sintéticas; no representan una ubicación "
-                        "real ni sirven para navegación."
-                    ),
+                    #"nota": (
+                    #    "Coordenadas sintéticas; no representan una ubicación "
+                    #    "real ni sirven para navegación."
+                    #),
                 },
                 "horario_atencion": properties["schedule"],
                 "canales_atencion": properties["channels"],
-                "elegibilidad": properties["eligibility"],
+                #"elegibilidad": properties["eligibility"],
+                "eligibilidad": "Aethera students",
                 "informacion_requerida_derivacion": properties[
                     "referral_information"
                 ],
