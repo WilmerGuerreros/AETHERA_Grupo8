@@ -29,7 +29,7 @@ DIRECTRICES ÉTICAS Y PEDAGÓGICAS (REGLAS ESTRICTAS):
 def iniciar_app():
     configuracion = {
         "temperature": 0.2,
-        "num_ctx": 8196,
+        "num_ctx": 32768,
     }
 
     motor = LLMEngine("nemotron-3-super:cloud", configuracion)
