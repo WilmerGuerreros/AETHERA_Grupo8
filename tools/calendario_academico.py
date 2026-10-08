@@ -10,13 +10,12 @@ RUTA_RECURSOS = TOOLS_DIR.parent / "Resources" / "D7_calendar.ics"
 
 def calendario_academico(tipo: str, fecha_inicio: str = '1900-01-01', fecha_fin: str = '2100-01-01') -> list[dict]:
     """
-Consulta eventos del calendario académico en un rango de fechas inclusivo. Si
-no te dan un rango específico, se usa un valor por defecto (1900-01-01, 2100-01-01)
+Consulta eventos del calendario académico en un rango de fechas inclusivo.
 
 Args:
     tipo (str): Categoría exacta: 'period_start' (inicios), 'evaluation_week' (exámenes), 'wellbeing_activity' (pausas), 'period_end' (cierres), 'university_activity' (encuentros) o 'any' (todos).
-    fecha_inicio (str): Fecha inicial en formato 'YYYY-MM-DD'.
-    fecha_fin (str): Fecha final en formato 'YYYY-MM-DD'.
+    fecha_inicio (str): Fecha inicial en formato 'YYYY-MM-DD' (por defecto 1900-01-01).
+    fecha_fin (str): Fecha final en formato 'YYYY-MM-DD' (por defecto 2100-01-01).
 
 Returns:
     list[dict]: Lista de eventos con claves: 'resumen', 'categoria', 'fecha_inicio', 'fecha_fin', 'periodo_id', 'distrito_id'. Si falla, retorna [{'error': 'motivo'}].
