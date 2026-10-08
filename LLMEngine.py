@@ -1,12 +1,22 @@
 import ollama
 from typing import List, Dict, Any, Optional, Iterator
 
-from generar_stream import generar_stream as _generar_stream
-
 
 class LLMEngine:
     def __init__(self, modelo: str, configuracion: dict):
         self.modelo = modelo
         self.configuracion = configuracion
 
-    generar_stream = _generar_stream
+    def generar_stream(
+        self,
+        historial: List[Dict[str, Any]],
+        herramientas: Optional[List[Any]] = None,
+    ) -> Iterator[Any]:
+        """Envía el historial a Ollama y devuelve fragmentos de respuesta."""
+        return ollama.chat(
+            model=self.modelo,
+            messages=historial,
+            tools=herramientas,
+            stream=True,
+            options=self.configuracion,
+        )
