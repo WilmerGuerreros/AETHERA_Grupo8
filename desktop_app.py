@@ -2,6 +2,7 @@
 
 import queue
 import math
+import re
 import threading
 import time
 import tkinter as tk
@@ -57,6 +58,10 @@ SERVICE_CHANNELS = {
     "digital": "En línea",
     "phone": "Teléfono",
 }
+INLINE_MARKDOWN = re.compile(
+    r"(\*\*.+?\*\*|__.+?__|(?<!\*)\*(?!\*).+?(?<!\*)\*(?!\*)|`[^`\n]+`|~~.+?~~)"
+)
+EMOJI_CHAR = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
 WEEKDAYS = {
     "Mon-Fri": "Lunes a viernes",
     "Mon-Sat": "Lunes a sábado",
@@ -133,8 +138,8 @@ class RoundedFrame(tk.Frame):
             (radius, height - radius, 90),
             (radius, radius, 180),
         ):
-            for step in range(7):
-                angle = (start + step * 90 / 6) * math.pi / 180
+            for step in range(13):
+                angle = (start + step * 90 / 12) * math.pi / 180
                 points.extend(
                     (
                         center_x + radius * math.cos(angle),
@@ -240,8 +245,8 @@ class RoundedButton(tk.Canvas):
             (radius, height - radius, 90),
             (radius, radius, 180),
         ):
-            for step in range(7):
-                angle = (start + step * 15) * 3.141592653589793 / 180
+            for step in range(13):
+                angle = math.radians(start + step * 7.5)
                 points.extend(
                     (
                         center_x + radius * math.cos(angle),
@@ -354,6 +359,8 @@ class AnimatedDropdown(tk.Frame):
         self.animation_id = None
         self._outside_binding = None
         self._selection_animation_id = None
+        self._hover_animations = {}
+        self._hover_starts = {}
         self.selection_color = self._option_color(textvariable.get())
         self.canvas = tk.Canvas(
             self,
@@ -576,6 +583,7 @@ class AnimatedDropdown(tk.Frame):
             pady=2,
         ).pack(side="right")
         self.option_rows = []
+        self._hover_animations = {}
         for index, value in enumerate(self.values):
             self._create_option(body, value, index)
         self.popup.update_idletasks()
@@ -653,36 +661,65 @@ class AnimatedDropdown(tk.Frame):
         )
         marker.pack(side="right")
         for widget in (row, stripe, dot, label, marker):
-            widget.bind("<Enter>", lambda event, item=row, color=accent: self._hover_option(item, color))
+            widget.bind("<Enter>", lambda _event, item=row, color=accent: self._hover_option(item, color))
             widget.bind("<Leave>", lambda _event, item=row, chosen=selected: self._unhover_option(item, chosen))
             widget.bind("<Button-1>", lambda _event, selected_value=value: self.select(selected_value))
         self.option_rows.append(row)
 
     def _hover_option(self, row, accent):
-        row.configure(bg="#302e58")
-        for child in row.winfo_children():
-            if isinstance(child, (tk.Label, tk.Canvas)) and child.cget("bg") not in (accent,):
-                child.configure(bg="#302e58")
-        row.configure(highlightbackground=accent, highlightthickness=1)
+        self._animate_option_color(row, "#353363", accent, 1)
 
     def _unhover_option(self, row, selected):
         base = "#27264a" if selected else "#131a2d"
-        row.configure(bg=base, highlightthickness=0)
+        self._animate_option_color(row, base, COLORS["accent_light"], 1, restore=True)
+
+    def _animate_option_color(self, row, target, accent, step, restore=False):
+        if not row.winfo_exists():
+            return
+        old_job = self._hover_animations.get(str(row))
+        if old_job:
+            self.after_cancel(old_job)
+        current = row.cget("bg")
+        start = current if step == 1 else self._hover_starts.get(str(row), current)
+        if step == 1:
+            self._hover_starts[str(row)] = start
+        progress = min(1.0, step / 9)
+        eased = progress * progress * (3 - 2 * progress)
+        color = _mix_color(start, target, eased)
+        row.configure(
+            bg=color,
+            highlightbackground=accent,
+            highlightthickness=0 if restore and step == 9 else 1,
+        )
         for child in row.winfo_children():
             if isinstance(child, (tk.Label, tk.Canvas)):
-                child.configure(bg=base)
+                child.configure(bg=color)
+        if step < 9:
+            self._hover_animations[str(row)] = self.after(
+                16,
+                lambda: self._animate_option_color(
+                    row,
+                    target,
+                    accent,
+                    step + 1,
+                    restore,
+                ),
+            )
+        else:
+            self._hover_animations.pop(str(row), None)
+            self._hover_starts.pop(str(row), None)
 
     def _animate_open(self, step):
         if not self.popup or not self.popup.winfo_exists():
             return
-        progress = min(1.0, step / 10)
-        eased = 1 - (1 - progress) ** 3
+        progress = min(1.0, step / 18)
+        eased = 1 - (1 - progress) ** 4
         height = max(1, round(self.popup_height * eased))
         self.popup.geometry(
             f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
         )
-        if step < 10:
-            self.animation_id = self.after(12, lambda: self._animate_open(step + 1))
+        if step < 18:
+            self.animation_id = self.after(16, lambda: self._animate_open(step + 1))
 
     def select(self, value):
         old_color = self._option_color(self.textvariable.get())
@@ -699,13 +736,13 @@ class AnimatedDropdown(tk.Frame):
     def _animate_selection(self, old_color, new_color, step):
         if not self.winfo_exists():
             return
-        progress = min(1.0, step / 9)
+        progress = min(1.0, step / 18)
         eased = 1 - (1 - progress) ** 3
         self.selection_color = _mix_color(old_color, new_color, eased)
         self._draw()
-        if step < 9:
+        if step < 18:
             self._selection_animation_id = self.after(
-                18,
+                22,
                 lambda: self._animate_selection(old_color, new_color, step + 1),
             )
 
@@ -756,14 +793,15 @@ class AnimatedDropdown(tk.Frame):
     def _animate_close(self, popup, step):
         if not popup.winfo_exists():
             return
-        progress = min(1.0, step / 7)
-        height = max(1, round(self.popup_height * (1 - progress) ** 2))
+        progress = min(1.0, step / 14)
+        eased = progress * progress * (3 - 2 * progress)
+        height = max(1, round(self.popup_height * (1 - eased)))
         popup.geometry(
             f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
         )
-        if step < 7:
+        if step < 14:
             self.animation_id = self.after(
-                12,
+                16,
                 lambda: self._animate_close(popup, step + 1),
             )
         else:
@@ -995,11 +1033,13 @@ class AetheraDesktopApp:
         return RoundedButton(parent, text, command, primary=primary)
 
     def _animate_scroll_to_bottom(self, canvas):
-        self._animate_scroll(canvas, 1.0)
+        self._animate_scroll(canvas, 1.0, duration=340)
 
-    def _animate_scroll(self, canvas, target, duration=190):
+    def _animate_scroll(self, canvas, target, duration=340):
         key = str(canvas)
         animation = self._scroll_animations.get(key)
+        if animation and abs(animation["target"] - target) < 0.001:
+            return
         if animation and animation.get("after_id"):
             self.root.after_cancel(animation["after_id"])
         start = canvas.yview()[0] if animation is None else animation["current"]
@@ -1020,7 +1060,7 @@ class AetheraDesktopApp:
             return
         elapsed = time.monotonic() - animation["started"]
         progress = min(1.0, elapsed / animation["duration"])
-        eased = 1 - (1 - progress) ** 3
+        eased = (1 - math.cos(math.pi * progress)) / 2
         current = animation["start"] + (
             animation["target"] - animation["start"]
         ) * eased
@@ -1037,8 +1077,8 @@ class AetheraDesktopApp:
     def _on_mousewheel(self, canvas, event):
         delta = -1 if event.delta > 0 else 1
         current = canvas.yview()[0]
-        target = min(1.0, max(0.0, current + delta * 0.08))
-        self._animate_scroll(canvas, target, duration=160)
+        target = min(1.0, max(0.0, current + delta * 0.12))
+        self._animate_scroll(canvas, target, duration=280)
         return "break"
 
     def _handle_mousewheel(self, event):
@@ -1098,7 +1138,7 @@ class AetheraDesktopApp:
             bg="#171a3a",
             border="#4d4c99",
             radius=30,
-            gradient=("#171b3c", "#212052", "#30245f"),
+            gradient=("#171a3a", "#171a3a", "#30245f"),
         )
         welcome.pack(fill="x", pady=(0, 18))
         left = tk.Frame(welcome, bg="#171a3a")
@@ -1373,6 +1413,7 @@ class AetheraDesktopApp:
     def _refresh_calendar(self, direction=0):
         if not hasattr(self, "calendar_canvas") or not self.calendar_canvas.winfo_exists():
             return
+        self._calendar_transition_direction = direction or 1
         for after_id in self._calendar_animation_ids:
             self.root.after_cancel(after_id)
         self._calendar_animation_ids.clear()
@@ -1444,6 +1485,9 @@ class AetheraDesktopApp:
         canvas = self.calendar_canvas
         if not canvas.winfo_exists():
             return
+        for after_id in self._calendar_animation_ids:
+            self.root.after_cancel(after_id)
+        self._calendar_animation_ids.clear()
         width = max(canvas.winfo_width(), 900)
         start = self.calendar_week_start
         days = [start + timedelta(days=index) for index in range(7)]
@@ -1788,7 +1832,26 @@ class AetheraDesktopApp:
                     edge,
                 ),
             )
-            self._animate_calendar_event(canvas, tag, y0, y1, fill, direction=-1)
+            self._animate_calendar_event(
+                canvas,
+                tag,
+                y0,
+                y1,
+                fill,
+                direction=getattr(self, "_calendar_transition_direction", -1),
+            )
+
+    def _schedule_calendar_animation(self, callback, delay):
+        after_id = None
+
+        def run():
+            if after_id in self._calendar_animation_ids:
+                self._calendar_animation_ids.remove(after_id)
+            callback()
+
+        after_id = self.root.after(delay, run)
+        self._calendar_animation_ids.append(after_id)
+        return after_id
 
     def _canvas_round_rect(self, canvas, x0, y0, x1, y1, radius, fill, outline, tags=()):
         radius = min(radius, (x1 - x0) / 2, (y1 - y0) / 2)
@@ -1799,8 +1862,8 @@ class AetheraDesktopApp:
             (x0 + radius, y1 - radius, 90),
             (x0 + radius, y0 + radius, 180),
         ):
-            for step in range(7):
-                angle = math.radians(start_angle + step * 15)
+            for step in range(13):
+                angle = math.radians(start_angle + step * 7.5)
                 points.extend(
                     (
                         cx + radius * math.cos(angle),
@@ -1836,43 +1899,59 @@ class AetheraDesktopApp:
         self.calendar_canvas.configure(cursor="arrow")
 
     def _animate_calendar_event(self, canvas, tag, y0, y1, fill, direction):
-        del y1
-        start_y = y0 - 18 * direction
-        canvas.move(tag, 0, start_y - y0)
+        start_y = y0 + 34
+        start_x = -direction * 22
+        canvas.move(tag, start_x, start_y - y0)
         background_tag = f"{tag}_bg"
-        initial_outline = COLORS["surface_light"]
-        canvas.itemconfigure(background_tag, outline=initial_outline)
+        initial_fill = _mix_color(fill, COLORS["surface"], 0.76)
+        initial_outline = _mix_color(fill, COLORS["surface"], 0.55)
+        canvas.itemconfigure(
+            background_tag,
+            fill=initial_fill,
+            outline=initial_outline,
+        )
 
         def step(index):
             if not canvas.winfo_exists():
                 return
-            progress = index / 8
-            eased = 1 - (1 - progress) ** 3
-            canvas.move(tag, 0, (y0 - start_y) / 8)
+            progress = min(1.0, index / 20)
+            eased = (1 - math.cos(math.pi * progress)) / 2
+            previous = (1 - math.cos(math.pi * max(0, progress - 1 / 20))) / 2
+            canvas.move(
+                tag,
+                -start_x * (eased - previous),
+                -(start_y - y0) * (eased - previous),
+            )
             canvas.itemconfigure(
                 background_tag,
+                fill=_mix_color(initial_fill, fill, eased),
                 outline=_mix_color(initial_outline, fill, eased),
             )
-            if index < 8:
-                after_id = self.root.after(18, lambda: step(index + 1))
-                self._calendar_animation_ids.append(after_id)
+            if index < 20:
+                self._schedule_calendar_animation(
+                    lambda: step(index + 1),
+                    22,
+                )
 
-        after_id = self.root.after(18, lambda: step(1))
-        self._calendar_animation_ids.append(after_id)
+        self._schedule_calendar_animation(lambda: step(1), 22)
 
     def _animate_calendar_header(self, canvas, direction, left, top, right):
-        canvas.move("calendar_event", direction * 24, 0)
+        del left, top, right
+        canvas.move("calendar_event", -direction * 32, 0)
 
-        def settle(index):
+        def settle(index, previous=0.0):
             if not canvas.winfo_exists():
                 return
-            canvas.move("calendar_event", -direction * 3, 0)
-            if index < 8:
-                after_id = self.root.after(15, lambda: settle(index + 1))
-                self._calendar_animation_ids.append(after_id)
+            progress = min(1.0, index / 18)
+            eased = (1 - math.cos(math.pi * progress)) / 2
+            canvas.move("calendar_event", direction * 32 * (eased - previous), 0)
+            if index < 18:
+                self._schedule_calendar_animation(
+                    lambda: settle(index + 1, eased),
+                    18,
+                )
 
-        after_id = self.root.after(15, lambda: settle(1))
-        self._calendar_animation_ids.append(after_id)
+        self._schedule_calendar_animation(lambda: settle(1), 18)
 
     def _show_calendar_event(self, event):
         dialog = tk.Toplevel(self.root)
@@ -1886,7 +1965,7 @@ class AetheraDesktopApp:
             dialog,
             radius=28,
             bg=COLORS["surface"],
-            gradient=("#17213b", "#17172f", "#25204c"),
+            gradient=("#17213b", "#17213b", "#25204c"),
         )
         panel.pack(fill="both", expand=True, padx=14, pady=14)
         category = event.get("categoria", "")
@@ -2192,7 +2271,7 @@ class AetheraDesktopApp:
             self.service_cards_container,
             bg=COLORS["surface_light"],
             radius=22,
-            gradient=("#202d4b", "#19243d", "#24204a"),
+            gradient=("#202d4b", COLORS["surface_light"], "#24204a"),
         )
         card.grid(
             row=index // 2,
@@ -2406,12 +2485,15 @@ class AetheraDesktopApp:
         outer = tk.Frame(self.message_list, bg=COLORS["background"])
         outer.pack(fill="x", padx=15, pady=8)
         bubble_color = "#30245f" if is_user else COLORS["surface"]
+        bubble_center = "#5b52e8" if is_user else COLORS["surface"]
+        if is_user:
+            bubble_color = bubble_center
         bubble = self._card(
             outer,
             bg=bubble_color,
             border=COLORS["accent_light"] if is_user else COLORS["border"],
             radius=24,
-            gradient=("#7666ff", "#5b52e8", "#3c73cb") if is_user else None,
+            gradient=("#7666ff", bubble_center, "#3c73cb") if is_user else None,
         )
         bubble.pack(side="right" if is_user else "left", padx=(80, 0) if is_user else (0, 80))
         tk.Label(
@@ -2421,17 +2503,133 @@ class AetheraDesktopApp:
             fg="white" if is_user else COLORS["accent_light"],
             font=(FONT, 10, "bold"),
         ).pack(anchor="w", padx=18, pady=(14, 4))
-        tk.Label(
+        body = self._create_formatted_message(
             bubble,
-            text=text,
-            bg=bubble_color,
-            fg="white" if is_user else COLORS["text"],
-            font=(FONT, 12),
-            justify="left",
-            wraplength=max(460, self.root.winfo_width() - 540),
-        ).pack(anchor="w", padx=18, pady=(0, 15))
+            text,
+            background=bubble_color,
+            foreground="white" if is_user else COLORS["text"],
+            width=max(50, (self.root.winfo_width() - 560) // 9),
+        )
+        body.pack(anchor="w", padx=18, pady=(0, 15))
         self._animate_card_in(outer)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
+
+    def _create_formatted_message(self, parent, text, background, foreground, width):
+        line_count = self._estimate_message_lines(text, width)
+        body = tk.Text(
+            parent,
+            width=width,
+            height=line_count,
+            wrap="word",
+            bg=background,
+            fg=foreground,
+            insertwidth=0,
+            borderwidth=0,
+            highlightthickness=0,
+            relief="flat",
+            padx=0,
+            pady=0,
+            font=(FONT, 12),
+            cursor="arrow",
+            takefocus=False,
+            spacing1=2,
+            spacing3=2,
+        )
+        body.tag_configure("bold", font=(FONT, 12, "bold"))
+        body.tag_configure("italic", font=(FONT, 12, "italic"))
+        body.tag_configure("code", font=("Consolas", 11), foreground="#b6c8ff")
+        body.tag_configure(
+            "heading",
+            font=(FONT, 14, "bold"),
+            foreground=COLORS["accent_light"],
+            spacing1=7,
+            spacing3=4,
+        )
+        body.tag_configure(
+            "quote",
+            foreground="#c1cce2",
+            lmargin1=14,
+            lmargin2=14,
+        )
+        body.tag_configure("emoji", font=("Segoe UI Emoji", 12))
+        body.tag_configure("strike", overstrike=True)
+        self._insert_formatted_text(body, text)
+        body.configure(state="disabled")
+        return body
+
+    def _estimate_message_lines(self, text, width):
+        available = max(20, width)
+        lines = 0
+        for line in text.splitlines() or [""]:
+            lines += max(1, math.ceil(len(line) / available))
+        return min(28, max(1, lines))
+
+    def _insert_formatted_text(self, widget, text):
+        for line_index, line in enumerate(text.splitlines()):
+            if line_index:
+                widget.insert("end", "\n")
+            heading_match = re.match(r"^\s{0,3}(#{1,3})\s+(.*)$", line)
+            if heading_match:
+                widget.insert("end", f"{heading_match.group(2)}\n", "heading")
+                continue
+            quote_match = re.match(r"^\s*>\s?(.*)$", line)
+            if quote_match:
+                self._insert_inline_formatted_text(
+                    widget,
+                    quote_match.group(1),
+                    base_tag="quote",
+                )
+                continue
+            list_match = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$", line)
+            if list_match:
+                marker = "•" if list_match.group(2) in {"-", "*", "+"} else f"{list_match.group(2)}"
+                widget.insert("end", f"{list_match.group(1)}{marker}  ")
+                self._insert_inline_formatted_text(widget, list_match.group(3))
+                continue
+            self._insert_inline_formatted_text(widget, line)
+        if text.endswith("\n"):
+            widget.insert("end", "\n")
+
+    def _set_formatted_text(self, widget, text):
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        self._insert_formatted_text(widget, text)
+        widget.configure(
+            height=self._estimate_message_lines(
+                text,
+                max(50, (self.root.winfo_width() - 560) // 9),
+            ),
+            state="disabled",
+        )
+
+    def _insert_inline_formatted_text(self, widget, text, base_tag=None):
+        for part in INLINE_MARKDOWN.split(text):
+            if not part:
+                continue
+            tag = base_tag
+            value = part
+            if part.startswith(("**", "__")) and part.endswith(part[:2]):
+                value = part[2:-2]
+                tag = "bold"
+            elif part.startswith("~~") and part.endswith("~~"):
+                value = part[2:-2]
+                tag = "strike"
+            elif part.startswith("`") and part.endswith("`"):
+                value = part[1:-1]
+                tag = "code"
+            elif part.startswith("*") and part.endswith("*"):
+                value = part[1:-1]
+                tag = "italic"
+
+            segments = EMOJI_CHAR.split(value)
+            emojis = EMOJI_CHAR.findall(value)
+            for index, segment in enumerate(segments):
+                if segment:
+                    tags = tuple(item for item in (base_tag, tag) if item)
+                    widget.insert("end", segment, tags)
+                if index < len(emojis):
+                    tags = tuple(item for item in (base_tag, tag, "emoji") if item)
+                    widget.insert("end", emojis[index], tags)
 
     def _send_from_shortcut(self, _event):
         self._send_message()
@@ -2509,41 +2707,40 @@ class AetheraDesktopApp:
             text=f"{self.status_base}  {dots}",
             fg=color,
         )
-        self._typing_after_id = self.root.after(360, self._pulse_typing_indicator)
+        self._typing_after_id = self.root.after(500, self._pulse_typing_indicator)
 
     def _append_stream_chunk(self, chunk):
         if not hasattr(self, "stream_bubble"):
             outer = tk.Frame(self.message_list, bg=COLORS["background"])
             outer.pack(fill="x", padx=15, pady=8)
+            stream_background = "#14283b"
             self.stream_bubble = self._card(
                 outer,
-                bg="#15223a",
+                bg=stream_background,
                 border="#405176",
                 radius=24,
-                gradient=("#17223d", "#14283b", "#20214b"),
+                gradient=("#17223d", stream_background, "#20214b"),
             )
             self.stream_bubble.pack(side="left", padx=(0, 80))
             tk.Label(
                 self.stream_bubble,
                 text="Aethera",
-                bg="#17223d",
+                bg=stream_background,
                 fg=COLORS["accent_light"],
                 font=(FONT, 10, "bold"),
             ).pack(anchor="w", padx=18, pady=(14, 4))
-            self.stream_text = tk.Label(
+            self.stream_text = self._create_formatted_message(
                 self.stream_bubble,
-                text="",
-                bg="#17223d",
-                fg=COLORS["text"],
-                font=(FONT, 12),
-                justify="left",
-                wraplength=max(460, self.root.winfo_width() - 540),
+                "",
+                background=stream_background,
+                foreground=COLORS["text"],
+                width=max(50, (self.root.winfo_width() - 560) // 9),
             )
             self.stream_text.pack(anchor="w", padx=18, pady=(0, 15))
             self.stream_content = ""
             self._animate_card_in(outer)
         self.stream_content += chunk
-        self.stream_text.configure(text=self.stream_content)
+        self._set_formatted_text(self.stream_text, self.stream_content)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
     def _set_status(self, status):
@@ -2580,6 +2777,7 @@ class AetheraDesktopApp:
             final_top, final_bottom = (int(value) for value in padding)
         else:
             final_top = final_bottom = int(padding)
+        steps = 18
         widget.configure(highlightthickness=0)
         rounded = next(
             (
@@ -2595,9 +2793,10 @@ class AetheraDesktopApp:
         def step(index):
             if not widget.winfo_exists():
                 return
-            progress = index / 5
-            top = round(final_top * progress)
-            bottom = round(final_bottom * progress)
+            progress = min(1.0, index / steps)
+            eased = (1 - math.cos(math.pi * progress)) / 2
+            top = round(final_top * eased)
+            bottom = round(final_bottom * eased)
             if grid:
                 widget.grid_configure(pady=(top, bottom))
             else:
@@ -2606,11 +2805,11 @@ class AetheraDesktopApp:
                 rounded.border = _mix_color(
                     parent_bg,
                     original_border,
-                    progress,
+                    eased,
                 )
                 rounded._draw()
-            if index < 5:
-                self.root.after(16, lambda: step(index + 1))
+            if index < steps:
+                self.root.after(20, lambda: step(index + 1))
 
         self.root.after(0, lambda: step(1))
 
