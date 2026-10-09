@@ -1307,7 +1307,7 @@ class AetheraDesktopApp:
     def _show_dashboard(self):
         self._label(
             self.content,
-            f"¡Holaaaaaaaaaaaa!  {self._greeting()}",
+            f"Hola, de nuevo!!!  {self._greeting()}",
             size=24,
             weight="bold",
             bg=COLORS["background"],
