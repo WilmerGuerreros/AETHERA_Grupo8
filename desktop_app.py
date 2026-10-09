@@ -1,6 +1,7 @@
 """Interfaz de escritorio para Aethera, construida con Tkinter."""
 
 import queue
+import math
 import threading
 import tkinter as tk
 from datetime import date, datetime
@@ -35,6 +36,201 @@ SERVICE_CATEGORIES = {
     "Sueño y rutinas": "sleep_and_routine",
     "Orientación sobre servicios": "service_navigation",
 }
+SERVICE_TYPES = {
+    "counseling": "Orientación",
+    "peer_support": "Acompañamiento entre pares",
+    "career_guidance": "Orientación vocacional",
+}
+SERVICE_DISTRICTS = {
+    "Todos los distritos": None,
+    "Distrito Gaia": "DIST_GAIA",
+    "Distrito Horizon": "DIST_HORIZON",
+    "Distrito Nebula": "DIST_NEBULA",
+    "Distrito Quantum": "DIST_QUANTUM",
+    "Distrito Vector": "DIST_VECTOR",
+}
+SERVICE_CHANNELS = {
+    "in_person": "Presencial",
+    "digital": "En línea",
+    "phone": "Teléfono",
+}
+WEEKDAYS = {
+    "Mon-Fri": "Lunes a viernes",
+    "Mon-Sat": "Lunes a sábado",
+    "Mon-Sun": "Todos los días",
+}
+
+
+class RoundedFrame(tk.Frame):
+    """Marco con fondo redondeado dibujado en un canvas de Tk."""
+
+    def __init__(self, parent, bg, border, radius=14, **kwargs):
+        parent_bg = parent.cget("bg")
+        super().__init__(parent, bg=parent_bg, **kwargs)
+        self.fill = bg
+        self.border = border
+        self.radius = radius
+        self.canvas = tk.Canvas(self, bg=parent_bg, highlightthickness=0, bd=0)
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.bind("<Configure>", self._draw)
+
+    def _draw(self, _event=None):
+        width = self.winfo_width()
+        height = self.winfo_height()
+        if width < 2 or height < 2:
+            return
+        radius = min(self.radius, width // 2, height // 2)
+        points = []
+        for center_x, center_y, start in (
+            (width - radius, radius, -90),
+            (width - radius, height - radius, 0),
+            (radius, height - radius, 90),
+            (radius, radius, 180),
+        ):
+            for step in range(7):
+                angle = (start + step * 90 / 6) * 3.141592653589793 / 180
+                points.extend(
+                    (
+                        center_x + radius * math.cos(angle),
+                        center_y + radius * math.sin(angle),
+                    )
+                )
+        self.canvas.delete("rounded")
+        self.canvas.create_polygon(
+            *points,
+            smooth=True,
+            splinesteps=24,
+            fill=self.fill,
+            outline=self.border,
+            width=1,
+            tags="rounded",
+        )
+
+
+class RoundedButton(tk.Canvas):
+    """Botón de estilo minimalista con estados hover y presionado."""
+
+    def __init__(self, parent, text, command, primary=False):
+        self.primary = primary
+        self.command = command
+        self.text = text
+        self.disabled = False
+        self.hovered = False
+        self.pressed = False
+        self.focused = False
+        self.bg_normal = COLORS["accent"] if primary else COLORS["surface_light"]
+        self.bg_hover = COLORS["accent_light"] if primary else "#253252"
+        width = max(104, len(text) * 7 + 34)
+        super().__init__(
+            parent,
+            width=width,
+            height=40,
+            bg=getattr(parent, "fill", parent.cget("bg")),
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+            takefocus=True,
+        )
+        self.bind("<Configure>", self._draw)
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<FocusIn>", self._on_focus)
+        self.bind("<FocusOut>", self._on_blur)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self.bind("<Return>", self._invoke)
+        self.bind("<space>", self._invoke)
+
+    def _draw(self, _event=None):
+        self.delete("button")
+        width = self.winfo_width()
+        height = self.winfo_height()
+        if width < 2 or height < 2:
+            return
+        radius = min(12, height // 2)
+        points = []
+        for center_x, center_y, start in (
+            (width - radius, radius, -90),
+            (width - radius, height - radius, 0),
+            (radius, height - radius, 90),
+            (radius, radius, 180),
+        ):
+            for step in range(7):
+                angle = (start + step * 15) * 3.141592653589793 / 180
+                points.extend(
+                    (
+                        center_x + radius * math.cos(angle),
+                        center_y + radius * math.sin(angle),
+                    )
+                )
+        fill = self.bg_normal
+        if self.disabled:
+            fill = COLORS["border"]
+        elif self.pressed:
+            fill = COLORS["accent"]
+        elif self.hovered:
+            fill = self.bg_hover
+        self.create_polygon(
+            *points,
+            smooth=True,
+            splinesteps=20,
+            fill=fill,
+            outline=COLORS["accent_light"] if self.focused else fill,
+            width=2 if self.focused else 1,
+            tags="button",
+        )
+        self.create_text(
+            width / 2,
+            height / 2,
+            text=self.text,
+            fill="#8792ad" if self.disabled else "white",
+            font=(FONT, 9, "bold"),
+            tags="button",
+        )
+
+    def _on_enter(self, _event):
+        self.hovered = True
+        self._draw()
+
+    def _on_leave(self, _event):
+        self.hovered = False
+        self.pressed = False
+        self._draw()
+
+    def _on_focus(self, _event):
+        self.focused = True
+        self._draw()
+
+    def _on_blur(self, _event):
+        self.focused = False
+        self._draw()
+
+    def _on_press(self, _event):
+        if not self.disabled:
+            self.pressed = True
+            self._draw()
+
+    def _on_release(self, event):
+        was_pressed = self.pressed
+        self.pressed = False
+        self._draw()
+        inside = 0 <= event.x <= self.winfo_width() and 0 <= event.y <= self.winfo_height()
+        if was_pressed and inside and not self.disabled:
+            self.command()
+
+    def _invoke(self, _event=None):
+        if not self.disabled:
+            self.command()
+        return "break"
+
+    def configure(self, cnf=None, **kwargs):
+        state = kwargs.pop("state", None)
+        if state is not None:
+            self.disabled = state == "disabled"
+            self.configure(cursor="arrow" if self.disabled else "hand2")
+            self._draw()
+        if kwargs or cnf:
+            super().configure(cnf, **kwargs)
 
 
 class AetheraDesktopApp:
@@ -150,6 +346,24 @@ class AetheraDesktopApp:
                 cursor="hand2",
             )
             button.pack(fill="x", padx=12, pady=2)
+            button.bind(
+                "<Enter>",
+                lambda _event, item=button, selected_page=page: (
+                    item.configure(
+                        bg=COLORS["accent"] if self.current_page == selected_page else COLORS["surface_light"],
+                        fg=COLORS["text"],
+                    )
+                ),
+            )
+            button.bind(
+                "<Leave>",
+                lambda _event, item=button, selected_page=page: (
+                    item.configure(
+                        bg=COLORS["accent"] if self.current_page == selected_page else COLORS["sidebar"],
+                        fg="white" if self.current_page == selected_page else COLORS["muted"],
+                    )
+                ),
+            )
             self.nav_buttons[page] = button
 
         spacer = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
@@ -214,11 +428,11 @@ class AetheraDesktopApp:
         self.content.pack(fill="both", expand=True, padx=30, pady=24)
 
     def _card(self, parent, **kwargs):
-        return tk.Frame(
+        return RoundedFrame(
             parent,
             bg=kwargs.pop("bg", COLORS["surface"]),
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
+            border=kwargs.pop("border", COLORS["border"]),
+            radius=kwargs.pop("radius", 14),
             **kwargs,
         )
 
@@ -233,21 +447,7 @@ class AetheraDesktopApp:
         )
 
     def _button(self, parent, text, command, primary=False):
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            relief="flat",
-            bd=0,
-            padx=16,
-            pady=10,
-            bg=COLORS["accent"] if primary else COLORS["surface_light"],
-            fg="white" if primary else COLORS["text"],
-            activebackground=COLORS["accent_light"],
-            activeforeground="white",
-            font=(FONT, 9, "bold"),
-            cursor="hand2",
-        )
+        return RoundedButton(parent, text, command, primary=primary)
 
     def show_page(self, page):
         if self.current_page == "Asistente IA" and page != "Asistente IA":
@@ -533,73 +733,323 @@ class AetheraDesktopApp:
 
         controls = self._card(self.content)
         controls.pack(fill="x", pady=(0, 14))
-        self._label(controls, "¿Qué tipo de orientación buscas?", weight="bold").pack(
-            anchor="w", padx=18, pady=(16, 7)
+        self._label(
+            controls,
+            "Filtra las opciones para encontrar el apoyo adecuado",
+            size=11,
+            weight="bold",
+        ).pack(anchor="w", padx=18, pady=(16, 12))
+        filters = tk.Frame(controls, bg=COLORS["surface"])
+        filters.pack(fill="x", padx=18, pady=(0, 16))
+
+        category_filter = tk.Frame(filters, bg=COLORS["surface"])
+        category_filter.pack(side="left", padx=(0, 12))
+        self._label(category_filter, "TIPO DE APOYO", size=8, color=COLORS["muted"]).pack(
+            anchor="w", pady=(0, 5)
         )
         self.category_var = tk.StringVar(value=next(iter(SERVICE_CATEGORIES)))
-        selector = ttk.Combobox(
-            controls,
+        self.category_selector = ttk.Combobox(
+            category_filter,
             textvariable=self.category_var,
             values=tuple(SERVICE_CATEGORIES),
             state="readonly",
             style="Aethera.TCombobox",
-            width=34,
+            width=30,
         )
-        selector.pack(side="left", padx=18, pady=(0, 16))
-        self._button(controls, "Buscar opciones", self._load_services, primary=True).pack(
-            side="left", pady=(0, 16)
+        self.category_selector.pack()
+
+        district_filter = tk.Frame(filters, bg=COLORS["surface"])
+        district_filter.pack(side="left", padx=(0, 12))
+        self._label(district_filter, "DISTRITO", size=8, color=COLORS["muted"]).pack(
+            anchor="w", pady=(0, 5)
         )
+        self.district_var = tk.StringVar(value=next(iter(SERVICE_DISTRICTS)))
+        self.district_selector = ttk.Combobox(
+            district_filter,
+            textvariable=self.district_var,
+            values=tuple(SERVICE_DISTRICTS),
+            state="readonly",
+            style="Aethera.TCombobox",
+            width=22,
+        )
+        self.district_selector.pack()
+
+        search_filter = tk.Frame(filters, bg=COLORS["surface"])
+        search_filter.pack(side="left", fill="x", expand=True)
+        self._label(search_filter, "BUSCAR SERVICIO", size=8, color=COLORS["muted"]).pack(
+            anchor="w", pady=(0, 5)
+        )
+        self.service_search_var = tk.StringVar()
+        search_entry = tk.Entry(
+            search_filter,
+            textvariable=self.service_search_var,
+            bg=COLORS["surface_light"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief="flat",
+            font=(FONT, 9),
+            highlightthickness=1,
+            highlightbackground=COLORS["border"],
+            highlightcolor=COLORS["accent"],
+        )
+        search_entry.pack(fill="x", ipady=9)
+
+        self.category_selector.bind("<<ComboboxSelected>>", self._on_service_filter)
+        self.district_selector.bind("<<ComboboxSelected>>", self._on_service_filter)
+        self.service_search_var.trace_add("write", self._on_service_search)
 
         self.services_result = self._card(self.content)
         self.services_result.pack(fill="both", expand=True)
-        self._label(
+        results_header = tk.Frame(self.services_result, bg=COLORS["surface"])
+        results_header.pack(fill="x", padx=16, pady=(12, 5))
+        self._label(results_header, "Servicios disponibles", size=11, weight="bold").pack(
+            side="left"
+        )
+        self.service_count = self._label(
+            results_header,
+            "",
+            size=8,
+            color=COLORS["accent_light"],
+            bg=COLORS["surface_light"],
+        )
+        self.service_count.pack(side="right", padx=9, pady=3)
+        self.services_canvas = tk.Canvas(
             self.services_result,
-            "Selecciona una categoría para ver los servicios asociados.",
-            color=COLORS["muted"],
-        ).pack(anchor="w", padx=18, pady=18)
+            bg=COLORS["surface"],
+            highlightthickness=0,
+            bd=0,
+        )
+        self.services_scrollbar = ttk.Scrollbar(
+            self.services_result,
+            orient="vertical",
+            command=self.services_canvas.yview,
+        )
+        self.service_cards_container = tk.Frame(
+            self.services_canvas,
+            bg=COLORS["surface"],
+        )
+        self.service_cards_container.bind(
+            "<Configure>",
+            lambda _event: self.services_canvas.configure(
+                scrollregion=self.services_canvas.bbox("all")
+            ),
+        )
+        self.services_canvas.create_window(
+            (0, 0),
+            window=self.service_cards_container,
+            anchor="nw",
+            tags="service_cards",
+        )
+        self.services_canvas.configure(yscrollcommand=self.services_scrollbar.set)
+        self.services_canvas.bind(
+            "<Configure>",
+            lambda event: self.services_canvas.itemconfigure(
+                "service_cards",
+                width=event.width,
+            ),
+        )
+        self.services_canvas.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=(0, 10))
+        self.services_scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=(0, 10))
+        self._load_services()
+
+    def _on_service_filter(self, _event=None):
+        self._load_services()
+
+    def _on_service_search(self, *_args):
+        if hasattr(self, "service_cards_container"):
+            self._load_services()
 
     def _load_services(self):
-        for child in self.services_result.winfo_children():
+        for child in self.service_cards_container.winfo_children():
             child.destroy()
+        self.service_count.configure(text="Cargando…")
         category = SERVICE_CATEGORIES[self.category_var.get()]
         try:
             result = buscar_servicios_ayuda(category)
             if "error" in result:
                 raise ValueError(result["error"])
-            services = result["servicios"]
-            if not services:
-                self._notice(self.services_result, "No se encontraron servicios.", COLORS["yellow"])
-                return
-            for service in services:
-                card = self._card(self.services_result, bg=COLORS["surface_light"])
-                card.pack(fill="x", padx=14, pady=7)
-                self._label(
-                    card,
-                    service["nombre"],
-                    size=11,
-                    weight="bold",
-                    bg=COLORS["surface_light"],
-                ).pack(anchor="w", padx=14, pady=(12, 5))
-                details = (
-                    f"{service['tipo_servicio']}  ·  Distrito {service['ubicacion']['distrito_id']}\n"
-                    f"Atención: {service['horario_atencion']}\n"
-                    f"Canales: {service['canales_atencion']}"
+            selected_district = SERVICE_DISTRICTS[self.district_var.get()]
+            query = self.service_search_var.get().strip().casefold()
+            services = [
+                service
+                for service in result["servicios"]
+                if (
+                    selected_district is None
+                    or service["ubicacion"]["distrito_id"] == selected_district
                 )
-                self._label(
-                    card,
-                    details,
-                    size=9,
-                    color=COLORS["muted"],
-                    bg=COLORS["surface_light"],
-                    justify="left",
-                    wraplength=940,
-                ).pack(anchor="w", padx=14, pady=(0, 12))
+                and (
+                    not query
+                    or query
+                    in " ".join(
+                        (
+                            service["nombre"],
+                            service["tipo_servicio"],
+                            service["ubicacion"]["distrito_id"],
+                        )
+                    ).casefold()
+                )
+            ]
+            self.service_count.configure(
+                text=f"{len(services)} {'opciones' if len(services) != 1 else 'opción'}"
+            )
+            if not services:
+                self._show_empty_services()
+                return
+            for index, service in enumerate(services):
+                self._service_card(service, index)
         except (OSError, ValueError, KeyError, TypeError) as error:
+            self.service_count.configure(text="Error")
             self._notice(
-                self.services_result,
+                self.service_cards_container,
                 f"No se pudieron cargar los servicios de apoyo: {error}",
                 COLORS["red"],
             )
+
+    def _service_card(self, service, index):
+        card = self._card(
+            self.service_cards_container,
+            bg=COLORS["surface_light"],
+            radius=12,
+        )
+        card.grid(
+            row=index // 2,
+            column=index % 2,
+            sticky="nsew",
+            padx=(4, 7) if index % 2 == 0 else (7, 4),
+            pady=7,
+        )
+        self.service_cards_container.grid_columnconfigure(0, weight=1, uniform="service")
+        self.service_cards_container.grid_columnconfigure(1, weight=1, uniform="service")
+
+        heading = tk.Frame(card, bg=COLORS["surface_light"])
+        heading.pack(fill="x", padx=14, pady=(13, 8))
+        icon = tk.Label(
+            heading,
+            text="♡",
+            bg="#282650",
+            fg=COLORS["accent_light"],
+            font=(FONT, 15, "bold"),
+            width=2,
+            height=1,
+        )
+        icon.pack(side="left", padx=(0, 10), ipady=3)
+        title_area = tk.Frame(heading, bg=COLORS["surface_light"])
+        title_area.pack(side="left", fill="x", expand=True)
+        self._label(
+            title_area,
+            service["nombre"],
+            size=10,
+            weight="bold",
+            bg=COLORS["surface_light"],
+            wraplength=330,
+            justify="left",
+        ).pack(anchor="w")
+        service_type = SERVICE_TYPES.get(
+            service["tipo_servicio"],
+            service["tipo_servicio"].replace("_", " ").title(),
+        )
+        district = self._format_district(service["ubicacion"]["distrito_id"])
+        self._label(
+            title_area,
+            f"{service_type}  ·  {district}",
+            size=8,
+            color=COLORS["muted"],
+            bg=COLORS["surface_light"],
+        ).pack(anchor="w", pady=(3, 0))
+
+        self._service_detail(
+            card,
+            "HORARIO",
+            self._format_schedule(service["horario_atencion"]),
+        )
+        channels = service["canales_atencion"]
+        channel_names = [
+            SERVICE_CHANNELS.get(channel, channel.replace("_", " ").title())
+            for channel in channels
+        ]
+        self._service_detail(card, "CANALES DE ATENCIÓN", "  ·  ".join(channel_names))
+        self._service_detail(
+            card,
+            "ORIENTACIÓN",
+            self._format_referral(service["informacion_requerida_derivacion"]),
+        )
+        self._label(
+            card,
+            "Servicio demostrativo · Datos ficticios",
+            size=8,
+            color=COLORS["muted"],
+            bg=COLORS["surface_light"],
+        ).pack(anchor="w", padx=14, pady=(4, 12))
+
+    def _service_detail(self, parent, label, value):
+        detail = tk.Frame(parent, bg=COLORS["surface_light"])
+        detail.pack(fill="x", padx=14, pady=4)
+        self._label(
+            detail,
+            label,
+            size=7,
+            color=COLORS["accent_light"],
+            weight="bold",
+            bg=COLORS["surface_light"],
+        ).pack(anchor="w")
+        self._label(
+            detail,
+            value,
+            size=9,
+            color=COLORS["text"],
+            bg=COLORS["surface_light"],
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", pady=(2, 0))
+
+    def _format_district(self, district_id):
+        name = district_id.removeprefix("DIST_").title()
+        return f"Distrito {name}"
+
+    def _format_schedule(self, schedule):
+        day_range, _, hours = schedule.partition(" ")
+        readable_days = WEEKDAYS.get(day_range, day_range)
+        if not hours:
+            return readable_days
+        start, separator, end = hours.partition("-")
+        if separator:
+            return f"{readable_days}  ·  {start}–{end} h"
+        return f"{readable_days}  ·  {hours}"
+
+    def _format_referral(self, information):
+        labels = {
+            "student_id": "identificador del estudiante",
+            "preferred channel": "canal de atención preferido",
+            "non-clinical reason code": "motivo de orientación (no clínico)",
+        }
+        parts = [item.strip() for item in information.split(",")]
+        return " · ".join(
+            labels.get(part.casefold(), part.replace("_", " ").capitalize())
+            for part in parts
+        )
+
+    def _show_empty_services(self):
+        empty = tk.Frame(self.service_cards_container, bg=COLORS["surface"])
+        empty.pack(fill="x", padx=8, pady=24)
+        tk.Label(
+            empty,
+            text="⌕",
+            bg=COLORS["surface"],
+            fg=COLORS["accent_light"],
+            font=(FONT, 28),
+        ).pack()
+        self._label(
+            empty,
+            "No encontramos servicios con estos filtros",
+            size=11,
+            weight="bold",
+        ).pack(pady=(3, 5))
+        self._label(
+            empty,
+            "Prueba con otro distrito o una búsqueda más amplia.",
+            size=9,
+            color=COLORS["muted"],
+        ).pack()
 
     def _show_chat(self):
         intro = self._card(self.content)
