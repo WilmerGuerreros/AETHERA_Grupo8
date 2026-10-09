@@ -3,8 +3,9 @@
 import queue
 import math
 import threading
+import time
 import tkinter as tk
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from tkinter import ttk
 
 from ChatSession import ChatSession
@@ -14,18 +15,20 @@ from tools.servicios_ayuda import buscar_servicios_ayuda
 
 
 COLORS = {
-    "background": "#090d1b",
-    "sidebar": "#0d1427",
-    "surface": "#111a30",
-    "surface_light": "#17223c",
-    "border": "#263252",
+    "background": "#080b18",
+    "sidebar": "#0c1224",
+    "surface": "#11182b",
+    "surface_light": "#18223b",
+    "border": "#293551",
     "text": "#f5f7ff",
-    "muted": "#9ba8c7",
+    "muted": "#aab5cf",
     "accent": "#6558f5",
     "accent_light": "#8b83ff",
     "green": "#35d5a0",
     "yellow": "#f6c85f",
     "red": "#ff7885",
+    "teal": "#34cbb3",
+    "purple_deep": "#37256f",
 }
 
 FONT = "Segoe UI"
@@ -59,17 +62,59 @@ WEEKDAYS = {
     "Mon-Sat": "Lunes a sábado",
     "Mon-Sun": "Todos los días",
 }
+WEEKDAY_NAMES = ("LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM")
+MONTH_NAMES = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+EVENT_STYLES = {
+    "evaluation_week": ("#593039", "#ff94a1", "#42252e"),
+    "wellbeing_activity": ("#185347", "#71e2c5", "#123e39"),
+    "period_start": ("#283f69", "#9dc3ff", "#1e3151"),
+    "period_end": ("#56426c", "#d0a7ff", "#382a4a"),
+    "university_activity": ("#4b476d", "#b9adff", "#302b4a"),
+}
+
+
+def _mix_color(start, end, amount):
+    start_rgb = tuple(int(start[index:index + 2], 16) for index in (1, 3, 5))
+    end_rgb = tuple(int(end[index:index + 2], 16) for index in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(
+        round(first + (last - first) * amount)
+        for first, last in zip(start_rgb, end_rgb)
+    )
+
+
+def _rounded_scanline(width, height, radius, y):
+    inset = 0
+    if y < radius:
+        inset = radius - math.sqrt(max(0, radius * radius - (radius - y) ** 2))
+    elif y > height - radius:
+        distance = y - (height - radius)
+        inset = radius - math.sqrt(max(0, radius * radius - distance ** 2))
+    return inset, width - inset
 
 
 class RoundedFrame(tk.Frame):
     """Marco con fondo redondeado dibujado en un canvas de Tk."""
 
-    def __init__(self, parent, bg, border, radius=14, **kwargs):
+    def __init__(self, parent, bg, border, radius=20, gradient=None, **kwargs):
         parent_bg = parent.cget("bg")
         super().__init__(parent, bg=parent_bg, **kwargs)
         self.fill = bg
         self.border = border
         self.radius = radius
+        self.gradient = gradient
         self.canvas = tk.Canvas(self, bg=parent_bg, highlightthickness=0, bd=0)
         self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
         self.bind("<Configure>", self._draw)
@@ -80,6 +125,7 @@ class RoundedFrame(tk.Frame):
         if width < 2 or height < 2:
             return
         radius = min(self.radius, width // 2, height // 2)
+        self.canvas.delete("rounded")
         points = []
         for center_x, center_y, start in (
             (width - radius, radius, -90),
@@ -88,14 +134,40 @@ class RoundedFrame(tk.Frame):
             (radius, radius, 180),
         ):
             for step in range(7):
-                angle = (start + step * 90 / 6) * 3.141592653589793 / 180
+                angle = (start + step * 90 / 6) * math.pi / 180
                 points.extend(
                     (
                         center_x + radius * math.cos(angle),
                         center_y + radius * math.sin(angle),
                     )
                 )
-        self.canvas.delete("rounded")
+        if self.gradient:
+            stops = self.gradient
+            rows = min(height, 120)
+            for row in range(rows):
+                y = row * height / rows
+                position = row / max(1, rows - 1)
+                color = _gradient_color(stops, position)
+                left, right = _rounded_scanline(width, height, radius, y)
+                self.canvas.create_line(
+                    left,
+                    y,
+                    right,
+                    y,
+                    fill=color,
+                    width=height / rows + 1,
+                    tags="rounded",
+                )
+            self.canvas.create_polygon(
+                *points,
+                smooth=True,
+                splinesteps=24,
+                fill="",
+                outline=self.border,
+                width=1,
+                tags="rounded",
+            )
+            return
         self.canvas.create_polygon(
             *points,
             smooth=True,
@@ -105,6 +177,14 @@ class RoundedFrame(tk.Frame):
             width=1,
             tags="rounded",
         )
+
+
+def _gradient_color(stops, position):
+    if len(stops) == 1:
+        return stops[0]
+    segment = position * (len(stops) - 1)
+    index = min(int(segment), len(stops) - 2)
+    return _mix_color(stops[index], stops[index + 1], segment - index)
 
 
 class RoundedButton(tk.Canvas):
@@ -120,11 +200,16 @@ class RoundedButton(tk.Canvas):
         self.focused = False
         self.bg_normal = COLORS["accent"] if primary else COLORS["surface_light"]
         self.bg_hover = COLORS["accent_light"] if primary else "#253252"
-        width = max(104, len(text) * 7 + 34)
+        self.gradient = (
+            ("#7666ff", "#634ff0", "#3d82ed")
+            if primary
+            else None
+        )
+        width = max(116, len(text) * 8 + 40)
         super().__init__(
             parent,
             width=width,
-            height=40,
+            height=46,
             bg=getattr(parent, "fill", parent.cget("bg")),
             highlightthickness=0,
             bd=0,
@@ -170,21 +255,43 @@ class RoundedButton(tk.Canvas):
             fill = COLORS["accent"]
         elif self.hovered:
             fill = self.bg_hover
-        self.create_polygon(
-            *points,
-            smooth=True,
-            splinesteps=20,
-            fill=fill,
-            outline=COLORS["accent_light"] if self.focused else fill,
-            width=2 if self.focused else 1,
-            tags="button",
-        )
+        if self.gradient and not (self.disabled or self.pressed or self.hovered):
+            for row in range(height):
+                left, right = _rounded_scanline(width, height, radius, row)
+                self.create_line(
+                    left,
+                    row,
+                    right,
+                    row,
+                    fill=_gradient_color(self.gradient, row / max(1, height - 1)),
+                    tags="button",
+                )
+        else:
+            self.create_polygon(
+                *points,
+                smooth=True,
+                splinesteps=20,
+                fill=fill,
+                outline=COLORS["accent_light"] if self.focused else fill,
+                width=2 if self.focused else 1,
+                tags="button",
+            )
+        if self.focused:
+            self.create_polygon(
+                *points,
+                smooth=True,
+                splinesteps=20,
+                fill="",
+                outline=COLORS["accent_light"],
+                width=2,
+                tags="button",
+            )
         self.create_text(
             width / 2,
             height / 2,
             text=self.text,
             fill="#8792ad" if self.disabled else "white",
-            font=(FONT, 9, "bold"),
+            font=(FONT, 10, "bold"),
             tags="button",
         )
 
@@ -227,7 +334,7 @@ class RoundedButton(tk.Canvas):
         state = kwargs.pop("state", None)
         if state is not None:
             self.disabled = state == "disabled"
-            self.configure(cursor="arrow" if self.disabled else "hand2")
+            super().configure(cursor="arrow" if self.disabled else "hand2")
             self._draw()
         if kwargs or cnf:
             super().configure(cnf, **kwargs)
@@ -237,10 +344,19 @@ class AetheraDesktopApp:
     def __init__(self, motor, historial, herramientas, guardar_historial):
         self.root = tk.Tk()
         self.root.title("Aethera | Acompañamiento académico")
-        self.root.geometry("1440x900")
-        self.root.minsize(1120, 720)
+        self.root.geometry("1560x980")
+        self.root.minsize(1200, 780)
         self.root.configure(bg=COLORS["background"])
         self.event_queue = queue.Queue()
+        self._scroll_animations = {}
+        self._search_after_id = None
+        self._scroll_targets = []
+        self.calendar_week_start = date.today() - timedelta(days=date.today().weekday())
+        self.calendar_category_var = None
+        self._calendar_animation_ids = []
+        self._calendar_pulse_after_id = None
+        self._calendar_pulse_phase = 0
+        self.root.bind_all("<MouseWheel>", self._handle_mousewheel)
         self.current_page = "Inicio"
         self.busy = False
 
@@ -272,7 +388,7 @@ class AetheraDesktopApp:
             bordercolor=COLORS["border"],
             lightcolor=COLORS["border"],
             darkcolor=COLORS["border"],
-            padding=9,
+            padding=12,
         )
         style.map(
             "Aethera.TCombobox",
@@ -281,7 +397,7 @@ class AetheraDesktopApp:
         )
 
     def _build_shell(self):
-        self.sidebar = tk.Frame(self.root, bg=COLORS["sidebar"], width=248)
+        self.sidebar = tk.Frame(self.root, bg=COLORS["sidebar"], width=276)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
@@ -292,7 +408,7 @@ class AetheraDesktopApp:
             text="✦",
             bg=COLORS["accent"],
             fg="white",
-            font=(FONT, 18, "bold"),
+            font=(FONT, 21, "bold"),
             width=2,
             height=1,
         ).pack(side="left", padx=(0, 11), ipady=5)
@@ -303,14 +419,14 @@ class AetheraDesktopApp:
             text="AETHERA",
             bg=COLORS["sidebar"],
             fg=COLORS["text"],
-            font=(FONT, 14, "bold"),
+            font=(FONT, 16, "bold"),
         ).pack(anchor="w")
         tk.Label(
             title,
             text="Tu espacio académico",
             bg=COLORS["sidebar"],
             fg=COLORS["muted"],
-            font=(FONT, 9),
+            font=(FONT, 10),
         ).pack(anchor="w", pady=(2, 0))
 
         tk.Label(
@@ -318,7 +434,7 @@ class AetheraDesktopApp:
             text="MENÚ PRINCIPAL",
             bg=COLORS["sidebar"],
             fg="#7381a4",
-            font=(FONT, 8, "bold"),
+            font=(FONT, 9, "bold"),
         ).pack(anchor="w", padx=24, pady=(0, 10))
 
         self.nav_buttons = {}
@@ -342,7 +458,7 @@ class AetheraDesktopApp:
                 fg=COLORS["muted"],
                 activebackground=COLORS["surface_light"],
                 activeforeground=COLORS["text"],
-                font=(FONT, 10),
+                font=(FONT, 11),
                 cursor="hand2",
             )
             button.pack(fill="x", padx=12, pady=2)
@@ -368,29 +484,26 @@ class AetheraDesktopApp:
 
         spacer = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
         spacer.pack(fill="both", expand=True)
-        wellbeing = tk.Frame(
+        wellbeing = self._card(
             self.sidebar,
             bg=COLORS["surface"],
-            highlightbackground=COLORS["border"],
-            highlightthickness=1,
+            radius=22,
         )
-        wellbeing.pack(fill="x", padx=16, pady=(0, 16))
-        tk.Label(
+        wellbeing.pack(fill="x", padx=16, pady=(0, 18))
+        self._label(
             wellbeing,
             text="Un paso a la vez",
-            bg=COLORS["surface"],
-            fg=COLORS["text"],
-            font=(FONT, 10, "bold"),
-        ).pack(anchor="w", padx=13, pady=(12, 4))
-        tk.Label(
+            size=11,
+            weight="bold",
+        ).pack(anchor="w", padx=16, pady=(14, 5))
+        self._label(
             wellbeing,
             text="Organizarte también es cuidarte.",
-            bg=COLORS["surface"],
-            fg=COLORS["muted"],
-            font=(FONT, 8),
+            size=9,
+            color=COLORS["muted"],
             wraplength=185,
             justify="left",
-        ).pack(anchor="w", padx=13, pady=(0, 12))
+        ).pack(anchor="w", padx=16, pady=(0, 15))
 
         self.main = tk.Frame(self.root, bg=COLORS["background"])
         self.main.pack(side="left", fill="both", expand=True)
@@ -406,7 +519,7 @@ class AetheraDesktopApp:
             text="Inicio",
             bg=COLORS["background"],
             fg=COLORS["text"],
-            font=(FONT, 16, "bold"),
+            font=(FONT, 19, "bold"),
         )
         self.page_title.pack(side="left", padx=30, pady=20)
         tk.Label(
@@ -414,14 +527,14 @@ class AetheraDesktopApp:
             text="Acompañamiento académico personalizado",
             bg=COLORS["background"],
             fg=COLORS["muted"],
-            font=(FONT, 9),
+            font=(FONT, 10),
         ).pack(side="left", padx=(4, 0), pady=20)
         tk.Label(
             self.header,
             text="●  AETHERA",
             bg=COLORS["background"],
             fg=COLORS["green"],
-            font=(FONT, 9, "bold"),
+            font=(FONT, 10, "bold"),
         ).pack(side="right", padx=30, pady=20)
 
         self.content = tk.Frame(self.main, bg=COLORS["background"])
@@ -432,7 +545,8 @@ class AetheraDesktopApp:
             parent,
             bg=kwargs.pop("bg", COLORS["surface"]),
             border=kwargs.pop("border", COLORS["border"]),
-            radius=kwargs.pop("radius", 14),
+            radius=kwargs.pop("radius", 20),
+            gradient=kwargs.pop("gradient", None),
             **kwargs,
         )
 
@@ -442,12 +556,68 @@ class AetheraDesktopApp:
             text=text,
             bg=kwargs.pop("bg", COLORS["surface"]),
             fg=color or COLORS["text"],
-            font=(FONT, size, weight),
+            font=(FONT, max(8, round(size * 1.16)), weight),
             **kwargs,
         )
 
     def _button(self, parent, text, command, primary=False):
         return RoundedButton(parent, text, command, primary=primary)
+
+    def _animate_scroll_to_bottom(self, canvas):
+        self._animate_scroll(canvas, 1.0)
+
+    def _animate_scroll(self, canvas, target, duration=190):
+        key = str(canvas)
+        animation = self._scroll_animations.get(key)
+        if animation and animation.get("after_id"):
+            self.root.after_cancel(animation["after_id"])
+        start = canvas.yview()[0] if animation is None else animation["current"]
+        self._scroll_animations[key] = {
+            "start": start,
+            "target": target,
+            "started": time.monotonic(),
+            "duration": duration / 1000,
+            "current": start,
+            "after_id": None,
+        }
+        self._step_scroll(canvas, key)
+
+    def _step_scroll(self, canvas, key):
+        animation = self._scroll_animations.get(key)
+        if animation is None or not canvas.winfo_exists():
+            self._scroll_animations.pop(key, None)
+            return
+        elapsed = time.monotonic() - animation["started"]
+        progress = min(1.0, elapsed / animation["duration"])
+        eased = 1 - (1 - progress) ** 3
+        current = animation["start"] + (
+            animation["target"] - animation["start"]
+        ) * eased
+        animation["current"] = current
+        canvas.yview_moveto(current)
+        if progress < 1:
+            animation["after_id"] = self.root.after(
+                12,
+                lambda: self._step_scroll(canvas, key),
+            )
+        else:
+            self._scroll_animations.pop(key, None)
+
+    def _on_mousewheel(self, canvas, event):
+        delta = -1 if event.delta > 0 else 1
+        current = canvas.yview()[0]
+        target = min(1.0, max(0.0, current + delta * 0.08))
+        self._animate_scroll(canvas, target, duration=160)
+        return "break"
+
+    def _handle_mousewheel(self, event):
+        widget = event.widget
+        for canvas, scrollable in reversed(self._scroll_targets):
+            current = widget
+            while current is not None:
+                if current == scrollable or current == canvas:
+                    return self._on_mousewheel(canvas, event)
+                current = getattr(current, "master", None)
 
     def show_page(self, page):
         if self.current_page == "Asistente IA" and page != "Asistente IA":
@@ -461,7 +631,7 @@ class AetheraDesktopApp:
             button.configure(
                 bg=COLORS["accent"] if selected else COLORS["sidebar"],
                 fg="white" if selected else COLORS["muted"],
-                font=(FONT, 10, "bold" if selected else "normal"),
+                font=(FONT, 12, "bold" if selected else "normal"),
             )
         for child in self.content.winfo_children():
             child.destroy()
@@ -492,7 +662,13 @@ class AetheraDesktopApp:
             bg=COLORS["background"],
         ).pack(anchor="w", pady=(5, 20))
 
-        welcome = self._card(self.content, bg="#171a3a")
+        welcome = self._card(
+            self.content,
+            bg="#171a3a",
+            border="#4d4c99",
+            radius=30,
+            gradient=("#171b3c", "#212052", "#30245f"),
+        )
         welcome.pack(fill="x", pady=(0, 18))
         left = tk.Frame(welcome, bg="#171a3a")
         left.pack(side="left", fill="both", expand=True, padx=24, pady=22)
@@ -630,34 +806,714 @@ class AetheraDesktopApp:
         ).pack(anchor="w", pady=(3, 0))
 
     def _show_calendar(self):
+        heading = tk.Frame(self.content, bg=COLORS["background"])
+        heading.pack(fill="x", pady=(0, 14))
+        title_area = tk.Frame(heading, bg=COLORS["background"])
+        title_area.pack(side="left")
         self._label(
-            self.content,
-            "Organiza lo que viene",
-            size=22,
+            title_area,
+            "Tu calendario académico",
+            size=24,
             weight="bold",
             bg=COLORS["background"],
         ).pack(anchor="w")
         self._label(
-            self.content,
-            "Eventos del calendario académico disponibles para Aethera.",
+            title_area,
+            "Una vista clara de tus fechas importantes. Organiza tu semana con calma.",
+            size=10,
             color=COLORS["muted"],
             bg=COLORS["background"],
-        ).pack(anchor="w", pady=(5, 18))
-        panel = self._card(self.content)
-        panel.pack(fill="both", expand=True)
+        ).pack(anchor="w", pady=(4, 0))
+
+        toolbar = self._card(
+            self.content,
+            radius=22,
+            bg=COLORS["surface"],
+            gradient=("#141d34", "#11182b", "#191a38"),
+        )
+        toolbar.pack(fill="x", pady=(0, 14))
+        navigation = tk.Frame(toolbar, bg=COLORS["surface"])
+        navigation.pack(side="left", padx=14, pady=11)
+        self._button(
+            navigation,
+            "‹",
+            lambda: self._shift_calendar_week(-7),
+        ).pack(side="left", padx=(0, 6))
+        self._button(
+            navigation,
+            "Hoy",
+            self._go_to_calendar_today,
+        ).pack(side="left", padx=5)
+        self._button(
+            navigation,
+            "›",
+            lambda: self._shift_calendar_week(7),
+        ).pack(side="left", padx=(6, 0))
+
+        self.calendar_range_label = self._label(
+            toolbar,
+            "",
+            size=14,
+            weight="bold",
+            bg=COLORS["surface"],
+        )
+        self.calendar_range_label.pack(side="left", padx=18)
+        self.calendar_count_label = self._label(
+            toolbar,
+            "",
+            size=9,
+            color=COLORS["muted"],
+            bg=COLORS["surface"],
+        )
+        self.calendar_count_label.pack(side="left", padx=6)
+
+        filter_area = tk.Frame(toolbar, bg=COLORS["surface"])
+        filter_area.pack(side="right", padx=15, pady=11)
+        self._label(
+            filter_area,
+            "MOSTRAR",
+            size=8,
+            color=COLORS["muted"],
+            bg=COLORS["surface"],
+        ).pack(side="left", padx=(0, 8))
+        self.calendar_category_var = tk.StringVar(value="Todos los eventos")
+        self.calendar_category_selector = ttk.Combobox(
+            filter_area,
+            textvariable=self.calendar_category_var,
+            values=(
+                "Todos los eventos",
+                "Evaluaciones",
+                "Bienestar",
+                "Períodos académicos",
+                "Actividades",
+            ),
+            state="readonly",
+            style="Aethera.TCombobox",
+            width=22,
+        )
+        self.calendar_category_selector.pack(side="left")
+        self.calendar_category_selector.bind(
+            "<<ComboboxSelected>>",
+            lambda _event: self._refresh_calendar(),
+        )
+
+        calendar_panel = self._card(
+            self.content,
+            radius=24,
+            bg=COLORS["surface"],
+            border="#343653",
+        )
+        calendar_panel.pack(fill="both", expand=True)
+        self.calendar_canvas = tk.Canvas(
+            calendar_panel,
+            bg=COLORS["surface"],
+            highlightthickness=0,
+            bd=0,
+        )
+        self.calendar_scrollbar = ttk.Scrollbar(
+            calendar_panel,
+            orient="vertical",
+            command=self.calendar_canvas.yview,
+        )
+        self.calendar_canvas.configure(
+            yscrollcommand=self.calendar_scrollbar.set,
+        )
+        self.calendar_canvas.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(8, 0),
+            pady=8,
+        )
+        self.calendar_scrollbar.pack(
+            side="right",
+            fill="y",
+            padx=(0, 8),
+            pady=8,
+        )
+        self._bind_smooth_scroll(self.calendar_canvas, self.calendar_canvas)
+        self.calendar_canvas.bind("<Configure>", self._draw_calendar)
+        self._refresh_calendar()
+
+    def _go_to_calendar_today(self):
+        today = date.today()
+        self.calendar_week_start = today - timedelta(days=today.weekday())
+        self._refresh_calendar(direction=0)
+
+    def _shift_calendar_week(self, days):
+        self.calendar_week_start += timedelta(days=days)
+        self._refresh_calendar(direction=1 if days > 0 else -1)
+
+    def _refresh_calendar(self, direction=0):
+        if not hasattr(self, "calendar_canvas") or not self.calendar_canvas.winfo_exists():
+            return
+        for after_id in self._calendar_animation_ids:
+            self.root.after_cancel(after_id)
+        self._calendar_animation_ids.clear()
+        start = self.calendar_week_start
+        end = start + timedelta(days=6)
+        self.calendar_range_label.configure(
+            text=self._format_calendar_range(start, end)
+        )
+        self.calendar_canvas.delete("all")
         try:
-            events = self._get_upcoming_events()
-            if not events:
-                self._label(
-                    panel,
-                    "No hay eventos registrados a partir de hoy.",
-                    color=COLORS["muted"],
-                ).pack(anchor="w", padx=20, pady=20)
-            else:
-                for event in events:
-                    self._event_row(panel, event)
+            events = calendario_academico(
+                "any",
+                fecha_inicio=start.isoformat(),
+                fecha_fin=end.isoformat(),
+            )
+            if events and "error" in events[0]:
+                raise ValueError(events[0]["error"])
+            events = self._filter_calendar_events(events)
+            self.calendar_events = events
+            self.calendar_count_label.configure(
+                text=f"·  {len(events)} "
+                f"{'eventos' if len(events) != 1 else 'evento'} esta semana"
+            )
+            self._draw_calendar(direction=direction)
+            self.calendar_canvas.yview_moveto(0)
         except (OSError, ValueError, KeyError, TypeError) as error:
-            self._notice(panel, f"No se pudo cargar el calendario: {error}", COLORS["red"])
+            self.calendar_count_label.configure(text="·  No disponible")
+            self.calendar_canvas.delete("all")
+            self.calendar_canvas.create_text(
+                36,
+                42,
+                text=f"No se pudo cargar el calendario: {error}",
+                anchor="nw",
+                fill=COLORS["red"],
+                font=(FONT, 12),
+            )
+
+    def _format_calendar_range(self, start, end):
+        start_month = MONTH_NAMES[start.month - 1]
+        end_month = MONTH_NAMES[end.month - 1]
+        if start.year != end.year:
+            return (
+                f"{start.day} {start_month[:3]} {start.year}  —  "
+                f"{end.day} {end_month[:3]} {end.year}"
+            )
+        if start.month == end.month:
+            return f"{start.day} – {end.day} de {start_month} {start.year}"
+        return (
+            f"{start.day} {start_month[:3]}  —  "
+            f"{end.day} {end_month[:3]} {end.year}"
+        )
+
+    def _filter_calendar_events(self, events):
+        selection = self.calendar_category_var.get()
+        category_groups = {
+            "Evaluaciones": {"evaluation_week"},
+            "Bienestar": {"wellbeing_activity"},
+            "Períodos académicos": {"period_start", "period_end"},
+            "Actividades": {"university_activity"},
+        }
+        allowed = category_groups.get(selection)
+        if allowed is None:
+            return events
+        return [event for event in events if event.get("categoria") in allowed]
+
+    def _draw_calendar(self, _event=None, direction=0):
+        if not hasattr(self, "calendar_canvas"):
+            return
+        canvas = self.calendar_canvas
+        if not canvas.winfo_exists():
+            return
+        width = max(canvas.winfo_width(), 900)
+        start = self.calendar_week_start
+        days = [start + timedelta(days=index) for index in range(7)]
+        left = 78
+        right = width - 14
+        column_width = (right - left) / 7
+        header_top = 18
+        header_height = 68
+        event_header_top = header_top + header_height
+        event_area_top = event_header_top + 28
+        event_rows = max(1, len(getattr(self, "calendar_events", [])))
+        event_row_height = 38
+        event_area_height = max(66, event_rows * event_row_height + 12)
+        grid_top = event_area_top + event_area_height + 8
+        hour_height = 54
+        first_hour, last_hour = 8, 20
+        total_height = grid_top + (last_hour - first_hour) * hour_height + 25
+        canvas.delete("all")
+        canvas.create_rectangle(
+            0,
+            0,
+            width,
+            total_height,
+            fill=COLORS["surface"],
+            outline="",
+            tags="calendar_base",
+        )
+
+        for index, day in enumerate(days):
+            x0 = left + index * column_width
+            x1 = x0 + column_width
+            is_weekend = index >= 5
+            is_today = day == date.today()
+            if is_weekend:
+                canvas.create_rectangle(
+                    x0,
+                    header_top,
+                    x1,
+                    total_height,
+                    fill="#141b2e",
+                    outline="",
+                )
+            if is_today:
+                canvas.create_rectangle(
+                    x0 + 3,
+                    header_top,
+                    x1 - 3,
+                    header_top + header_height - 3,
+                    fill="#222044",
+                    outline="#5145b9",
+                    width=1,
+                )
+            canvas.create_text(
+                (x0 + x1) / 2,
+                header_top + 17,
+                text=WEEKDAY_NAMES[index],
+                fill=COLORS["muted"] if not is_today else COLORS["accent_light"],
+                font=(FONT, 9, "bold"),
+            )
+            if is_today:
+                self._draw_calendar_today_badge(
+                    canvas,
+                    (x0 + x1) / 2,
+                    header_top + 46,
+                    str(day.day),
+                )
+            else:
+                canvas.create_text(
+                    (x0 + x1) / 2,
+                    header_top + 46,
+                    text=str(day.day),
+                    fill=COLORS["text"],
+                    font=(FONT, 18, "bold"),
+                )
+            canvas.create_line(
+                x1,
+                header_top,
+                x1,
+                total_height,
+                fill="#252d42",
+                width=1,
+            )
+
+        canvas.create_text(
+            19,
+            event_header_top + 13,
+            text="FECHAS",
+            anchor="w",
+            fill=COLORS["muted"],
+            font=(FONT, 8, "bold"),
+        )
+        canvas.create_line(
+            left,
+            event_header_top,
+            right,
+            event_header_top,
+            fill="#343b52",
+            width=1,
+        )
+        canvas.create_line(
+            left,
+            grid_top - 8,
+            right,
+            grid_top - 8,
+            fill="#343b52",
+            width=1,
+        )
+        self._draw_week_event_chips(
+            canvas,
+            days,
+            left,
+            column_width,
+            event_area_top,
+            event_row_height,
+        )
+
+        for hour in range(first_hour, last_hour + 1):
+            y = grid_top + (hour - first_hour) * hour_height
+            canvas.create_text(
+                19,
+                y,
+                text=f"{hour:02d}:00",
+                anchor="w",
+                fill="#8c98b3",
+                font=(FONT, 9),
+            )
+            canvas.create_line(
+                left,
+                y,
+                right,
+                y,
+                fill="#252d42" if hour != first_hour else "#343b52",
+                width=1,
+                dash=(2, 4) if hour % 2 else (),
+            )
+        canvas.create_text(
+            left + 14,
+            total_height - 17,
+            text="Los eventos académicos se registran por fecha; no incluyen horario.",
+            anchor="w",
+            fill="#8490aa",
+            font=(FONT, 9),
+        )
+        canvas.configure(scrollregion=(0, 0, width, total_height))
+        self._draw_now_line(canvas, left, right, grid_top, first_hour, hour_height)
+        self._schedule_calendar_pulse()
+        if direction:
+            self._animate_calendar_header(canvas, direction, left, header_top, right)
+
+    def _draw_calendar_today_badge(self, canvas, x, y, label):
+        radius = 17
+        canvas.create_oval(
+            x - radius,
+            y - radius,
+            x + radius,
+            y + radius,
+            fill=COLORS["accent"],
+            outline=COLORS["accent_light"],
+            width=2,
+            tags="today_badge",
+        )
+        canvas.create_text(
+            x,
+            y,
+            text=label,
+            fill="white",
+            font=(FONT, 11, "bold"),
+            tags="today_badge",
+        )
+
+    def _draw_now_line(self, canvas, left, right, grid_top, first_hour, hour_height):
+        now = datetime.now()
+        if now.date() not in (
+            self.calendar_week_start + timedelta(days=index) for index in range(7)
+        ):
+            return
+        minutes = now.hour * 60 + now.minute - first_hour * 60
+        y = grid_top + minutes / 60 * hour_height
+        if not grid_top <= y <= grid_top + (20 - first_hour) * hour_height:
+            return
+        day_offset = now.weekday()
+        x = left + day_offset * (right - left) / 7
+        pulse = getattr(self, "_calendar_pulse_phase", 0)
+        radius = 5 + pulse % 3
+        canvas.create_oval(
+            x - radius - 4,
+            y - radius - 4,
+            x + radius + 4,
+            y + radius + 4,
+            fill="#3a263c",
+            outline="",
+            tags="now_indicator",
+        )
+        canvas.create_oval(
+            x - radius,
+            y - radius,
+            x + radius,
+            y + radius,
+            fill=("#ff8b9a", COLORS["red"], "#e65d86")[pulse % 3],
+            outline="#ffd0d7",
+            width=1,
+            tags="now_indicator",
+        )
+        canvas.create_line(
+            x,
+            y,
+            right,
+            y,
+            fill=COLORS["red"],
+            width=2,
+            tags="now_indicator",
+        )
+
+    def _schedule_calendar_pulse(self):
+        if self._calendar_pulse_after_id:
+            self.root.after_cancel(self._calendar_pulse_after_id)
+            self._calendar_pulse_after_id = None
+        today = date.today()
+        if not self.calendar_week_start <= today < self.calendar_week_start + timedelta(days=7):
+            return
+
+        def pulse():
+            if not hasattr(self, "calendar_canvas") or not self.calendar_canvas.winfo_exists():
+                return
+            self._calendar_pulse_phase = (self._calendar_pulse_phase + 1) % 6
+            self.calendar_canvas.delete("now_indicator")
+            width = max(self.calendar_canvas.winfo_width(), 900)
+            left = 78
+            right = width - 14
+            grid_top = 18 + 68 + 28 + max(
+                66,
+                max(1, len(getattr(self, "calendar_events", []))) * 38 + 12,
+            ) + 8
+            self._draw_now_line(self.calendar_canvas, left, right, grid_top, 8, 54)
+            self._calendar_pulse_after_id = self.root.after(520, pulse)
+
+        self._calendar_pulse_after_id = self.root.after(520, pulse)
+
+    def _draw_week_event_chips(
+        self,
+        canvas,
+        days,
+        left,
+        column_width,
+        top,
+        row_height,
+    ):
+        events = getattr(self, "calendar_events", [])
+        if not events:
+            canvas.create_text(
+                left + 14,
+                top + 23,
+                text="Una semana despejada. Un buen momento para planificar con calma.",
+                anchor="w",
+                fill="#9aa6bf",
+                font=(FONT, 10),
+                tags="calendar_empty",
+            )
+            return
+        for index, event in enumerate(events):
+            try:
+                start = date.fromisoformat(event["fecha_inicio"])
+                end = date.fromisoformat(event["fecha_fin"])
+            except (KeyError, ValueError):
+                continue
+            first_index = max(0, (start - days[0]).days)
+            last_index = min(6, (end - days[0]).days)
+            if first_index > 6 or last_index < 0:
+                continue
+            x0 = left + first_index * column_width + 5
+            x1 = left + (last_index + 1) * column_width - 5
+            y0 = top + index * row_height + 4
+            y1 = y0 + row_height - 6
+            fill, accent, border = EVENT_STYLES.get(
+                event.get("categoria"),
+                (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]),
+            )
+            tag = f"calendar_event_{index}"
+            self._canvas_round_rect(
+                canvas,
+                x0,
+                y0,
+                x1,
+                y1,
+                12,
+                fill,
+                border,
+                tags=(tag, "calendar_event", f"{tag}_bg"),
+            )
+            canvas.create_rectangle(
+                x0 + 1,
+                y0 + 7,
+                x0 + 4,
+                y1 - 7,
+                fill=accent,
+                outline="",
+                tags=(tag, "calendar_event"),
+            )
+            label = event.get("resumen") or "Evento académico"
+            font = (FONT, 9, "bold")
+            available = max(80, x1 - x0 - 22)
+            max_chars = max(12, int(available / 7))
+            if len(label) > max_chars:
+                label = label[: max_chars - 1].rstrip() + "…"
+            canvas.create_text(
+                x0 + 12,
+                y0 + 7,
+                text=label,
+                anchor="nw",
+                fill="#f5efff",
+                font=font,
+                tags=(tag, "calendar_event"),
+            )
+            canvas.create_text(
+                x0 + 12,
+                y0 + 22,
+                text=self._format_calendar_category(event.get("categoria", "")),
+                anchor="nw",
+                fill="#d0c8e8",
+                font=(FONT, 8),
+                tags=(tag, "calendar_event"),
+            )
+            canvas.tag_bind(
+                tag,
+                "<Button-1>",
+                lambda _event, selected=event: self._show_calendar_event(selected),
+            )
+            canvas.tag_bind(
+                tag,
+                "<Enter>",
+                lambda _event, selected_tag=tag, hover=accent: self._highlight_calendar_event(
+                    selected_tag,
+                    hover,
+                ),
+            )
+            canvas.tag_bind(
+                tag,
+                "<Leave>",
+                lambda _event, selected_tag=tag, base=fill, edge=border: self._restore_calendar_event(
+                    selected_tag,
+                    base,
+                    edge,
+                ),
+            )
+            self._animate_calendar_event(canvas, tag, y0, y1, fill, direction=-1)
+
+    def _canvas_round_rect(self, canvas, x0, y0, x1, y1, radius, fill, outline, tags=()):
+        radius = min(radius, (x1 - x0) / 2, (y1 - y0) / 2)
+        points = []
+        for cx, cy, start_angle in (
+            (x1 - radius, y0 + radius, -90),
+            (x1 - radius, y1 - radius, 0),
+            (x0 + radius, y1 - radius, 90),
+            (x0 + radius, y0 + radius, 180),
+        ):
+            for step in range(7):
+                angle = math.radians(start_angle + step * 15)
+                points.extend(
+                    (
+                        cx + radius * math.cos(angle),
+                        cy + radius * math.sin(angle),
+                    )
+                )
+        return canvas.create_polygon(
+            *points,
+            smooth=True,
+            splinesteps=20,
+            fill=fill,
+            outline=outline,
+            width=1,
+            tags=tags,
+        )
+
+    def _format_calendar_category(self, category):
+        names = {
+            "evaluation_week": "Semana de evaluaciones",
+            "wellbeing_activity": "Bienestar y pausa",
+            "period_start": "Inicio de período",
+            "period_end": "Cierre de período",
+            "university_activity": "Actividad universitaria",
+        }
+        return names.get(category, category.replace("_", " ").title())
+
+    def _highlight_calendar_event(self, tag, accent):
+        self.calendar_canvas.itemconfigure(f"{tag}_bg", outline=accent, width=2)
+        self.calendar_canvas.configure(cursor="hand2")
+
+    def _restore_calendar_event(self, tag, _fill, border):
+        self.calendar_canvas.itemconfigure(f"{tag}_bg", outline=border, width=1)
+        self.calendar_canvas.configure(cursor="arrow")
+
+    def _animate_calendar_event(self, canvas, tag, y0, y1, fill, direction):
+        del y1
+        start_y = y0 - 18 * direction
+        canvas.move(tag, 0, start_y - y0)
+        background_tag = f"{tag}_bg"
+        initial_outline = COLORS["surface_light"]
+        canvas.itemconfigure(background_tag, outline=initial_outline)
+
+        def step(index):
+            if not canvas.winfo_exists():
+                return
+            progress = index / 8
+            eased = 1 - (1 - progress) ** 3
+            canvas.move(tag, 0, (y0 - start_y) / 8)
+            canvas.itemconfigure(
+                background_tag,
+                outline=_mix_color(initial_outline, fill, eased),
+            )
+            if index < 8:
+                after_id = self.root.after(18, lambda: step(index + 1))
+                self._calendar_animation_ids.append(after_id)
+
+        after_id = self.root.after(18, lambda: step(1))
+        self._calendar_animation_ids.append(after_id)
+
+    def _animate_calendar_header(self, canvas, direction, left, top, right):
+        canvas.move("calendar_event", direction * 24, 0)
+
+        def settle(index):
+            if not canvas.winfo_exists():
+                return
+            canvas.move("calendar_event", -direction * 3, 0)
+            if index < 8:
+                after_id = self.root.after(15, lambda: settle(index + 1))
+                self._calendar_animation_ids.append(after_id)
+
+        after_id = self.root.after(15, lambda: settle(1))
+        self._calendar_animation_ids.append(after_id)
+
+    def _show_calendar_event(self, event):
+        dialog = tk.Toplevel(self.root)
+        dialog.title(event.get("resumen", "Evento académico"))
+        dialog.configure(bg=COLORS["background"])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.geometry("560x340")
+        dialog.resizable(False, False)
+        panel = self._card(
+            dialog,
+            radius=28,
+            bg=COLORS["surface"],
+            gradient=("#17213b", "#17172f", "#25204c"),
+        )
+        panel.pack(fill="both", expand=True, padx=14, pady=14)
+        category = event.get("categoria", "")
+        _, accent, _ = EVENT_STYLES.get(category, (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]))
+        self._label(
+            panel,
+            self._format_calendar_category(category).upper(),
+            size=9,
+            color=accent,
+            weight="bold",
+            bg="#17213b",
+        ).pack(anchor="w", padx=24, pady=(23, 7))
+        self._label(
+            panel,
+            event.get("resumen", "Evento académico"),
+            size=20,
+            weight="bold",
+            bg="#17213b",
+            wraplength=470,
+            justify="left",
+        ).pack(anchor="w", padx=24)
+        start = date.fromisoformat(event["fecha_inicio"])
+        end = date.fromisoformat(event["fecha_fin"])
+        dates = start.strftime("%d/%m/%Y")
+        if end != start:
+            dates += f"  —  {end.strftime('%d/%m/%Y')}"
+        self._label(
+            panel,
+            f"◷   {dates}",
+            size=12,
+            color=COLORS["muted"],
+            bg="#17213b",
+        ).pack(anchor="w", padx=24, pady=(17, 4))
+        district = event.get("distrito_id", "ALL")
+        self._label(
+            panel,
+            f"Ubicación: {district.replace('DIST_', 'Distrito ').title()}",
+            size=10,
+            color=COLORS["muted"],
+            bg="#17213b",
+        ).pack(anchor="w", padx=24)
+        self._label(
+            panel,
+            "Las fechas provienen del calendario académico institucional.",
+            size=9,
+            color=COLORS["muted"],
+            bg="#17213b",
+        ).pack(anchor="w", padx=24, pady=(14, 14))
+        self._button(panel, "Entendido", dialog.destroy, primary=True).pack(
+            anchor="e",
+            padx=24,
+            pady=(0, 20),
+        )
 
     def _show_workload(self):
         self._label(
@@ -848,6 +1704,7 @@ class AetheraDesktopApp:
                 width=event.width,
             ),
         )
+        self._bind_smooth_scroll(self.services_canvas, self.service_cards_container)
         self.services_canvas.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=(0, 10))
         self.services_scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=(0, 10))
         self._load_services()
@@ -857,9 +1714,12 @@ class AetheraDesktopApp:
 
     def _on_service_search(self, *_args):
         if hasattr(self, "service_cards_container"):
-            self._load_services()
+            if self._search_after_id:
+                self.root.after_cancel(self._search_after_id)
+            self._search_after_id = self.root.after(140, self._load_services)
 
     def _load_services(self):
+        self._search_after_id = None
         for child in self.service_cards_container.winfo_children():
             child.destroy()
         self.service_count.configure(text="Cargando…")
@@ -909,7 +1769,8 @@ class AetheraDesktopApp:
         card = self._card(
             self.service_cards_container,
             bg=COLORS["surface_light"],
-            radius=12,
+            radius=22,
+            gradient=("#202d4b", "#19243d", "#24204a"),
         )
         card.grid(
             row=index // 2,
@@ -918,6 +1779,7 @@ class AetheraDesktopApp:
             padx=(4, 7) if index % 2 == 0 else (7, 4),
             pady=7,
         )
+        self._animate_card_in(card, grid=True)
         self.service_cards_container.grid_columnconfigure(0, weight=1, uniform="service")
         self.service_cards_container.grid_columnconfigure(1, weight=1, uniform="service")
 
@@ -1084,6 +1946,7 @@ class AetheraDesktopApp:
         canvas.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
         scrollbar.pack(side="right", fill="y", padx=(0, 8), pady=8)
         self.canvas = canvas
+        self._bind_smooth_scroll(canvas, self.message_list)
 
         for message in self.chat.historial:
             if message.get("role") in {"assistant", "user"} and message.get("content"):
@@ -1104,7 +1967,7 @@ class AetheraDesktopApp:
             fg=COLORS["text"],
             insertbackground=COLORS["text"],
             relief="flat",
-            font=(FONT, 10),
+            font=(FONT, 12),
             padx=12,
             pady=10,
         )
@@ -1119,31 +1982,34 @@ class AetheraDesktopApp:
     def _append_message(self, role, text):
         is_user = role == "user"
         outer = tk.Frame(self.message_list, bg=COLORS["background"])
-        outer.pack(fill="x", padx=13, pady=7)
-        bubble = tk.Frame(
+        outer.pack(fill="x", padx=15, pady=8)
+        bubble_color = "#30245f" if is_user else COLORS["surface"]
+        bubble = self._card(
             outer,
-            bg=COLORS["accent"] if is_user else COLORS["surface"],
-            highlightbackground=COLORS["accent"] if is_user else COLORS["border"],
-            highlightthickness=1,
+            bg=bubble_color,
+            border=COLORS["accent_light"] if is_user else COLORS["border"],
+            radius=24,
+            gradient=("#7666ff", "#5b52e8", "#3c73cb") if is_user else None,
         )
-        bubble.pack(side="right" if is_user else "left")
+        bubble.pack(side="right" if is_user else "left", padx=(80, 0) if is_user else (0, 80))
         tk.Label(
             bubble,
             text="Tú" if is_user else "Aethera",
-            bg=COLORS["accent"] if is_user else COLORS["surface"],
+            bg=bubble_color,
             fg="white" if is_user else COLORS["accent_light"],
-            font=(FONT, 8, "bold"),
-        ).pack(anchor="w", padx=12, pady=(9, 2))
+            font=(FONT, 10, "bold"),
+        ).pack(anchor="w", padx=18, pady=(14, 4))
         tk.Label(
             bubble,
             text=text,
-            bg=COLORS["accent"] if is_user else COLORS["surface"],
+            bg=bubble_color,
             fg="white" if is_user else COLORS["text"],
-            font=(FONT, 10),
+            font=(FONT, 12),
             justify="left",
-            wraplength=max(340, self.root.winfo_width() - 440),
-        ).pack(anchor="w", padx=12, pady=(0, 10))
-        self.root.after_idle(lambda: self.canvas.yview_moveto(1))
+            wraplength=max(460, self.root.winfo_width() - 540),
+        ).pack(anchor="w", padx=18, pady=(0, 15))
+        self._animate_card_in(outer)
+        self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
     def _send_from_shortcut(self, _event):
         self._send_message()
@@ -1161,12 +2027,15 @@ class AetheraDesktopApp:
         self.send_button.configure(state="disabled")
         self.status_label = self._label(
             self.content,
-            "Aethera está pensando...",
-            size=8,
+            "✦  Aethera está pensando",
+            size=10,
             color=COLORS["accent_light"],
             bg=COLORS["background"],
         )
         self.status_label.pack(anchor="w", pady=(5, 0))
+        self.status_base = "✦  Aethera está pensando"
+        self._typing_phase = 0
+        self._pulse_typing_indicator()
         worker = threading.Thread(
             target=self._run_chat_turn,
             args=(text,),
@@ -1206,44 +2075,64 @@ class AetheraDesktopApp:
             pass
         self.root.after(80, self._process_queue)
 
+    def _pulse_typing_indicator(self):
+        if not self.busy or not hasattr(self, "status_label"):
+            return
+        if not self.status_label.winfo_exists():
+            return
+        self._typing_phase = (self._typing_phase + 1) % 4
+        dots = "·" * self._typing_phase
+        color = COLORS["accent_light"] if self._typing_phase % 2 else COLORS["teal"]
+        self.status_label.configure(
+            text=f"{self.status_base}  {dots}",
+            fg=color,
+        )
+        self._typing_after_id = self.root.after(360, self._pulse_typing_indicator)
+
     def _append_stream_chunk(self, chunk):
         if not hasattr(self, "stream_bubble"):
             outer = tk.Frame(self.message_list, bg=COLORS["background"])
-            outer.pack(fill="x", padx=13, pady=7)
-            self.stream_bubble = tk.Frame(
+            outer.pack(fill="x", padx=15, pady=8)
+            self.stream_bubble = self._card(
                 outer,
-                bg=COLORS["surface"],
-                highlightbackground=COLORS["border"],
-                highlightthickness=1,
+                bg="#15223a",
+                border="#405176",
+                radius=24,
+                gradient=("#17223d", "#14283b", "#20214b"),
             )
-            self.stream_bubble.pack(side="left")
+            self.stream_bubble.pack(side="left", padx=(0, 80))
             tk.Label(
                 self.stream_bubble,
                 text="Aethera",
-                bg=COLORS["surface"],
+                bg="#17223d",
                 fg=COLORS["accent_light"],
-                font=(FONT, 8, "bold"),
-            ).pack(anchor="w", padx=12, pady=(9, 2))
+                font=(FONT, 10, "bold"),
+            ).pack(anchor="w", padx=18, pady=(14, 4))
             self.stream_text = tk.Label(
                 self.stream_bubble,
                 text="",
-                bg=COLORS["surface"],
+                bg="#17223d",
                 fg=COLORS["text"],
-                font=(FONT, 10),
+                font=(FONT, 12),
                 justify="left",
-                wraplength=max(340, self.root.winfo_width() - 440),
+                wraplength=max(460, self.root.winfo_width() - 540),
             )
-            self.stream_text.pack(anchor="w", padx=12, pady=(0, 10))
+            self.stream_text.pack(anchor="w", padx=18, pady=(0, 15))
             self.stream_content = ""
+            self._animate_card_in(outer)
         self.stream_content += chunk
         self.stream_text.configure(text=self.stream_content)
-        self.root.after_idle(lambda: self.canvas.yview_moveto(1))
+        self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
     def _set_status(self, status):
         if hasattr(self, "status_label") and self.status_label.winfo_exists():
-            self.status_label.configure(text=status)
+            self.status_base = f"✦  {status}"
+            self.status_label.configure(text=self.status_base)
 
     def _finish_chat_turn(self):
+        typing_after_id = getattr(self, "_typing_after_id", None)
+        if typing_after_id:
+            self.root.after_cancel(typing_after_id)
         if hasattr(self, "status_label") and self.status_label.winfo_exists():
             self.status_label.destroy()
         self.busy = False
@@ -1253,6 +2142,55 @@ class AetheraDesktopApp:
             del self.stream_bubble
             del self.stream_text
             del self.stream_content
+        if self.current_page == "Asistente IA" and hasattr(self, "canvas"):
+            self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
+
+    def _bind_smooth_scroll(self, canvas, child):
+        self._scroll_targets.append((canvas, child))
+
+    def _animate_card_in(self, widget, grid=False):
+        try:
+            info = widget.grid_info() if grid else widget.pack_info()
+        except tk.TclError:
+            return
+        padding = info.get("pady", 0)
+        if isinstance(padding, tuple):
+            final_top, final_bottom = (int(value) for value in padding)
+        else:
+            final_top = final_bottom = int(padding)
+        widget.configure(highlightthickness=0)
+        rounded = next(
+            (
+                child
+                for child in widget.winfo_children()
+                if isinstance(child, RoundedFrame)
+            ),
+            widget if isinstance(widget, RoundedFrame) else None,
+        )
+        original_border = rounded.border if rounded else None
+        parent_bg = widget.master.cget("bg")
+
+        def step(index):
+            if not widget.winfo_exists():
+                return
+            progress = index / 5
+            top = round(final_top * progress)
+            bottom = round(final_bottom * progress)
+            if grid:
+                widget.grid_configure(pady=(top, bottom))
+            else:
+                widget.pack_configure(pady=(top, bottom))
+            if rounded:
+                rounded.border = _mix_color(
+                    parent_bg,
+                    original_border,
+                    progress,
+                )
+                rounded._draw()
+            if index < 5:
+                self.root.after(16, lambda: step(index + 1))
+
+        self.root.after(0, lambda: step(1))
 
     def _notice(self, parent, text, color):
         tk.Label(

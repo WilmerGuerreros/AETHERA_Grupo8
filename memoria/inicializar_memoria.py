@@ -9,4 +9,4 @@ def inicializar_memoria():
     numero_seccion = int(archivo.stem.split("_")[1])
     if contador >= 20:
         return numero_seccion + 1, 0
-    return numero_seccion, contador
+    return numero_seccion, contador 
