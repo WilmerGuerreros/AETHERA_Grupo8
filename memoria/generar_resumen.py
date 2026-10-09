@@ -3,7 +3,7 @@ import ollama
 from config_de_carpetas import carpeta_resumen
 
 
-def generar_resumen(archivo_historial, numero_seccion, modelo="qwen2.5:7b"):
+def generar_resumen(archivo_historial, numero_seccion, modelo="nemotron-3-super:cloud"):
     with open(archivo_historial, "r", encoding="utf-8") as historial:
         contenido_historial = historial.read()
 

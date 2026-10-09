@@ -1,11 +1,11 @@
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
+from app_paths import resource_path
 
-TOOLS_DIR = Path(__file__).resolve().parent
-RUTA_SERVICIOS = TOOLS_DIR.parent / "Resources" / "D6_services_map.geojson"
+
+RUTA_SERVICIOS = resource_path("Resources", "D6_services_map.geojson")
 
 SERVICIOS_POR_CATEGORIA = {
     "academic_pressure": {

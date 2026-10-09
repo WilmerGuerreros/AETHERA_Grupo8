@@ -1,12 +1,9 @@
 import os
 from datetime import datetime, timedelta
-from pathlib import Path
 
-# Obtiene la carpeta 'tools' (donde está la herramienta)
-TOOLS_DIR = Path(__file__).resolve().parent
+from app_paths import resource_path
 
-# .parent sube a la raíz ('mi_proyecto') e ingresa a 'Resources/D7_calendar.ics'
-RUTA_RECURSOS = TOOLS_DIR.parent / "Resources" / "D7_calendar.ics"
+RUTA_RECURSOS = resource_path("Resources", "D7_calendar.ics")
 
 def calendario_academico(tipo: str, fecha_inicio: str = '1900-01-01', fecha_fin: str = '2100-01-01') -> list[dict]:
     """

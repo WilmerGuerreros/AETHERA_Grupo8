@@ -1,7 +1,14 @@
-import os
+import sys
 from pathlib import Path
 
-carpeta_memoria = Path("MEMORIA DE AETHERA AI")
+from app_paths import user_data_directory
+
+
+carpeta_memoria = (
+    user_data_directory() / "MEMORIA DE AETHERA AI"
+    if getattr(sys, "frozen", False)
+    else Path("MEMORIA DE AETHERA AI")
+)
 
 carpeta_historial = carpeta_memoria / "HISTORIAL"
 carpeta_resumen = carpeta_memoria / "RESUMEN"

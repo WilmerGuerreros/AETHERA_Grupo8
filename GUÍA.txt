@@ -6,6 +6,7 @@ Módulos principales
 - ChatSession.py: Gestiona los turnos del chat y ejecuta las herramientas solicitadas por el modelo.
 - desktop_app.py: Implementa la interfaz de escritorio, con chat, calendario, análisis de carga y servicios de apoyo.
 - config_de_carpetas.py: Define y crea las carpetas donde se guardan historiales, resúmenes e índices de memoria.
+- app_paths.py: Resuelve las rutas de recursos empaquetados y la carpeta persistente del usuario.
 
 Paquete tools
 - tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
@@ -30,3 +31,10 @@ Paquete memoria
 - memoria/obtener_ultimas_interacciones.py: Recupera las interacciones más recientes de las secciones de historial.
 - memoria/obtener_ultimo_archivo.py: Localiza el archivo de historial más reciente y cuenta sus interacciones.
 - memoria/obtener_ultimo_resumen.py: Lee el resumen de la sección anterior, si existe.
+
+Crear y compartir el ejecutable en Windows
+1. Instala Python 3.10 o posterior y Ollama en el equipo de desarrollo.
+2. Desde PowerShell, en la carpeta del proyecto, ejecuta: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1
+3. El ejecutable se crea en dist\Aethera.exe; comparte ese archivo junto con esta guía.
+
+El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose en el equipo, conexión a Internet y acceso al modelo configurado en main.py; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.

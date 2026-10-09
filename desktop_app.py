@@ -233,13 +233,15 @@ class RoundedButton(tk.Canvas):
         self.hovered = False
         self.pressed = False
         self.focused = False
-        self.bg_normal = COLORS["accent"] if primary else COLORS["surface_light"]
-        self.bg_hover = COLORS["accent_light"] if primary else "#253252"
         self.gradient = (
             ("#7666ff", "#634ff0", "#3d82ed")
             if primary
-            else None
+            else ("#18223b", "#1d2943", "#18223b")
         )
+        self.selected = False
+        self.font = (FONT, 10, "bold")
+        self._display_gradient = self.gradient
+        self._gradient_animation_id = None
         width = max(116, len(text) * 8 + 40)
         super().__init__(
             parent,
@@ -283,34 +285,24 @@ class RoundedButton(tk.Canvas):
                         center_y + radius * math.sin(angle),
                     )
                 )
-        fill = self.bg_normal
-        if self.disabled:
-            fill = COLORS["border"]
-        elif self.pressed:
-            fill = COLORS["accent"]
-        elif self.hovered:
-            fill = self.bg_hover
-        if self.gradient and not (self.disabled or self.pressed or self.hovered):
-            for row in range(height):
-                left, right = _rounded_scanline(width, height, radius, row)
-                self.create_line(
-                    left,
-                    row,
-                    right,
-                    row,
-                    fill=_gradient_color(self.gradient, row / max(1, height - 1)),
-                    tags="button",
-                )
-        else:
-            self.create_polygon(
-                *points,
-                smooth=True,
-                splinesteps=20,
-                fill=fill,
-                outline=COLORS["accent_light"] if self.focused else fill,
-                width=2 if self.focused else 1,
+        for row in range(height):
+            left, right = _rounded_scanline(width, height, radius, row)
+            self.create_line(
+                left,
+                row,
+                right,
+                row,
+                fill=_gradient_color(
+                    self._display_gradient,
+                    row / max(1, height - 1),
+                ),
                 tags="button",
             )
+        outline = (
+            COLORS["accent_light"]
+            if self.focused or self.selected
+            else self._display_gradient[1]
+        )
         if self.focused:
             self.create_polygon(
                 *points,
@@ -321,56 +313,131 @@ class RoundedButton(tk.Canvas):
                 width=2,
                 tags="button",
             )
+        elif self.selected:
+            self.create_polygon(
+                *points,
+                smooth=True,
+                splinesteps=20,
+                fill="",
+                outline=outline,
+                width=1,
+                tags="button",
+            )
         self.create_text(
             width / 2,
             height / 2,
             text=self.text,
-            fill="#8792ad" if self.disabled else "white",
-            font=(FONT, 10, "bold"),
+            fill=(
+                "#8792ad"
+                if self.disabled
+                else COLORS["text"]
+                if self.selected or self.hovered
+                else COLORS["muted"]
+                if not self.primary
+                else "white"
+            ),
+            font=self.font,
             tags="button",
         )
 
+    def _gradient_for_state(self):
+        if self.disabled:
+            color = COLORS["border"]
+            return color, _mix_color(color, COLORS["surface_light"], 0.4), color
+        if self.pressed:
+            return ("#4439bd", "#5144cf", "#315fae")
+        if self.selected:
+            return ("#5145d7", "#5f53e8", "#326fc6")
+        if self.hovered:
+            return ("#302b62", "#383774", "#264b76")
+        if self.focused and not self.primary:
+            return ("#24234b", "#292952", "#203a5d")
+        return self.gradient
+
+    def _animate_gradient(self):
+        if self._gradient_animation_id:
+            self.after_cancel(self._gradient_animation_id)
+            self._gradient_animation_id = None
+        start = self._display_gradient
+        target = self._gradient_for_state()
+        if start == target:
+            self._draw()
+            return
+
+        def step(index):
+            if not self.winfo_exists():
+                return
+            progress = min(1.0, index / 9)
+            eased = 1 - (1 - progress) ** 3
+            self._display_gradient = tuple(
+                _mix_color(first, last, eased)
+                for first, last in zip(start, target)
+            )
+            self._draw()
+            if progress < 1:
+                self._gradient_animation_id = self.after(
+                    14,
+                    lambda next_step=index + 1: step(next_step),
+                )
+            else:
+                self._gradient_animation_id = None
+
+        step(1)
+
+    def set_selected(self, selected):
+        self.selected = selected
+        self.font = (FONT, 10, "bold" if selected else "normal")
+        self._animate_gradient()
+
     def _on_enter(self, _event):
         self.hovered = True
-        self._draw()
+        self._animate_gradient()
 
     def _on_leave(self, _event):
         self.hovered = False
         self.pressed = False
-        self._draw()
+        self._animate_gradient()
 
     def _on_focus(self, _event):
         self.focused = True
-        self._draw()
+        self._animate_gradient()
 
     def _on_blur(self, _event):
         self.focused = False
-        self._draw()
+        self._animate_gradient()
 
     def _on_press(self, _event):
         if not self.disabled:
             self.pressed = True
-            self._draw()
+            self._animate_gradient()
 
     def _on_release(self, event):
         was_pressed = self.pressed
         self.pressed = False
-        self._draw()
+        self._animate_gradient()
         inside = 0 <= event.x <= self.winfo_width() and 0 <= event.y <= self.winfo_height()
         if was_pressed and inside and not self.disabled:
             self.command()
 
     def _invoke(self, _event=None):
         if not self.disabled:
+            self.pressed = True
+            self._animate_gradient()
+            self.after(100, self._release_keyboard_activation)
             self.command()
         return "break"
+
+    def _release_keyboard_activation(self):
+        if self.winfo_exists():
+            self.pressed = False
+            self._animate_gradient()
 
     def configure(self, cnf=None, **kwargs):
         state = kwargs.pop("state", None)
         if state is not None:
             self.disabled = state == "disabled"
             super().configure(cursor="arrow" if self.disabled else "hand2")
-            self._draw()
+            self._animate_gradient()
         if kwargs or cnf:
             super().configure(cnf, **kwargs)
 
@@ -389,8 +456,12 @@ class AnimatedDropdown(tk.Frame):
         self.animation_id = None
         self._outside_binding = None
         self._selection_animation_id = None
+        self._gradient_animation_id = None
         self._hover_animations = {}
         self._hover_starts = {}
+        self.hovered = False
+        self.pressed = False
+        self._display_gradient = ("#222b45", "#1b2238", "#252044")
         self.selection_color = self._option_color(textvariable.get())
         self.canvas = tk.Canvas(
             self,
@@ -403,7 +474,8 @@ class AnimatedDropdown(tk.Frame):
         )
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", self._draw)
-        self.canvas.bind("<Button-1>", self.toggle)
+        self.canvas.bind("<ButtonPress-1>", self._on_press)
+        self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<Enter>", self._on_hover)
         self.canvas.bind("<Leave>", self._on_leave)
         self.canvas.bind("<Return>", self.toggle)
@@ -418,11 +490,7 @@ class AnimatedDropdown(tk.Frame):
         width = max(2, self.canvas.winfo_width())
         height = max(2, self.canvas.winfo_height())
         radius = min(15, height // 2)
-        colors = ("#222b45", "#1b2238", "#252044") if not self.is_open else (
-            "#312b60",
-            "#24294b",
-            "#27354e",
-        )
+        colors = self._display_gradient
         for y in range(height):
             left, right = _rounded_scanline(width, height, radius, y)
             self.canvas.create_line(
@@ -557,13 +625,70 @@ class AnimatedDropdown(tk.Frame):
         return COLORS["accent_light"]
 
     def _on_hover(self, _event=None):
+        self.hovered = True
         if not self.is_open:
             self.canvas.configure(cursor="hand2")
+        self._animate_gradient()
         self._draw()
 
     def _on_leave(self, _event=None):
+        self.hovered = False
+        self.pressed = False
+        self._animate_gradient()
         self.canvas.configure(cursor="hand2")
         self._draw()
+
+    def _on_press(self, _event=None):
+        self.pressed = True
+        self._animate_gradient()
+        return "break"
+
+    def _on_release(self, _event=None):
+        was_pressed = self.pressed
+        self.pressed = False
+        self._animate_gradient()
+        if was_pressed:
+            self.toggle()
+        return "break"
+
+    def _gradient_for_state(self):
+        if self.pressed:
+            return ("#403782", "#39366f", "#294c73")
+        if self.is_open:
+            return ("#393274", "#2e355e", "#2c4d70")
+        if self.hovered:
+            return ("#302b62", "#2a3155", "#264968")
+        return ("#222b45", "#1b2238", "#252044")
+
+    def _animate_gradient(self):
+        if self._gradient_animation_id:
+            self.after_cancel(self._gradient_animation_id)
+            self._gradient_animation_id = None
+        start = self._display_gradient
+        target = self._gradient_for_state()
+        if start == target:
+            self._draw()
+            return
+
+        def step(index):
+            if not self.winfo_exists():
+                return
+            progress = min(1.0, index / 8)
+            eased = 1 - (1 - progress) ** 3
+            self._display_gradient = tuple(
+                _mix_color(first, last, eased)
+                for first, last in zip(start, target)
+            )
+            self._draw()
+            if progress < 1:
+                self._gradient_animation_id = self.after(
+                    14,
+                    lambda next_step=index + 1: step(next_step),
+                )
+            else:
+                self._gradient_animation_id = None
+
+        step(1)
 
     def toggle(self, _event=None):
         if self.is_open:
@@ -576,6 +701,7 @@ class AnimatedDropdown(tk.Frame):
         if self.is_open or not self.values:
             return
         self.is_open = True
+        self._animate_gradient()
         self._draw()
         self.popup = tk.Toplevel(self)
         self.popup.withdraw()
@@ -805,6 +931,7 @@ class AnimatedDropdown(tk.Frame):
         if not self.is_open:
             return
         self.is_open = False
+        self._animate_gradient()
         if self.animation_id:
             self.after_cancel(self.animation_id)
             self.animation_id = None
@@ -952,35 +1079,12 @@ class AetheraDesktopApp:
             row.pack(fill="x", padx=12, pady=2)
             indicator = tk.Frame(row, bg=COLORS["accent_light"])
             indicator.place(x=0, rely=0.5, anchor="w", width=3, height=0)
-            button = tk.Button(
+            button = RoundedButton(
                 row,
-                text=f"  {icon}    {page}",
-                anchor="w",
+                text=f"{icon}    {page}",
                 command=lambda selected=page: self.show_page(selected),
-                relief="flat",
-                bd=0,
-                padx=10,
-                pady=12,
-                bg=COLORS["sidebar"],
-                fg=COLORS["muted"],
-                activebackground=COLORS["surface_light"],
-                activeforeground=COLORS["text"],
-                font=(FONT, 11),
-                cursor="hand2",
             )
             button.pack(side="left", fill="x", expand=True, padx=(10, 0))
-            button.bind(
-                "<Enter>",
-                lambda _event, selected_page=page: self._on_nav_enter(
-                    selected_page
-                ),
-            )
-            button.bind(
-                "<Leave>",
-                lambda _event, selected_page=page: self._on_nav_leave(
-                    selected_page
-                ),
-            )
             self.nav_buttons[page] = button
             self.nav_indicators[page] = indicator
             self._nav_indicator_progress[page] = 0.0
@@ -1146,20 +1250,6 @@ class AetheraDesktopApp:
         elif page == "Servicios de apoyo":
             self._show_services()
 
-    def _on_nav_enter(self, page):
-        if page != self.current_page:
-            self.nav_buttons[page].configure(
-                bg=COLORS["surface_light"],
-                fg=COLORS["text"],
-            )
-
-    def _on_nav_leave(self, page):
-        if page != self.current_page:
-            self.nav_buttons[page].configure(
-                bg=COLORS["sidebar"],
-                fg=COLORS["muted"],
-            )
-
     def _animate_nav_selection(self, selected_page):
         duration = 0.18
         started = time.monotonic()
@@ -1170,18 +1260,13 @@ class AetheraDesktopApp:
             token = self._nav_animation_tokens.get(page, 0) + 1
             self._nav_animation_tokens[page] = token
             selected = page == selected_page
-            start_color = button.cget("bg")
-            target_color = COLORS["accent"] if selected else COLORS["sidebar"]
             start_progress = self._nav_indicator_progress[page]
             target_progress = 1.0 if selected else 0.0
-            button.configure(font=(FONT, 12, "bold" if selected else "normal"))
+            button.set_selected(selected)
 
             def step(
                 nav_page=page,
-                nav_button=button,
                 indicator=self.nav_indicators[page],
-                from_color=start_color,
-                to_color=target_color,
                 from_progress=start_progress,
                 to_progress=target_progress,
                 animation_token=token,
@@ -1191,19 +1276,11 @@ class AetheraDesktopApp:
                     callback = step
                 if self._nav_animation_tokens.get(nav_page) != animation_token:
                     return
-                if not nav_button.winfo_exists():
+                if not indicator.winfo_exists():
                     self._nav_animation_ids.pop(nav_page, None)
                     return
                 progress = min(1.0, (time.monotonic() - started) / duration)
                 eased = 1 - (1 - progress) ** 3
-                nav_button.configure(
-                    bg=_mix_color(from_color, to_color, eased),
-                    fg=_mix_color(
-                        COLORS["muted"],
-                        COLORS["text"] if nav_page == selected_page else COLORS["muted"],
-                        eased,
-                    ),
-                )
                 indicator_progress = from_progress + (
                     to_progress - from_progress
                 ) * eased

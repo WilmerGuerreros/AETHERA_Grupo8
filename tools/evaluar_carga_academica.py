@@ -1,12 +1,13 @@
 import csv
 import logging
-from pathlib import Path
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
-# Ruta a la carpeta Resources desde la carpeta tools
-TOOLS_DIR = Path(__file__).resolve().parent
-RUTA_CALENDARIO_CSV = TOOLS_DIR.parent / "Resources" / "D7_calendar.csv"
+from app_paths import resource_path
+
+
+RUTA_CALENDARIO_CSV = resource_path("Resources", "D7_calendar.csv")
 
 
 def _cargar_csv_data(file_path: Path) -> list[dict[str, str]]:
