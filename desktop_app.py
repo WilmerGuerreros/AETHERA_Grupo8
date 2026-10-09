@@ -9,6 +9,7 @@ import tkinter as tk
 from datetime import date, datetime, timedelta
 from tkinter import ttk
 
+from app_paths import configure_tk_environment
 from ChatSession import ChatSession
 from tools.calendario_academico import calendario_academico
 from tools.evaluar_carga_academica import evaluar_riesgo_sobrecarga
@@ -968,6 +969,7 @@ class AnimatedDropdown(tk.Frame):
 
 class AetheraDesktopApp:
     def __init__(self, motor, historial, herramientas, guardar_historial):
+        configure_tk_environment()
         self.root = tk.Tk()
         self.root.title("Aethera | Acompañamiento académico")
         self.root.geometry("1560x980")
@@ -1307,7 +1309,7 @@ class AetheraDesktopApp:
     def _show_dashboard(self):
         self._label(
             self.content,
-            f"Hola, de nuevo!!!  {self._greeting()}",
+            f"Hola de nuevo!  {self._greeting()}",
             size=24,
             weight="bold",
             bg=COLORS["background"],
