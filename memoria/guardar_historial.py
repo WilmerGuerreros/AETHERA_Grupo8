@@ -10,7 +10,7 @@ from .inicializar_memoria import inicializar_memoria
 numero_seccion, contador_mensajes = inicializar_memoria()
 
 
-def guardar_historial(usuario, respuesta, modelo="qwen2.5:7b"):
+def guardar_historial(usuario, respuesta, modelo="nemotron-3-super:cloud"):
     global numero_seccion
     global contador_mensajes
 
