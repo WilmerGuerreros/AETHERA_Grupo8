@@ -32,4 +32,11 @@ def guardar_historial(usuario, respuesta, modelo="qwen2.5:7b"):
         archivo_resumen = generar_resumen(archivo, numero_seccion, modelo)
         actualizar_indice(numero_seccion, archivo, archivo_resumen)
         numero_seccion += 1
-        contador_mensajes = 0
+        contador_mensajes = 0 
+
+
+
+                
+
+
+

@@ -23,6 +23,7 @@ if resumen_anterior:
         "content": f"Memoria de largo plazo recuperada:\n{resumen_anterior}",
     })
 
+
 ultimas_interacciones = obtener_ultimas_interacciones(numero_seccion, cantidad=4)
 if ultimas_interacciones:
     contexto_reciente = "MEMORIA RECIENTE RECUPERADA:\n\n"

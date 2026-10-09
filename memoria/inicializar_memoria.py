@@ -10,3 +10,9 @@ def inicializar_memoria():
     if contador >= 20:
         return numero_seccion + 1, 0
     return numero_seccion, contador 
+
+
+
+# CIERRAS --> VUELVES A ABRIR LA APP  
+# Historial_0016 #17 --> Historial_0016 #18 
+

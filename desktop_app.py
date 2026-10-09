@@ -340,6 +340,437 @@ class RoundedButton(tk.Canvas):
             super().configure(cnf, **kwargs)
 
 
+class AnimatedDropdown(tk.Frame):
+    """Selector desplegable propio para evitar el menú nativo del sistema."""
+
+    def __init__(self, parent, textvariable, values, width=280, on_select=None):
+        super().__init__(parent, bg=parent.cget("bg"), width=width, height=48)
+        self.pack_propagate(False)
+        self.textvariable = textvariable
+        self.values = tuple(values)
+        self.on_select = on_select
+        self.is_open = False
+        self.popup = None
+        self.animation_id = None
+        self._outside_binding = None
+        self._selection_animation_id = None
+        self.selection_color = self._option_color(textvariable.get())
+        self.canvas = tk.Canvas(
+            self,
+            width=width,
+            height=48,
+            bg=parent.cget("bg"),
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+        )
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Configure>", self._draw)
+        self.canvas.bind("<Button-1>", self.toggle)
+        self.canvas.bind("<Enter>", self._on_hover)
+        self.canvas.bind("<Leave>", self._on_leave)
+        self.canvas.bind("<Return>", self.toggle)
+        self.canvas.bind("<space>", self.toggle)
+        self.canvas.configure(takefocus=True)
+        self.textvariable.trace_add("write", self._draw)
+
+    def _draw(self, *_args):
+        if not self.winfo_exists():
+            return
+        self.canvas.delete("selector")
+        width = max(2, self.canvas.winfo_width())
+        height = max(2, self.canvas.winfo_height())
+        radius = min(15, height // 2)
+        colors = ("#222b45", "#1b2238", "#252044") if not self.is_open else (
+            "#312b60",
+            "#24294b",
+            "#27354e",
+        )
+        for y in range(height):
+            left, right = _rounded_scanline(width, height, radius, y)
+            self.canvas.create_line(
+                left,
+                y,
+                right,
+                y,
+                fill=_gradient_color(colors, y / max(1, height - 1)),
+                tags="selector",
+            )
+        self.canvas.create_arc(
+            1,
+            1,
+            height - 1,
+            height - 1,
+            start=90,
+            extent=180,
+            style="arc",
+            outline="#544d8a" if self.is_open else COLORS["border"],
+            width=1,
+            tags="selector",
+        )
+        self.canvas.create_arc(
+            width - height + 1,
+            1,
+            width - 1,
+            height - 1,
+            start=270,
+            extent=180,
+            style="arc",
+            outline="#544d8a" if self.is_open else COLORS["border"],
+            width=1,
+            tags="selector",
+        )
+        self.canvas.create_line(
+            radius,
+            1,
+            width - radius,
+            1,
+            fill="#544d8a" if self.is_open else COLORS["border"],
+            tags="selector",
+        )
+        self.canvas.create_line(
+            radius,
+            height - 1,
+            width - radius,
+            height - 1,
+            fill="#544d8a" if self.is_open else COLORS["border"],
+            tags="selector",
+        )
+        selected = self.textvariable.get()
+        accent = self._option_color(selected)
+        accent = self.selection_color or accent
+        glow = 4 if self.is_open else 0
+        self.canvas.create_oval(
+            11 - glow,
+            height / 2 - 9 - glow,
+            29 + glow,
+            height / 2 + 9 + glow,
+            outline="#4b427e" if self.is_open else "",
+            width=1 if self.is_open else 0,
+            tags="selector",
+        )
+        self.canvas.create_oval(
+            15,
+            height / 2 - 5,
+            25,
+            height / 2 + 5,
+            fill=accent,
+            outline="",
+            tags="selector",
+        )
+        self.canvas.create_text(
+            36,
+            height / 2,
+            text=selected,
+            anchor="w",
+            fill=COLORS["text"],
+            font=(FONT, 10, "bold"),
+            tags="selector",
+        )
+        center_x = width - 20
+        center_y = height / 2
+        direction = -1 if self.is_open else 1
+        self.canvas.create_line(
+            center_x - 4,
+            center_y - direction * 2,
+            center_x,
+            center_y + direction * 2,
+            fill=COLORS["accent_light"],
+            width=2,
+            capstyle="round",
+            tags="selector",
+        )
+        self.canvas.create_line(
+            center_x,
+            center_y + direction * 2,
+            center_x + 4,
+            center_y - direction * 2,
+            fill=COLORS["accent_light"],
+            width=2,
+            capstyle="round",
+            tags="selector",
+        )
+
+    def _option_color(self, value):
+        label = value.casefold()
+        if "evalu" in label:
+            return "#ff8799"
+        if "bienestar" in label:
+            return "#54d9bb"
+        if "período" in label or "periodo" in label:
+            return "#83aaff"
+        if "activ" in label:
+            return "#c196ff"
+        if "gaia" in label:
+            return "#48d3b7"
+        if "horizon" in label:
+            return "#61b9ff"
+        if "nebula" in label:
+            return "#b493ff"
+        if "quantum" in label:
+            return "#ff94bf"
+        if "vector" in label:
+            return "#ffbd71"
+        if "apoyo" in label:
+            return "#56d7be"
+        if "sueño" in label or "rutinas" in label:
+            return "#82b5ff"
+        if "vocacional" in label:
+            return "#ffc26c"
+        return COLORS["accent_light"]
+
+    def _on_hover(self, _event=None):
+        if not self.is_open:
+            self.canvas.configure(cursor="hand2")
+        self._draw()
+
+    def _on_leave(self, _event=None):
+        self.canvas.configure(cursor="hand2")
+        self._draw()
+
+    def toggle(self, _event=None):
+        if self.is_open:
+            self.close()
+        else:
+            self.open()
+        return "break"
+
+    def open(self):
+        if self.is_open or not self.values:
+            return
+        self.is_open = True
+        self._draw()
+        self.popup = tk.Toplevel(self)
+        self.popup.withdraw()
+        self.popup.overrideredirect(True)
+        self.popup.configure(bg="#403a65")
+        self.popup.attributes("-topmost", True)
+        self.popup.bind("<Escape>", lambda _event: self.close())
+        self.popup.bind("<Up>", lambda _event: self._move_active_option(-1))
+        self.popup.bind("<Down>", lambda _event: self._move_active_option(1))
+        self.popup.bind("<Return>", lambda _event: self._select_active_option())
+        body = tk.Frame(
+            self.popup,
+            bg="#131a2d",
+            highlightbackground="#484572",
+            highlightthickness=1,
+            bd=0,
+        )
+        body.pack(fill="both", expand=True, padx=1, pady=1)
+        header = tk.Frame(body, bg="#131a2d")
+        header.pack(fill="x", padx=9, pady=(8, 5))
+        tk.Label(
+            header,
+            text="ELIGE UNA OPCIÓN",
+            bg="#131a2d",
+            fg="#8996b4",
+            font=(FONT, 8, "bold"),
+        ).pack(side="left")
+        tk.Label(
+            header,
+            text=f"{len(self.values):02d}",
+            bg="#282447",
+            fg=COLORS["accent_light"],
+            font=(FONT, 8, "bold"),
+            padx=6,
+            pady=2,
+        ).pack(side="right")
+        self.option_rows = []
+        for index, value in enumerate(self.values):
+            self._create_option(body, value, index)
+        self.popup.update_idletasks()
+        self.popup_width = max(self.winfo_width(), 270)
+        self.popup_height = min(
+            self.popup.winfo_reqheight(),
+            self.winfo_screenheight() - 100,
+        )
+        self.popup_x = self.winfo_rootx()
+        self.popup_y = self.winfo_rooty() + self.winfo_height() + 7
+        if self.popup_y + self.popup_height > self.winfo_screenheight() - 12:
+            self.popup_y = max(8, self.winfo_rooty() - self.popup_height - 7)
+        if self.popup_x + self.popup_width > self.winfo_screenwidth() - 12:
+            self.popup_x = self.winfo_screenwidth() - self.popup_width - 12
+        self.popup.geometry(
+            f"{self.popup_width}x1+{self.popup_x}+{self.popup_y}"
+        )
+        self.popup.deiconify()
+        self.popup.lift()
+        self.active_option_index = next(
+            (
+                index
+                for index, value in enumerate(self.values)
+                if value == self.textvariable.get()
+            ),
+            0,
+        )
+        self.popup.focus_force()
+        self._animate_open(1)
+        self._outside_binding = self.winfo_toplevel().bind_all(
+            "<Button-1>",
+            self._close_if_outside,
+            add="+",
+        )
+
+    def _create_option(self, parent, value, index):
+        accent = self._option_color(value)
+        selected = value == self.textvariable.get()
+        row = tk.Frame(
+            parent,
+            bg="#27264a" if selected else "#131a2d",
+            height=42,
+            cursor="hand2",
+        )
+        row.pack(fill="x", padx=7, pady=2)
+        row.pack_propagate(False)
+        stripe = tk.Frame(row, bg=accent, width=3)
+        stripe.pack(side="left", fill="y", padx=(5, 10), pady=8)
+        dot = tk.Canvas(
+            row,
+            width=17,
+            height=17,
+            bg=row.cget("bg"),
+            highlightthickness=0,
+            bd=0,
+        )
+        dot.pack(side="left", padx=(0, 8))
+        dot.create_oval(2, 2, 15, 15, fill=accent, outline="")
+        label = tk.Label(
+            row,
+            text=value,
+            bg=row.cget("bg"),
+            fg=COLORS["text"] if selected else "#c6cee2",
+            font=(FONT, 10, "bold" if selected else "normal"),
+            anchor="w",
+        )
+        label.pack(side="left", fill="x", expand=True)
+        marker = tk.Label(
+            row,
+            text="✓" if selected else f"{index + 1:02d}",
+            bg=row.cget("bg"),
+            fg=accent if selected else "#727d98",
+            font=(FONT, 9, "bold"),
+            padx=10,
+        )
+        marker.pack(side="right")
+        for widget in (row, stripe, dot, label, marker):
+            widget.bind("<Enter>", lambda event, item=row, color=accent: self._hover_option(item, color))
+            widget.bind("<Leave>", lambda _event, item=row, chosen=selected: self._unhover_option(item, chosen))
+            widget.bind("<Button-1>", lambda _event, selected_value=value: self.select(selected_value))
+        self.option_rows.append(row)
+
+    def _hover_option(self, row, accent):
+        row.configure(bg="#302e58")
+        for child in row.winfo_children():
+            if isinstance(child, (tk.Label, tk.Canvas)) and child.cget("bg") not in (accent,):
+                child.configure(bg="#302e58")
+        row.configure(highlightbackground=accent, highlightthickness=1)
+
+    def _unhover_option(self, row, selected):
+        base = "#27264a" if selected else "#131a2d"
+        row.configure(bg=base, highlightthickness=0)
+        for child in row.winfo_children():
+            if isinstance(child, (tk.Label, tk.Canvas)):
+                child.configure(bg=base)
+
+    def _animate_open(self, step):
+        if not self.popup or not self.popup.winfo_exists():
+            return
+        progress = min(1.0, step / 10)
+        eased = 1 - (1 - progress) ** 3
+        height = max(1, round(self.popup_height * eased))
+        self.popup.geometry(
+            f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
+        )
+        if step < 10:
+            self.animation_id = self.after(12, lambda: self._animate_open(step + 1))
+
+    def select(self, value):
+        old_color = self._option_color(self.textvariable.get())
+        new_color = self._option_color(value)
+        self.textvariable.set(value)
+        self.selection_color = old_color
+        self._draw()
+        self._animate_selection(old_color, new_color, 1)
+        callback = self.on_select
+        self.close()
+        if callback:
+            self.after(30, lambda: callback(value))
+
+    def _animate_selection(self, old_color, new_color, step):
+        if not self.winfo_exists():
+            return
+        progress = min(1.0, step / 9)
+        eased = 1 - (1 - progress) ** 3
+        self.selection_color = _mix_color(old_color, new_color, eased)
+        self._draw()
+        if step < 9:
+            self._selection_animation_id = self.after(
+                18,
+                lambda: self._animate_selection(old_color, new_color, step + 1),
+            )
+
+    def _move_active_option(self, offset):
+        self.active_option_index = (
+            self.active_option_index + offset
+        ) % len(self.values)
+        for index, row in enumerate(self.option_rows):
+            self._unhover_option(row, index == self.active_option_index)
+        self._hover_option(
+            self.option_rows[self.active_option_index],
+            self._option_color(self.values[self.active_option_index]),
+        )
+        return "break"
+
+    def _select_active_option(self):
+        self.select(self.values[self.active_option_index])
+        return "break"
+
+    def _close_if_outside(self, event):
+        if not self.is_open or not self.popup:
+            return
+        clicked = str(event.widget)
+        popup_path = str(self.popup)
+        if clicked == str(self.canvas) or clicked.startswith(popup_path):
+            return
+        self.close()
+
+    def close(self):
+        if not self.is_open:
+            return
+        self.is_open = False
+        if self.animation_id:
+            self.after_cancel(self.animation_id)
+            self.animation_id = None
+        if self._outside_binding:
+            self.winfo_toplevel()._unbind(
+                ("bind", "all", "<Button-1>"),
+                self._outside_binding,
+            )
+            self._outside_binding = None
+        popup = self.popup
+        self.popup = None
+        self._draw()
+        if popup and popup.winfo_exists():
+            self._animate_close(popup, 1)
+
+    def _animate_close(self, popup, step):
+        if not popup.winfo_exists():
+            return
+        progress = min(1.0, step / 7)
+        height = max(1, round(self.popup_height * (1 - progress) ** 2))
+        popup.geometry(
+            f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
+        )
+        if step < 7:
+            self.animation_id = self.after(
+                12,
+                lambda: self._animate_close(popup, step + 1),
+            )
+        else:
+            popup.destroy()
+            self.animation_id = None
+
+
 class AetheraDesktopApp:
     def __init__(self, motor, historial, herramientas, guardar_historial):
         self.root = tk.Tk()
@@ -877,7 +1308,7 @@ class AetheraDesktopApp:
             bg=COLORS["surface"],
         ).pack(side="left", padx=(0, 8))
         self.calendar_category_var = tk.StringVar(value="Todos los eventos")
-        self.calendar_category_selector = ttk.Combobox(
+        self.calendar_category_selector = AnimatedDropdown(
             filter_area,
             textvariable=self.calendar_category_var,
             values=(
@@ -887,15 +1318,10 @@ class AetheraDesktopApp:
                 "Períodos académicos",
                 "Actividades",
             ),
-            state="readonly",
-            style="Aethera.TCombobox",
-            width=22,
+            width=270,
+            on_select=lambda _value: self._refresh_calendar(),
         )
         self.calendar_category_selector.pack(side="left")
-        self.calendar_category_selector.bind(
-            "<<ComboboxSelected>>",
-            lambda _event: self._refresh_calendar(),
-        )
 
         calendar_panel = self._card(
             self.content,
@@ -1604,13 +2030,12 @@ class AetheraDesktopApp:
             anchor="w", pady=(0, 5)
         )
         self.category_var = tk.StringVar(value=next(iter(SERVICE_CATEGORIES)))
-        self.category_selector = ttk.Combobox(
+        self.category_selector = AnimatedDropdown(
             category_filter,
             textvariable=self.category_var,
             values=tuple(SERVICE_CATEGORIES),
-            state="readonly",
-            style="Aethera.TCombobox",
-            width=30,
+            width=320,
+            on_select=lambda _value: self._on_service_filter(),
         )
         self.category_selector.pack()
 
@@ -1620,13 +2045,12 @@ class AetheraDesktopApp:
             anchor="w", pady=(0, 5)
         )
         self.district_var = tk.StringVar(value=next(iter(SERVICE_DISTRICTS)))
-        self.district_selector = ttk.Combobox(
+        self.district_selector = AnimatedDropdown(
             district_filter,
             textvariable=self.district_var,
             values=tuple(SERVICE_DISTRICTS),
-            state="readonly",
-            style="Aethera.TCombobox",
-            width=22,
+            width=250,
+            on_select=lambda _value: self._on_service_filter(),
         )
         self.district_selector.pack()
 
@@ -1650,8 +2074,6 @@ class AetheraDesktopApp:
         )
         search_entry.pack(fill="x", ipady=9)
 
-        self.category_selector.bind("<<ComboboxSelected>>", self._on_service_filter)
-        self.district_selector.bind("<<ComboboxSelected>>", self._on_service_filter)
         self.service_search_var.trace_add("write", self._on_service_search)
 
         self.services_result = self._card(self.content)
