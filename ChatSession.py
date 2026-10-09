@@ -31,18 +31,29 @@ class ChatSession:
                 print("Chat finalizado.")
                 break
 
-            self.historial.append({"role": "user", "content": usuario})
-            
-            
-            self._procesar_respuesta()
+            self.procesar_turno(usuario)
 
 #---------------- METODO DE BUCLE DE HERRAMIENTAS ----------------
-    def _procesar_respuesta(self):
+    def procesar_turno(
+        self,
+        usuario: str,
+        al_emitir_texto: Optional[Callable[[str], None]] = None,
+        al_actualizar_estado: Optional[Callable[[str], None]] = None,
+    ):
+        self.historial.append({"role": "user", "content": usuario})
+        self._procesar_respuesta(usuario, al_emitir_texto, al_actualizar_estado)
+
+    def _procesar_respuesta(
+        self,
+        usuario: str,
+        al_emitir_texto: Optional[Callable[[str], None]] = None,
+        al_actualizar_estado: Optional[Callable[[str], None]] = None,
+    ):
         """Maneja el stream y la ejecución cíclica de herramientas si el modelo las solicita."""
-        usuario = self.historial[-1]["content"]
 
         while True:
-            print("\nAETHERA> ", end="", flush=True)
+            if al_emitir_texto is None:
+                print("\nAETHERA> ", end="", flush=True)
             
             texto_completo = ""
             herramientas_solicitadas = []
@@ -61,14 +72,18 @@ class ChatSession:
                 # Imprimir texto parcial si viene en el fragmento
                 contenido = msg.get('content', '')
                 if contenido:
-                    print(contenido, end="", flush=True)
+                    if al_emitir_texto is None:
+                        print(contenido, end="", flush=True)
+                    else:
+                        al_emitir_texto(contenido)
                     texto_completo += contenido
                 
                 # Detectar si el fragmento contiene llamadas a herramientas
                 if 'tool_calls' in msg and msg['tool_calls']:
                     herramientas_solicitadas.extend(msg['tool_calls'])
                 
-            print()  # Salto de línea al terminar el stream de este turno
+            if al_emitir_texto is None:
+                print()  # Salto de línea al terminar el stream de este turno
 
             # 2. Registrar la respuesta del asistente en el historial
             mensaje_asistente = {'role': 'assistant', 'content': texto_completo}
@@ -88,7 +103,14 @@ class ChatSession:
                 nombre_fn = tool_call['function']['name']
                 argumentos = tool_call['function']['arguments']
 
-                print(f"🛠️ [Ejecutando herramienta '{nombre_fn}' con argumentos: {argumentos}]")
+                estado = f"Consultando {nombre_fn.replace('_', ' ')}..."
+                if al_actualizar_estado is not None:
+                    al_actualizar_estado(estado)
+                else:
+                    print(
+                        f"🛠️ [Ejecutando herramienta '{nombre_fn}' "
+                        f"con argumentos: {argumentos}]"
+                    )
 
                 if nombre_fn in self.lista_herramientas:
                     try:

@@ -1,3 +1,5 @@
+import argparse
+
 from LLMEngine import LLMEngine
 from ChatSession import ChatSession
 from memoria.contexto_inicial import mensajes
@@ -26,27 +28,46 @@ DIRECTRICES ÉTICAS Y PEDAGÓGICAS (REGLAS ESTRICTAS):
 6. Privacidad y Seguridad: Respeta siempre los protocolos de privacidad. No debes solicitar ni vulnerar la información personal administrada en el aplicativo para evitar filtraciones.
 """
 
-def iniciar_app():
+def iniciar_app(interfaz="escritorio"):
     configuracion = {
-        "temperature": 0.2,
+        "temperature": 0.4,
         "num_ctx": 32768,
     }
 
     motor = LLMEngine("nemotron-3-super:cloud", configuracion)
     historial = [mensaje.copy() for mensaje in mensajes]
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}
-    chat = ChatSession(
+
+    if interfaz == "consola":
+        chat = ChatSession(
+            motor,
+            historial,
+            LISTA_HERRAMIENTAS,
+            al_completar_turno=lambda usuario, respuesta: guardar_historial(
+                usuario,
+                respuesta,
+                motor.modelo,
+            ),
+        )
+        chat.iniciar_chat()
+        return
+
+    from desktop_app import iniciar_app_escritorio
+
+    iniciar_app_escritorio(
         motor,
         historial,
         LISTA_HERRAMIENTAS,
-        al_completar_turno=lambda usuario, respuesta: guardar_historial(
-            usuario,
-            respuesta,
-            motor.modelo,
-        ),
+        guardar_historial,
     )
-    chat.iniciar_chat()
 
 
 if __name__ == "__main__":
-    iniciar_app()
+    parser = argparse.ArgumentParser(description="Aethera, asistente académico")
+    parser.add_argument(
+        "--interfaz",
+        choices=("escritorio", "consola"),
+        default="escritorio",
+        help="Interfaz para iniciar (por defecto: escritorio)",
+    )
+    iniciar_app(parser.parse_args().interfaz)
