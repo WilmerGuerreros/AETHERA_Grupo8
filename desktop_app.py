@@ -163,6 +163,36 @@ class RoundedFrame(tk.Frame):
                     width=height / rows + 1,
                     tags="rounded",
                 )
+            inset = min(5, radius)
+            inner_radius = max(0, radius - inset)
+            inner_points = []
+            for center_x, center_y, start in (
+                (width - inset - inner_radius, inset + inner_radius, -90),
+                (
+                    width - inset - inner_radius,
+                    height - inset - inner_radius,
+                    0,
+                ),
+                (inset + inner_radius, height - inset - inner_radius, 90),
+                (inset + inner_radius, inset + inner_radius, 180),
+            ):
+                for step in range(13):
+                    angle = (start + step * 90 / 12) * math.pi / 180
+                    inner_points.extend(
+                        (
+                            center_x + inner_radius * math.cos(angle),
+                            center_y + inner_radius * math.sin(angle),
+                        )
+                    )
+            if width - inset * 2 > 0 and height - inset * 2 > 0:
+                self.canvas.create_polygon(
+                    *inner_points,
+                    smooth=True,
+                    splinesteps=24,
+                    fill=self.fill,
+                    outline="",
+                    tags="rounded",
+                )
             self.canvas.create_polygon(
                 *points,
                 smooth=True,
@@ -683,20 +713,20 @@ class AnimatedDropdown(tk.Frame):
         start = current if step == 1 else self._hover_starts.get(str(row), current)
         if step == 1:
             self._hover_starts[str(row)] = start
-        progress = min(1.0, step / 9)
+        progress = min(1.0, step / 7)
         eased = progress * progress * (3 - 2 * progress)
         color = _mix_color(start, target, eased)
         row.configure(
             bg=color,
             highlightbackground=accent,
-            highlightthickness=0 if restore and step == 9 else 1,
+            highlightthickness=0 if restore and step == 7 else 1,
         )
         for child in row.winfo_children():
             if isinstance(child, (tk.Label, tk.Canvas)):
                 child.configure(bg=color)
-        if step < 9:
+        if step < 7:
             self._hover_animations[str(row)] = self.after(
-                16,
+                14,
                 lambda: self._animate_option_color(
                     row,
                     target,
@@ -712,14 +742,14 @@ class AnimatedDropdown(tk.Frame):
     def _animate_open(self, step):
         if not self.popup or not self.popup.winfo_exists():
             return
-        progress = min(1.0, step / 18)
+        progress = min(1.0, step / 14)
         eased = 1 - (1 - progress) ** 4
         height = max(1, round(self.popup_height * eased))
         self.popup.geometry(
             f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
         )
-        if step < 18:
-            self.animation_id = self.after(16, lambda: self._animate_open(step + 1))
+        if step < 14:
+            self.animation_id = self.after(14, lambda: self._animate_open(step + 1))
 
     def select(self, value):
         old_color = self._option_color(self.textvariable.get())
@@ -736,13 +766,13 @@ class AnimatedDropdown(tk.Frame):
     def _animate_selection(self, old_color, new_color, step):
         if not self.winfo_exists():
             return
-        progress = min(1.0, step / 18)
+        progress = min(1.0, step / 14)
         eased = 1 - (1 - progress) ** 3
         self.selection_color = _mix_color(old_color, new_color, eased)
         self._draw()
-        if step < 18:
+        if step < 14:
             self._selection_animation_id = self.after(
-                22,
+                16,
                 lambda: self._animate_selection(old_color, new_color, step + 1),
             )
 
@@ -793,15 +823,15 @@ class AnimatedDropdown(tk.Frame):
     def _animate_close(self, popup, step):
         if not popup.winfo_exists():
             return
-        progress = min(1.0, step / 14)
+        progress = min(1.0, step / 11)
         eased = progress * progress * (3 - 2 * progress)
         height = max(1, round(self.popup_height * (1 - eased)))
         popup.geometry(
             f"{self.popup_width}x{height}+{self.popup_x}+{self.popup_y}"
         )
-        if step < 14:
+        if step < 11:
             self.animation_id = self.after(
-                16,
+                14,
                 lambda: self._animate_close(popup, step + 1),
             )
         else:
@@ -825,6 +855,9 @@ class AetheraDesktopApp:
         self._calendar_animation_ids = []
         self._calendar_pulse_after_id = None
         self._calendar_pulse_phase = 0
+        self._nav_animation_ids = {}
+        self._nav_animation_tokens = {}
+        self._nav_indicator_progress = {}
         self.root.bind_all("<MouseWheel>", self._handle_mousewheel)
         self.current_page = "Inicio"
         self.busy = False
@@ -907,6 +940,7 @@ class AetheraDesktopApp:
         ).pack(anchor="w", padx=24, pady=(0, 10))
 
         self.nav_buttons = {}
+        self.nav_indicators = {}
         for page, icon in (
             ("Inicio", "⌂"),
             ("Asistente IA", "✧"),
@@ -914,14 +948,18 @@ class AetheraDesktopApp:
             ("Carga académica", "▤"),
             ("Servicios de apoyo", "♡"),
         ):
+            row = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
+            row.pack(fill="x", padx=12, pady=2)
+            indicator = tk.Frame(row, bg=COLORS["accent_light"])
+            indicator.place(x=0, rely=0.5, anchor="w", width=3, height=0)
             button = tk.Button(
-                self.sidebar,
+                row,
                 text=f"  {icon}    {page}",
                 anchor="w",
                 command=lambda selected=page: self.show_page(selected),
                 relief="flat",
                 bd=0,
-                padx=14,
+                padx=10,
                 pady=12,
                 bg=COLORS["sidebar"],
                 fg=COLORS["muted"],
@@ -930,26 +968,22 @@ class AetheraDesktopApp:
                 font=(FONT, 11),
                 cursor="hand2",
             )
-            button.pack(fill="x", padx=12, pady=2)
+            button.pack(side="left", fill="x", expand=True, padx=(10, 0))
             button.bind(
                 "<Enter>",
-                lambda _event, item=button, selected_page=page: (
-                    item.configure(
-                        bg=COLORS["accent"] if self.current_page == selected_page else COLORS["surface_light"],
-                        fg=COLORS["text"],
-                    )
+                lambda _event, selected_page=page: self._on_nav_enter(
+                    selected_page
                 ),
             )
             button.bind(
                 "<Leave>",
-                lambda _event, item=button, selected_page=page: (
-                    item.configure(
-                        bg=COLORS["accent"] if self.current_page == selected_page else COLORS["sidebar"],
-                        fg="white" if self.current_page == selected_page else COLORS["muted"],
-                    )
+                lambda _event, selected_page=page: self._on_nav_leave(
+                    selected_page
                 ),
             )
             self.nav_buttons[page] = button
+            self.nav_indicators[page] = indicator
+            self._nav_indicator_progress[page] = 0.0
 
         spacer = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
         spacer.pack(fill="both", expand=True)
@@ -1033,9 +1067,9 @@ class AetheraDesktopApp:
         return RoundedButton(parent, text, command, primary=primary)
 
     def _animate_scroll_to_bottom(self, canvas):
-        self._animate_scroll(canvas, 1.0, duration=340)
+        self._animate_scroll(canvas, 1.0, duration=270)
 
-    def _animate_scroll(self, canvas, target, duration=340):
+    def _animate_scroll(self, canvas, target, duration=280):
         key = str(canvas)
         animation = self._scroll_animations.get(key)
         if animation and abs(animation["target"] - target) < 0.001:
@@ -1078,7 +1112,7 @@ class AetheraDesktopApp:
         delta = -1 if event.delta > 0 else 1
         current = canvas.yview()[0]
         target = min(1.0, max(0.0, current + delta * 0.12))
-        self._animate_scroll(canvas, target, duration=280)
+        self._animate_scroll(canvas, target, duration=225)
         return "break"
 
     def _handle_mousewheel(self, event):
@@ -1097,13 +1131,7 @@ class AetheraDesktopApp:
                     delattr(self, attribute)
         self.current_page = page
         self.page_title.configure(text=page)
-        for name, button in self.nav_buttons.items():
-            selected = name == page
-            button.configure(
-                bg=COLORS["accent"] if selected else COLORS["sidebar"],
-                fg="white" if selected else COLORS["muted"],
-                font=(FONT, 12, "bold" if selected else "normal"),
-            )
+        self._animate_nav_selection(page)
         for child in self.content.winfo_children():
             child.destroy()
 
@@ -1117,6 +1145,87 @@ class AetheraDesktopApp:
             self._show_workload()
         elif page == "Servicios de apoyo":
             self._show_services()
+
+    def _on_nav_enter(self, page):
+        if page != self.current_page:
+            self.nav_buttons[page].configure(
+                bg=COLORS["surface_light"],
+                fg=COLORS["text"],
+            )
+
+    def _on_nav_leave(self, page):
+        if page != self.current_page:
+            self.nav_buttons[page].configure(
+                bg=COLORS["sidebar"],
+                fg=COLORS["muted"],
+            )
+
+    def _animate_nav_selection(self, selected_page):
+        duration = 0.18
+        started = time.monotonic()
+        for page, button in self.nav_buttons.items():
+            after_id = self._nav_animation_ids.pop(page, None)
+            if after_id:
+                self.root.after_cancel(after_id)
+            token = self._nav_animation_tokens.get(page, 0) + 1
+            self._nav_animation_tokens[page] = token
+            selected = page == selected_page
+            start_color = button.cget("bg")
+            target_color = COLORS["accent"] if selected else COLORS["sidebar"]
+            start_progress = self._nav_indicator_progress[page]
+            target_progress = 1.0 if selected else 0.0
+            button.configure(font=(FONT, 12, "bold" if selected else "normal"))
+
+            def step(
+                nav_page=page,
+                nav_button=button,
+                indicator=self.nav_indicators[page],
+                from_color=start_color,
+                to_color=target_color,
+                from_progress=start_progress,
+                to_progress=target_progress,
+                animation_token=token,
+                callback=None,
+            ):
+                if callback is None:
+                    callback = step
+                if self._nav_animation_tokens.get(nav_page) != animation_token:
+                    return
+                if not nav_button.winfo_exists():
+                    self._nav_animation_ids.pop(nav_page, None)
+                    return
+                progress = min(1.0, (time.monotonic() - started) / duration)
+                eased = 1 - (1 - progress) ** 3
+                nav_button.configure(
+                    bg=_mix_color(from_color, to_color, eased),
+                    fg=_mix_color(
+                        COLORS["muted"],
+                        COLORS["text"] if nav_page == selected_page else COLORS["muted"],
+                        eased,
+                    ),
+                )
+                indicator_progress = from_progress + (
+                    to_progress - from_progress
+                ) * eased
+                self._nav_indicator_progress[nav_page] = indicator_progress
+                indicator.place(
+                    x=0,
+                    rely=0.5,
+                    anchor="w",
+                    width=3,
+                    height=round(30 * indicator_progress),
+                )
+                if progress < 1:
+                    self._nav_animation_ids[nav_page] = self.root.after(
+                        16,
+                        lambda next_step=callback: next_step(
+                            callback=next_step
+                        ),
+                    )
+                else:
+                    self._nav_animation_ids.pop(nav_page, None)
+
+            step()
 
     def _show_dashboard(self):
         self._label(
@@ -1914,9 +2023,9 @@ class AetheraDesktopApp:
         def step(index):
             if not canvas.winfo_exists():
                 return
-            progress = min(1.0, index / 20)
+            progress = min(1.0, index / 16)
             eased = (1 - math.cos(math.pi * progress)) / 2
-            previous = (1 - math.cos(math.pi * max(0, progress - 1 / 20))) / 2
+            previous = (1 - math.cos(math.pi * max(0, progress - 1 / 16))) / 2
             canvas.move(
                 tag,
                 -start_x * (eased - previous),
@@ -1927,13 +2036,13 @@ class AetheraDesktopApp:
                 fill=_mix_color(initial_fill, fill, eased),
                 outline=_mix_color(initial_outline, fill, eased),
             )
-            if index < 20:
+            if index < 16:
                 self._schedule_calendar_animation(
                     lambda: step(index + 1),
-                    22,
+                    18,
                 )
 
-        self._schedule_calendar_animation(lambda: step(1), 22)
+        self._schedule_calendar_animation(lambda: step(1), 18)
 
     def _animate_calendar_header(self, canvas, direction, left, top, right):
         del left, top, right
@@ -1942,16 +2051,16 @@ class AetheraDesktopApp:
         def settle(index, previous=0.0):
             if not canvas.winfo_exists():
                 return
-            progress = min(1.0, index / 18)
+            progress = min(1.0, index / 14)
             eased = (1 - math.cos(math.pi * progress)) / 2
             canvas.move("calendar_event", direction * 32 * (eased - previous), 0)
-            if index < 18:
+            if index < 14:
                 self._schedule_calendar_animation(
                     lambda: settle(index + 1, eased),
-                    18,
+                    16,
                 )
 
-        self._schedule_calendar_animation(lambda: settle(1), 18)
+        self._schedule_calendar_animation(lambda: settle(1), 16)
 
     def _show_calendar_event(self, event):
         dialog = tk.Toplevel(self.root)
@@ -1964,7 +2073,7 @@ class AetheraDesktopApp:
         panel = self._card(
             dialog,
             radius=28,
-            bg=COLORS["surface"],
+            bg="#17213b",
             gradient=("#17213b", "#17213b", "#25204c"),
         )
         panel.pack(fill="both", expand=True, padx=14, pady=14)
@@ -2777,7 +2886,7 @@ class AetheraDesktopApp:
             final_top, final_bottom = (int(value) for value in padding)
         else:
             final_top = final_bottom = int(padding)
-        steps = 18
+        steps = 15
         widget.configure(highlightthickness=0)
         rounded = next(
             (
@@ -2809,7 +2918,7 @@ class AetheraDesktopApp:
                 )
                 rounded._draw()
             if index < steps:
-                self.root.after(20, lambda: step(index + 1))
+                self.root.after(16, lambda: step(index + 1))
 
         self.root.after(0, lambda: step(1))
 

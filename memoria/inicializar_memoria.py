@@ -14,5 +14,6 @@ def inicializar_memoria():
 
 
 # CIERRAS --> VUELVES A ABRIR LA APP  
-# Historial_0016 #17 --> Historial_0016 #18 
+# #20 <-- última conv. 
+# ??? #0/20   
 

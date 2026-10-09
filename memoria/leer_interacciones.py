@@ -24,4 +24,5 @@ def leer_interacciones(archivo):
                 usuario.append(linea)
 
     guardar_interaccion(interacciones, usuario, respuesta)
-    return interacciones
+    return interacciones 
+

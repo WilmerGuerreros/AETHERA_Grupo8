@@ -10,4 +10,6 @@ def obtener_ultimas_interacciones(numero_seccion, cantidad=4):
         interacciones = leer_interacciones(archivo) + interacciones
         if len(interacciones) >= cantidad:
             break
-    return interacciones[-cantidad:]
+    return interacciones[-cantidad:] 
+
+#HISTORIAL 00_69 
