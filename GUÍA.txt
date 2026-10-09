@@ -38,3 +38,5 @@ Crear y compartir el ejecutable en Windows
 3. El ejecutable se crea en dist\Aethera.exe; comparte ese archivo junto con esta guía.
 
 El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose en el equipo, conexión a Internet y acceso al modelo configurado en main.py; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
+
+Si la aplicación muestra «No module named 'tkinter'», cierra todas las ventanas de Aethera y vuelve a generar el ejecutable con el script anterior; no compartas una compilación anterior. El script configura Tcl/Tk desde la instalación de Python usada para compilar.
