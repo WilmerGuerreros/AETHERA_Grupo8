@@ -843,9 +843,20 @@ class AetheraDesktopApp:
     def __init__(self, motor, historial, herramientas, guardar_historial):
         self.root = tk.Tk()
         self.root.title("Aethera | Acompañamiento académico")
-        self.root.geometry("1560x980")
-        self.root.minsize(1200, 780)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        window_width = min(1560, max(1, screen_width - 32))
+        window_height = min(980, max(1, screen_height - 80))
+        self.root.geometry(
+            f"{window_width}x{window_height}"
+            f"+{max(0, (screen_width - window_width) // 2)}"
+            f"+{max(0, (screen_height - window_height) // 2)}"
+        )
+        self.root.minsize(min(1024, window_width), min(640, window_height))
         self.root.configure(bg=COLORS["background"])
+        self._fullscreen = False
+        self.root.bind("<F11>", self._toggle_fullscreen)
+        self.root.bind("<Escape>", self._exit_fullscreen)
         self.event_queue = queue.Queue()
         self._scroll_animations = {}
         self._search_after_id = None
@@ -1032,6 +1043,21 @@ class AetheraDesktopApp:
             fg=COLORS["muted"],
             font=(FONT, 10),
         ).pack(side="left", padx=(4, 0), pady=20)
+        tk.Button(
+            self.header,
+            text="Pantalla completa (F11)",
+            command=self._toggle_fullscreen,
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=7,
+            bg=COLORS["surface_light"],
+            fg=COLORS["text"],
+            activebackground=COLORS["border"],
+            activeforeground=COLORS["text"],
+            font=(FONT, 9),
+            cursor="hand2",
+        ).pack(side="right", padx=(8, 18), pady=12)
         tk.Label(
             self.header,
             text="●  AETHERA",
@@ -1042,6 +1068,17 @@ class AetheraDesktopApp:
 
         self.content = tk.Frame(self.main, bg=COLORS["background"])
         self.content.pack(fill="both", expand=True, padx=30, pady=24)
+
+    def _toggle_fullscreen(self, _event=None):
+        self._fullscreen = not self._fullscreen
+        self.root.attributes("-fullscreen", self._fullscreen)
+        return "break"
+
+    def _exit_fullscreen(self, _event=None):
+        if self._fullscreen:
+            self._fullscreen = False
+            self.root.attributes("-fullscreen", False)
+            return "break"
 
     def _card(self, parent, **kwargs):
         return RoundedFrame(
