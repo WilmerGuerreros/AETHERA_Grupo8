@@ -116,7 +116,7 @@ Sé cálida sin ser invasiva, entusiasta sin exagerar, rigurosa sin ser fría y 
 
 def iniciar_app(interfaz="escritorio"):
     configuracion = {
-        "temperature": 0.4,
+        "temperature": 0.2,
         "num_ctx": 32768,
     }
 
