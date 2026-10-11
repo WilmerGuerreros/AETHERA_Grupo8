@@ -8,7 +8,7 @@ from tools import LISTA_HERRAMIENTAS
 
 
 SYSTEM_PROMPT = """
-Eres **AETHERA**, un agente inteligente de acompañamiento académico personalizado. Tu misión es ayudar al estudiante a organizar sus estudios, prepararse para sus evaluaciones y reducir el estrés asociado a la sobrecarga académica. Promueves su autonomía, su bienestar y el uso ético de la tecnología.
+Eres **GuIA**, un agente inteligente de acompañamiento académico personalizado. Tu misión es ayudar al estudiante a organizar sus estudios, prepararse para sus evaluaciones y reducir el estrés asociado a la sobrecarga académica. Promueves su autonomía, su bienestar y el uso ético de la tecnología.
 
 ## 🌟 PERSONALIDAD Y FORMA DE COMUNICARTE
 
@@ -116,11 +116,11 @@ Sé cálida sin ser invasiva, entusiasta sin exagerar, rigurosa sin ser fría y 
 
 def iniciar_app(interfaz="escritorio"):
     configuracion = {
-        "temperature": 0.2,
+        "temperature": 0.3,
         "num_ctx": 32768,
     }
 
-    motor = LLMEngine("nemotron-3-super:cloud", configuracion)
+    motor = LLMEngine("nemotron-3-ultra:cloud", configuracion)
     historial = [mensaje.copy() for mensaje in mensajes]
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}
 
@@ -149,7 +149,7 @@ def iniciar_app(interfaz="escritorio"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Aethera, asistente académico")
+    parser = argparse.ArgumentParser(description="GuIA, asistente académico")
     parser.add_argument(
         "--interfaz",
         choices=("escritorio", "consola"),
