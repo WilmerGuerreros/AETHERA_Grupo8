@@ -7,7 +7,10 @@ import threading
 import time
 import tkinter as tk
 from datetime import date, datetime, timedelta
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, ttk
+
+from pypdf import PdfReader
 
 from ChatSession import ChatSession
 from tools.calendario_academico import calendario_academico
@@ -89,6 +92,20 @@ EVENT_STYLES = {
     "period_end": ("#56426c", "#d0a7ff", "#382a4a"),
     "university_activity": ("#4b476d", "#b9adff", "#302b4a"),
 }
+
+
+def extraer_texto_pdf(ruta):
+    reader = PdfReader(ruta)
+    if reader.is_encrypted:
+        raise ValueError("El PDF está protegido con contraseña.")
+    paginas = [pagina.extract_text() or "" for pagina in reader.pages]
+    texto = "\n\n".join(pagina.strip() for pagina in paginas if pagina.strip())
+    if not texto:
+        raise ValueError(
+            "El PDF no contiene texto legible. "
+            "Los documentos escaneados requieren reconocimiento OCR."
+        )
+    return texto
 
 
 def _mix_color(start, end, amount):
@@ -860,6 +877,16 @@ class AetheraDesktopApp:
         self.event_queue = queue.Queue()
         self._scroll_animations = {}
         self._search_after_id = None
+        self._services_request_id = 0
+        self._service_render_after_id = None
+        self._service_render_index = 0
+        self._service_render_services = []
+        self._pdf_request_id = 0
+        self._pdf_loading = False
+        self._attached_pdf_name = None
+        self._attached_pdf_text = ""
+        self._pdf_status_text = "Sin documento adjunto"
+        self._pdf_status_color = COLORS["muted"]
         self._scroll_targets = []
         self.calendar_week_start = date.today() - timedelta(days=date.today().weekday())
         self.calendar_category_var = None
@@ -1166,6 +1193,12 @@ class AetheraDesktopApp:
             for attribute in ("stream_bubble", "stream_text", "stream_content"):
                 if hasattr(self, attribute):
                     delattr(self, attribute)
+        if self.current_page == "Servicios de apoyo" and page != "Servicios de apoyo":
+            if self._search_after_id:
+                self.root.after_cancel(self._search_after_id)
+                self._search_after_id = None
+            self._cancel_service_render()
+            self._services_request_id += 1
         self.current_page = page
         self.page_title.configure(text=page)
         self._animate_nav_selection(page)
@@ -1176,6 +1209,7 @@ class AetheraDesktopApp:
             self._show_dashboard()
         elif page == "Asistente IA":
             self._show_chat()
+            self.message_input.focus_set()
         elif page == "Calendario":
             self._show_calendar()
         elif page == "Carga académica":
@@ -2363,20 +2397,40 @@ class AetheraDesktopApp:
         if hasattr(self, "service_cards_container"):
             if self._search_after_id:
                 self.root.after_cancel(self._search_after_id)
+            self._cancel_service_render()
+            self._services_request_id += 1
             self._search_after_id = self.root.after(140, self._load_services)
+
+    def _cancel_service_render(self):
+        if self._service_render_after_id:
+            self.root.after_cancel(self._service_render_after_id)
+            self._service_render_after_id = None
+        self._service_render_services = []
+        self._service_render_index = 0
 
     def _load_services(self):
         self._search_after_id = None
+        self._cancel_service_render()
         for child in self.service_cards_container.winfo_children():
             child.destroy()
         self.service_count.configure(text="Cargando…")
         category = SERVICE_CATEGORIES[self.category_var.get()]
+        selected_district = SERVICE_DISTRICTS[self.district_var.get()]
+        query = self.service_search_var.get().strip().casefold()
+        self._services_request_id += 1
+        request_id = self._services_request_id
+        worker = threading.Thread(
+            target=self._search_services,
+            args=(request_id, category, selected_district, query),
+            daemon=True,
+        )
+        worker.start()
+
+    def _search_services(self, request_id, category, selected_district, query):
         try:
             result = buscar_servicios_ayuda(category)
             if "error" in result:
                 raise ValueError(result["error"])
-            selected_district = SERVICE_DISTRICTS[self.district_var.get()]
-            query = self.service_search_var.get().strip().casefold()
             services = [
                 service
                 for service in result["servicios"]
@@ -2396,20 +2450,55 @@ class AetheraDesktopApp:
                     ).casefold()
                 )
             ]
-            self.service_count.configure(
-                text=f"{len(services)} {'opciones' if len(services) != 1 else 'opción'}"
-            )
-            if not services:
-                self._show_empty_services()
-                return
-            for index, service in enumerate(services):
-                self._service_card(service, index)
+            self.event_queue.put(("services", (request_id, services, None)))
         except (OSError, ValueError, KeyError, TypeError) as error:
+            self.event_queue.put(("services", (request_id, None, str(error))))
+
+    def _display_services(self, request_id, services, error):
+        if (
+            request_id != self._services_request_id
+            or self.current_page != "Servicios de apoyo"
+        ):
+            return
+        if error is not None:
             self.service_count.configure(text="Error")
             self._notice(
                 self.service_cards_container,
                 f"No se pudieron cargar los servicios de apoyo: {error}",
                 COLORS["red"],
+            )
+            return
+        self.service_count.configure(
+            text=f"{len(services)} {'opciones' if len(services) != 1 else 'opción'}"
+        )
+        if not services:
+            self._show_empty_services()
+            return
+        self._service_render_services = services
+        self._service_render_index = 0
+        self._service_render_after_id = self.root.after_idle(
+            lambda: self._render_service_batch(request_id)
+        )
+
+    def _render_service_batch(self, request_id):
+        self._service_render_after_id = None
+        if (
+            request_id != self._services_request_id
+            or self.current_page != "Servicios de apoyo"
+        ):
+            return
+        batch_size = 2
+        batch_end = min(
+            self._service_render_index + batch_size,
+            len(self._service_render_services),
+        )
+        for index in range(self._service_render_index, batch_end):
+            self._service_card(self._service_render_services[index], index)
+        self._service_render_index = batch_end
+        if batch_end < len(self._service_render_services):
+            self._service_render_after_id = self.root.after(
+                1,
+                lambda: self._render_service_batch(request_id),
             )
 
     def _service_card(self, service, index):
@@ -2597,7 +2686,10 @@ class AetheraDesktopApp:
 
         for message in self.chat.historial:
             if message.get("role") in {"assistant", "user"} and message.get("content"):
-                self._append_message(message["role"], message["content"])
+                content = message["content"]
+                if message["role"] == "user":
+                    content = self._user_message_preview(content)
+                self._append_message(message["role"], content)
         if not self.message_list.winfo_children():
             self._append_message(
                 "assistant",
@@ -2606,6 +2698,30 @@ class AetheraDesktopApp:
 
         composer = self._card(self.content)
         composer.pack(fill="x", pady=(12, 0))
+        attachment_bar = tk.Frame(composer, bg=COLORS["surface"])
+        attachment_bar.pack(fill="x", padx=10, pady=(8, 0))
+        self._button(
+            attachment_bar,
+            "Adjuntar PDF",
+            self._choose_pdf,
+        ).pack(side="left")
+        self.pdf_status_label = self._label(
+            attachment_bar,
+            "Sin documento adjunto",
+            size=9,
+            color=COLORS["muted"],
+            bg=COLORS["surface"],
+            wraplength=520,
+            justify="left",
+        )
+        self.pdf_status_label.pack(side="left", padx=12)
+        self.remove_pdf_button = self._button(
+            attachment_bar,
+            "Quitar",
+            self._remove_pdf,
+        )
+        self.remove_pdf_button.pack(side="right")
+        self._sync_pdf_controls()
         self.message_input = tk.Text(
             composer,
             height=3,
@@ -2619,12 +2735,113 @@ class AetheraDesktopApp:
             pady=10,
         )
         self.message_input.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
+        self.message_input.lift()
+        self.message_input.bind(
+            "<Button-1>",
+            lambda _event: self.message_input.focus_set(),
+            add="+",
+        )
         self.message_input.bind("<Control-Return>", self._send_from_shortcut)
         send_button = self._button(composer, "Enviar  ↑", self._send_message, primary=True)
         send_button.pack(side="right", padx=10, pady=10)
         self.send_button = send_button
         if self.busy:
             self.send_button.configure(state="disabled")
+
+    def _choose_pdf(self):
+        ruta = filedialog.askopenfilename(
+            parent=self.root,
+            title="Seleccionar documento PDF",
+            filetypes=(("Documentos PDF", "*.pdf"),),
+        )
+        if not ruta:
+            return
+        self._pdf_request_id += 1
+        request_id = self._pdf_request_id
+        self._pdf_loading = True
+        self._attached_pdf_name = None
+        self._attached_pdf_text = ""
+        nombre = Path(ruta).name
+        self._pdf_status_text = f"Procesando {nombre}…"
+        self._pdf_status_color = COLORS["accent_light"]
+        self._sync_pdf_controls()
+        worker = threading.Thread(
+            target=self._extract_pdf_in_background,
+            args=(request_id, ruta, nombre),
+            daemon=True,
+        )
+        worker.start()
+
+    def _extract_pdf_in_background(self, request_id, ruta, nombre):
+        try:
+            texto = extraer_texto_pdf(ruta)
+            self.event_queue.put(("pdf_loaded", (request_id, nombre, texto)))
+        except Exception as error:
+            self.event_queue.put(("pdf_error", (request_id, nombre, str(error))))
+
+    def _handle_pdf_loaded(self, request_id, nombre, texto):
+        if request_id != self._pdf_request_id:
+            return
+        self._pdf_loading = False
+        self._attached_pdf_name = nombre
+        self._attached_pdf_text = texto
+        self._pdf_status_text = f"PDF listo: {nombre}"
+        self._pdf_status_color = COLORS["green"]
+        self._sync_pdf_controls()
+
+    def _handle_pdf_error(self, request_id, nombre, error):
+        if request_id != self._pdf_request_id:
+            return
+        self._pdf_loading = False
+        self._attached_pdf_name = None
+        self._attached_pdf_text = ""
+        self._pdf_status_text = f"No se pudo procesar {nombre}: {error}"
+        self._pdf_status_color = COLORS["red"]
+        self._sync_pdf_controls()
+
+    def _remove_pdf(self):
+        self._pdf_request_id += 1
+        self._pdf_loading = False
+        self._attached_pdf_name = None
+        self._attached_pdf_text = ""
+        self._pdf_status_text = "Sin documento adjunto"
+        self._pdf_status_color = COLORS["muted"]
+        self._sync_pdf_controls()
+
+    def _sync_pdf_controls(self):
+        if (
+            not hasattr(self, "pdf_status_label")
+            or not self.pdf_status_label.winfo_exists()
+        ):
+            return
+        self.pdf_status_label.configure(
+            text=self._pdf_status_text,
+            fg=self._pdf_status_color,
+        )
+        self.remove_pdf_button.configure(
+            state=(
+                "normal"
+                if self._attached_pdf_text and not self._pdf_loading
+                else "disabled"
+            )
+        )
+
+    @staticmethod
+    def _user_message_preview(text):
+        marker = "\n\ndocument: "
+        if marker not in text:
+            return text
+        prompt, document = text.split(marker, 1)
+        nombre = document.partition("\n")[0]
+        preview = f"document: {nombre}"
+        return f"{prompt}\n\n{preview}" if prompt else preview
+
+    @staticmethod
+    def _compose_user_message(prompt, document_name=None, document_text=""):
+        if not document_text:
+            return prompt
+        document = f"document: {document_name}\n{document_text}"
+        return f"{prompt}\n\n{document}" if prompt else document
 
     def _append_message(self, role, text):
         is_user = role == "user"
@@ -2784,11 +3001,23 @@ class AetheraDesktopApp:
     def _send_message(self):
         if self.busy:
             return
-        text = self.message_input.get("1.0", "end").strip()
-        if not text:
+        prompt = self.message_input.get("1.0", "end").strip()
+        if self._pdf_loading:
+            self.pdf_status_label.configure(
+                text="Espera a que termine el procesamiento del PDF.",
+                fg=COLORS["yellow"],
+            )
             return
+        if not prompt and not self._attached_pdf_text:
+            return
+        text = self._compose_user_message(
+            prompt,
+            self._attached_pdf_name,
+            self._attached_pdf_text,
+        )
         self.message_input.delete("1.0", "end")
-        self._append_message("user", text)
+        self._append_message("user", self._user_message_preview(text))
+        self._remove_pdf()
         self.busy = True
         self.send_button.configure(state="disabled")
         self.status_label = self._label(
@@ -2837,6 +3066,12 @@ class AetheraDesktopApp:
                         f"No pude completar la respuesta. Inténtalo de nuevo.\n\nDetalle: {value}",
                     )
                     self._finish_chat_turn()
+                elif event == "services":
+                    self._display_services(*value)
+                elif event == "pdf_loaded":
+                    self._handle_pdf_loaded(*value)
+                elif event == "pdf_error":
+                    self._handle_pdf_error(*value)
         except queue.Empty:
             pass
         self.root.after(80, self._process_queue)
