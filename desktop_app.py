@@ -2,6 +2,7 @@
 
 import queue
 import math
+import os
 import re
 import threading
 import time
@@ -10,6 +11,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from tkinter import filedialog, ttk
 
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 from pypdf import PdfReader
 
 from app_paths import configure_tk_environment
@@ -63,9 +65,22 @@ SERVICE_CHANNELS = {
     "phone": "Teléfono",
 }
 INLINE_MARKDOWN = re.compile(
-    r"(\*\*.+?\*\*|__.+?__|(?<!\*)\*(?!\*).+?(?<!\*)\*(?!\*)|`[^`\n]+`|~~.+?~~)"
+    r"(\*\*\*.+?\*\*\*|___.+?___|\*\*.+?\*\*|__.+?__|"
+    r"(?<!\*)\*(?!\*).+?(?<!\*)\*(?!\*)|"
+    r"(?<!_)_(?!_).+?(?<!_)_(?!_)|`[^`\n]+`|~~.+?~~)"
 )
-EMOJI_CHAR = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
+EMOJI_CHAR = re.compile(
+    r"(?:"
+    r"[#*0-9]\uFE0F?\u20E3"
+    r"|[\U0001F1E6-\U0001F1FF]{2}"
+    r"|[\U0001F000-\U0001FAFF\u2600-\u27BF]"
+    r"(?:\uFE0F|\uFE0E)?"
+    r"(?:[\U0001F3FB-\U0001F3FF])?"
+    r"(?:\u200D[\U0001F000-\U0001FAFF\u2600-\u27BF](?:\uFE0F)?"
+    r"(?:[\U0001F3FB-\U0001F3FF])?)*"
+    r")"
+)
+MARKDOWN_TABLE_SEPARATOR = re.compile(r":?-{3,}:?")
 WEEKDAYS = {
     "Mon-Fri": "Lunes a viernes",
     "Mon-Sat": "Lunes a sábado",
@@ -86,6 +101,24 @@ MONTH_NAMES = (
     "noviembre",
     "diciembre",
 )
+
+
+def _markdown_table_cells(line):
+    stripped = line.strip()
+    if "|" not in stripped:
+        return None
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", stripped)]
+
+
+def _is_markdown_table_separator(line):
+    cells = _markdown_table_cells(line)
+    return bool(cells) and all(MARKDOWN_TABLE_SEPARATOR.fullmatch(cell) for cell in cells)
+
+
 EVENT_STYLES = {
     "evaluation_week": ("#593039", "#ff94a1", "#42252e"),
     "wellbeing_activity": ("#185347", "#71e2c5", "#123e39"),
@@ -1004,6 +1037,8 @@ class AetheraDesktopApp:
         self.root.bind("<F11>", self._toggle_fullscreen)
         self.root.bind("<Escape>", self._exit_fullscreen)
         self.event_queue = queue.Queue()
+        self._emoji_images = {}
+        self._emoji_font = None
         self._scroll_animations = {}
         self._search_after_id = None
         self._services_request_id = 0
@@ -1011,11 +1046,10 @@ class AetheraDesktopApp:
         self._service_render_index = 0
         self._service_render_services = []
         self._pdf_request_id = 0
-        self._pdf_loading = False
-        self._attached_pdf_name = None
-        self._attached_pdf_text = ""
+        self._attached_pdfs = []
         self._pdf_status_text = "Sin documento adjunto"
         self._pdf_status_color = COLORS["muted"]
+        self._widget_color_animations = {}
         self._scroll_targets = []
         self.calendar_week_start = date.today() - timedelta(days=date.today().weekday())
         self.calendar_category_var = None
@@ -1176,7 +1210,7 @@ class AetheraDesktopApp:
             fg=COLORS["muted"],
             font=(FONT, 10),
         ).pack(side="left", padx=(4, 0), pady=20)
-        tk.Button(
+        fullscreen_button = tk.Button(
             self.header,
             text="Pantalla completa (F11)",
             command=self._toggle_fullscreen,
@@ -1190,7 +1224,9 @@ class AetheraDesktopApp:
             activeforeground=COLORS["text"],
             font=(FONT, 9),
             cursor="hand2",
-        ).pack(side="right", padx=(8, 18), pady=12)
+        )
+        self._bind_native_widget_animations(fullscreen_button)
+        fullscreen_button.pack(side="right", padx=(8, 18), pady=12)
         tk.Label(
             self.header,
             text="●  GuIA",
@@ -1235,6 +1271,92 @@ class AetheraDesktopApp:
 
     def _button(self, parent, text, command, primary=False):
         return RoundedButton(parent, text, command, primary=primary)
+
+    def _animate_widget_color(self, widget, option, target, steps=12):
+        key = (widget, option)
+        after_id = self._widget_color_animations.pop(key, None)
+        if after_id:
+            self.root.after_cancel(after_id)
+        try:
+            start = widget.cget(option)
+        except tk.TclError:
+            return
+        if not isinstance(start, str) or not start.startswith("#"):
+            return
+
+        def step(index):
+            try:
+                if not widget.winfo_exists():
+                    self._widget_color_animations.pop(key, None)
+                    return
+                progress = min(1.0, index / steps)
+                eased = 1 - (1 - progress) ** 3
+                widget.configure(**{option: _mix_color(start, target, eased)})
+            except tk.TclError:
+                self._widget_color_animations.pop(key, None)
+                return
+            if progress < 1:
+                self._widget_color_animations[key] = self.root.after(
+                    16,
+                    lambda next_step=index + 1: step(next_step),
+                )
+            else:
+                self._widget_color_animations.pop(key, None)
+
+        step(1)
+
+    def _bind_native_widget_animations(self, widget):
+        if isinstance(widget, tk.Button):
+            base_color = widget.cget("bg")
+            hover_color = _mix_color(base_color, COLORS["accent"], 0.32)
+            widget.bind(
+                "<Enter>",
+                lambda _event: self._animate_widget_color(
+                    widget, "bg", hover_color
+                ),
+                add="+",
+            )
+            widget.bind(
+                "<Leave>",
+                lambda _event: self._animate_widget_color(
+                    widget, "bg", base_color
+                ),
+                add="+",
+            )
+        elif isinstance(widget, (tk.Entry, tk.Text)):
+            widget.configure(
+                highlightthickness=1,
+                highlightbackground=COLORS["border"],
+                highlightcolor=COLORS["border"],
+            )
+            widget.bind(
+                "<FocusIn>",
+                lambda _event: self._animate_widget_color(
+                    widget, "highlightbackground", COLORS["accent_light"]
+                ),
+                add="+",
+            )
+            widget.bind(
+                "<FocusIn>",
+                lambda _event: self._animate_widget_color(
+                    widget, "highlightcolor", COLORS["accent_light"]
+                ),
+                add="+",
+            )
+            widget.bind(
+                "<FocusOut>",
+                lambda _event: self._animate_widget_color(
+                    widget, "highlightbackground", COLORS["border"]
+                ),
+                add="+",
+            )
+            widget.bind(
+                "<FocusOut>",
+                lambda _event: self._animate_widget_color(
+                    widget, "highlightcolor", COLORS["border"]
+                ),
+                add="+",
+            )
 
     def _animate_scroll_to_bottom(self, canvas):
         self._animate_scroll(canvas, 1.0, duration=270)
@@ -1940,6 +2062,7 @@ class AetheraDesktopApp:
             outline="",
             tags="now_indicator",
         )
+        
         canvas.create_oval(
             x - radius,
             y - radius,
@@ -2411,6 +2534,7 @@ class AetheraDesktopApp:
             highlightcolor=COLORS["accent"],
         )
         search_entry.pack(fill="x", ipady=9)
+        self._bind_native_widget_animations(search_entry)
 
         self.service_search_var.trace_add("write", self._on_service_search)
 
@@ -2765,10 +2889,7 @@ class AetheraDesktopApp:
 
         for message in self.chat.historial:
             if message.get("role") in {"assistant", "user"} and message.get("content"):
-                content = message["content"]
-                if message["role"] == "user":
-                    content = self._user_message_preview(content)
-                self._append_message(message["role"], content)
+                self._append_message(message["role"], message["content"])
         if not self.message_list.winfo_children():
             self._append_message(
                 "assistant",
@@ -2796,10 +2917,17 @@ class AetheraDesktopApp:
         self.pdf_status_label.pack(side="left", padx=12)
         self.remove_pdf_button = self._button(
             attachment_bar,
-            "Quitar",
+            "Quitar todos",
             self._remove_pdf,
         )
         self.remove_pdf_button.pack(side="right")
+        self.pdf_attachments_frame = tk.Frame(composer, bg=COLORS["surface"])
+        self.pdf_attachments_frame.pack(fill="x", padx=14, pady=(5, 0))
+        self.pdf_attachments_frame.bind(
+            "<Configure>",
+            lambda event: self._layout_attachment_chips(event.widget),
+            add="+",
+        )
         self._sync_pdf_controls()
         self.message_input = tk.Text(
             composer,
@@ -2814,6 +2942,7 @@ class AetheraDesktopApp:
             pady=10,
         )
         self.message_input.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
+        self._bind_native_widget_animations(self.message_input)
         self.message_input.lift()
         self.message_input.bind(
             "<Button-1>",
@@ -2828,63 +2957,87 @@ class AetheraDesktopApp:
             self.send_button.configure(state="disabled")
 
     def _choose_pdf(self):
-        ruta = filedialog.askopenfilename(
+        rutas = filedialog.askopenfilenames(
             parent=self.root,
-            title="Seleccionar documento PDF",
+            title="Seleccionar documentos PDF",
             filetypes=(("Documentos PDF", "*.pdf"),),
         )
-        if not ruta:
+        if not rutas:
             return
-        self._pdf_request_id += 1
-        request_id = self._pdf_request_id
-        self._pdf_loading = True
-        self._attached_pdf_name = None
-        self._attached_pdf_text = ""
-        nombre = Path(ruta).name
-        self._pdf_status_text = f"Procesando {nombre}…"
-        self._pdf_status_color = COLORS["accent_light"]
+        existing_paths = {
+            os.path.normcase(os.path.abspath(document["path"]))
+            for document in self._attached_pdfs
+        }
+        selected = []
+        for ruta in rutas:
+            normalized_path = os.path.normcase(os.path.abspath(ruta))
+            if normalized_path in existing_paths:
+                continue
+            existing_paths.add(normalized_path)
+            self._pdf_request_id += 1
+            document = {
+                "id": self._pdf_request_id,
+                "name": Path(ruta).name,
+                "path": ruta,
+                "text": "",
+                "state": "loading",
+                "error": "",
+            }
+            self._attached_pdfs.append(document)
+            selected.append(document)
+        if not selected:
+            return
         self._sync_pdf_controls()
-        worker = threading.Thread(
-            target=self._extract_pdf_in_background,
-            args=(request_id, ruta, nombre),
-            daemon=True,
-        )
-        worker.start()
+        for document in selected:
+            worker = threading.Thread(
+                target=self._extract_pdf_in_background,
+                args=(document["id"], document["path"]),
+                daemon=True,
+            )
+            worker.start()
 
-    def _extract_pdf_in_background(self, request_id, ruta, nombre):
+    def _extract_pdf_in_background(self, request_id, ruta):
         try:
             texto = extraer_texto_pdf(ruta)
-            self.event_queue.put(("pdf_loaded", (request_id, nombre, texto)))
+            self.event_queue.put(("pdf_loaded", (request_id, texto)))
         except Exception as error:
-            self.event_queue.put(("pdf_error", (request_id, nombre, str(error))))
+            self.event_queue.put(("pdf_error", (request_id, str(error))))
 
-    def _handle_pdf_loaded(self, request_id, nombre, texto):
-        if request_id != self._pdf_request_id:
+    def _find_attached_pdf(self, request_id):
+        return next(
+            (
+                document
+                for document in self._attached_pdfs
+                if document["id"] == request_id
+            ),
+            None,
+        )
+
+    def _handle_pdf_loaded(self, request_id, texto):
+        document = self._find_attached_pdf(request_id)
+        if document is None:
             return
-        self._pdf_loading = False
-        self._attached_pdf_name = nombre
-        self._attached_pdf_text = texto
-        self._pdf_status_text = f"PDF listo: {nombre}"
-        self._pdf_status_color = COLORS["green"]
+        document["state"] = "ready"
+        document["text"] = texto
         self._sync_pdf_controls()
 
-    def _handle_pdf_error(self, request_id, nombre, error):
-        if request_id != self._pdf_request_id:
+    def _handle_pdf_error(self, request_id, error):
+        document = self._find_attached_pdf(request_id)
+        if document is None:
             return
-        self._pdf_loading = False
-        self._attached_pdf_name = None
-        self._attached_pdf_text = ""
-        self._pdf_status_text = f"No se pudo procesar {nombre}: {error}"
-        self._pdf_status_color = COLORS["red"]
+        document["state"] = "error"
+        document["error"] = error
         self._sync_pdf_controls()
 
-    def _remove_pdf(self):
-        self._pdf_request_id += 1
-        self._pdf_loading = False
-        self._attached_pdf_name = None
-        self._attached_pdf_text = ""
-        self._pdf_status_text = "Sin documento adjunto"
-        self._pdf_status_color = COLORS["muted"]
+    def _remove_pdf(self, request_id=None):
+        if request_id is None:
+            self._attached_pdfs.clear()
+        else:
+            self._attached_pdfs = [
+                document
+                for document in self._attached_pdfs
+                if document["id"] != request_id
+            ]
         self._sync_pdf_controls()
 
     def _sync_pdf_controls(self):
@@ -2893,37 +3046,173 @@ class AetheraDesktopApp:
             or not self.pdf_status_label.winfo_exists()
         ):
             return
+        loading = [
+            document
+            for document in self._attached_pdfs
+            if document["state"] == "loading"
+        ]
+        errors = [
+            document
+            for document in self._attached_pdfs
+            if document["state"] == "error"
+        ]
+        ready_count = sum(
+            document["state"] == "ready" for document in self._attached_pdfs
+        )
+        if loading:
+            self._pdf_status_text = (
+                f"Procesando {len(loading)} PDF"
+                f"{'s' if len(loading) != 1 else ''}…"
+            )
+            self._pdf_status_color = COLORS["accent_light"]
+        elif errors:
+            failed_names = "; ".join(
+                f"{document['name']}: {document['error']}"
+                for document in errors
+            )
+            self._pdf_status_text = (
+                f"No se pudo procesar {failed_names}. Quita esos archivos para continuar."
+            )
+            self._pdf_status_color = COLORS["red"]
+        elif ready_count:
+            self._pdf_status_text = (
+                f"{ready_count} PDF listo"
+                f"{'s' if ready_count != 1 else ''}"
+            )
+            self._pdf_status_color = COLORS["green"]
+        else:
+            self._pdf_status_text = "Sin documento adjunto"
+            self._pdf_status_color = COLORS["muted"]
         self.pdf_status_label.configure(
             text=self._pdf_status_text,
             fg=self._pdf_status_color,
         )
         self.remove_pdf_button.configure(
-            state=(
-                "normal"
-                if self._attached_pdf_text and not self._pdf_loading
-                else "disabled"
-            )
+            state="normal" if self._attached_pdfs else "disabled"
         )
+        for child in self.pdf_attachments_frame.winfo_children():
+            child.destroy()
+        for document in self._attached_pdfs:
+            self._create_pdf_chip(
+                self.pdf_attachments_frame,
+                document["name"],
+                remove_command=lambda request_id=document["id"]: self._remove_pdf(
+                    request_id
+                ),
+                error=document["state"] == "error",
+            )
+
+    def _create_pdf_chip(self, parent, name, remove_command=None, error=False):
+        border = COLORS["red"] if error else COLORS["accent"]
+        chip = self._card(
+            parent,
+            bg=COLORS["surface_light"],
+            border=border,
+            radius=17,
+            gradient=("#222e4c", "#1b2440", "#2b2454"),
+        )
+        chip_name = name if len(name) <= 30 else f"{name[:13]}…{name[-13:]}"
+        chip.configure(cursor="hand2" if remove_command else "arrow")
+        badge = tk.Label(
+            chip,
+            text="PDF",
+            bg=COLORS["accent"],
+            fg="white",
+            font=(FONT, 8, "bold"),
+            padx=6,
+            pady=3,
+        )
+        badge.pack(side="left", padx=(10, 6), pady=6)
+        label = tk.Label(
+            chip,
+            text=chip_name,
+            bg=COLORS["surface_light"],
+            fg=COLORS["text"],
+            font=(FONT, 9),
+        )
+        label.pack(side="left", pady=6)
+        if remove_command:
+            remove = tk.Label(
+                chip,
+                text="×",
+                bg=COLORS["surface_light"],
+                fg=COLORS["muted"],
+                font=(FONT, 13, "bold"),
+                cursor="hand2",
+                padx=8,
+            )
+            remove.pack(side="left")
+            remove.bind("<Button-1>", lambda _event: remove_command())
+            remove.bind(
+                "<Enter>",
+                lambda _event: remove.configure(fg=COLORS["red"]),
+            )
+            remove.bind(
+                "<Leave>",
+                lambda _event: remove.configure(fg=COLORS["muted"]),
+            )
+        chip.grid(row=0, column=0, padx=(0, 8), pady=3, sticky="w")
+        self._layout_attachment_chips(parent)
+        self._animate_card_in(chip, grid=True)
+
+    @staticmethod
+    def _layout_attachment_chips(parent):
+        available_width = max(1, parent.winfo_width())
+        current_x = 0
+        row = 0
+        column = 0
+        for chip in parent.winfo_children():
+            chip_width = chip.winfo_reqwidth() + 8
+            if current_x and current_x + chip_width > available_width:
+                row += 1
+                column = 0
+                current_x = 0
+            chip.grid_configure(row=row, column=column)
+            current_x += chip_width
+            column += 1
 
     @staticmethod
     def _user_message_preview(text):
-        marker = "\n\ndocument: "
-        if marker not in text:
-            return text
-        prompt, document = text.split(marker, 1)
-        nombre = document.partition("\n")[0]
-        preview = f"document: {nombre}"
-        return f"{prompt}\n\n{preview}" if prompt else preview
+        prompt, documents = AetheraDesktopApp._split_user_message(text)
+        if prompt:
+            return prompt
+        return ", ".join(document["name"] for document in documents)
 
     @staticmethod
-    def _compose_user_message(prompt, document_name=None, document_text=""):
-        if not document_text:
-            return prompt
-        document = f"document: {document_name}\n{document_text}"
-        return f"{prompt}\n\n{document}" if prompt else document
+    def _split_user_message(text):
+        parts = re.split(r"(?:\A|\n\n)document: ([^\r\n]*)\r?\n", text)
+        if len(parts) == 1:
+            return text, []
+        prompt = parts[0]
+        documents = [
+            {"name": parts[index], "text": parts[index + 1]}
+            for index in range(1, len(parts), 2)
+        ]
+        return prompt, documents
+
+    @staticmethod
+    def _compose_user_message(
+        prompt, document_name=None, document_text="", documents=None
+    ):
+        attachments = list(documents or ())
+        if document_name and document_text:
+            attachments.insert(
+                0,
+                {"name": document_name, "text": document_text},
+            )
+        sections = [prompt] if prompt else []
+        sections.extend(
+            f"document: {document['name']}\n{document['text']}"
+            for document in attachments
+            if document.get("text")
+        )
+        return "\n\n".join(sections)
 
     def _append_message(self, role, text):
         is_user = role == "user"
+        attachments = []
+        if is_user:
+            text, attachments = self._split_user_message(text)
         outer = tk.Frame(self.message_list, bg=COLORS["background"])
         outer.pack(fill="x", padx=15, pady=8)
         bubble_color = "#30245f" if is_user else COLORS["surface"]
@@ -2945,14 +3234,32 @@ class AetheraDesktopApp:
             fg="white" if is_user else COLORS["accent_light"],
             font=(FONT, 10, "bold"),
         ).pack(anchor="w", padx=18, pady=(14, 4))
-        body = self._create_formatted_message(
-            bubble,
-            text,
-            background=bubble_color,
-            foreground="white" if is_user else COLORS["text"],
-            width=max(50, (self.root.winfo_width() - 560) // 9),
-        )
-        body.pack(anchor="w", padx=18, pady=(0, 15))
+        if text:
+            body = self._create_formatted_message(
+                bubble,
+                text,
+                background=bubble_color,
+                foreground="white" if is_user else COLORS["text"],
+                width=max(50, (self.root.winfo_width() - 560) // 9),
+            )
+            body.pack(
+                anchor="w",
+                padx=18,
+                pady=(0, 8 if attachments else 15),
+            )
+        if attachments:
+            attachment_frame = tk.Frame(bubble, bg=bubble_color)
+            attachment_frame.pack(fill="x", padx=18, pady=(0, 12))
+            attachment_frame.bind(
+                "<Configure>",
+                lambda event: self._layout_attachment_chips(event.widget),
+                add="+",
+            )
+            for document in attachments:
+                self._create_pdf_chip(
+                    attachment_frame,
+                    document["name"],
+                )
         self._animate_card_in(outer)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
@@ -2978,6 +3285,7 @@ class AetheraDesktopApp:
             spacing3=2,
         )
         body.tag_configure("bold", font=(FONT, 12, "bold"))
+        body.tag_configure("bold_italic", font=(FONT, 12, "bold", "italic"))
         body.tag_configure("italic", font=(FONT, 12, "italic"))
         body.tag_configure("code", font=("Consolas", 11), foreground="#b6c8ff")
         body.tag_configure(
@@ -2994,7 +3302,23 @@ class AetheraDesktopApp:
             lmargin2=14,
         )
         body.tag_configure("emoji", font=("Segoe UI Emoji", 12))
+        body.tag_configure(
+            "table_header",
+            font=(FONT, 11, "bold"),
+            foreground=COLORS["accent_light"],
+        )
+        body.tag_configure("table_primary", font=(FONT, 12, "bold"))
         body.tag_configure("strike", overstrike=True)
+        self._emoji_images[body] = {}
+        body.bind(
+            "<Destroy>",
+            lambda event, widget=body: (
+                self._emoji_images.pop(widget, None)
+                if event.widget is widget
+                else None
+            ),
+            add="+",
+        )
         self._insert_formatted_text(body, text)
         body.configure(state="disabled")
         return body
@@ -3007,30 +3331,77 @@ class AetheraDesktopApp:
         return min(28, max(1, lines))
 
     def _insert_formatted_text(self, widget, text):
-        for line_index, line in enumerate(text.splitlines()):
+        lines = text.splitlines()
+        line_index = 0
+        while line_index < len(lines):
+            line = lines[line_index]
             if line_index:
                 widget.insert("end", "\n")
+            headers = _markdown_table_cells(line)
+            if (
+                headers
+                and line_index + 1 < len(lines)
+                and _is_markdown_table_separator(lines[line_index + 1])
+            ):
+                separator = _markdown_table_cells(lines[line_index + 1])
+                if len(headers) == len(separator):
+                    rows = []
+                    next_line = line_index + 2
+                    while next_line < len(lines):
+                        row = _markdown_table_cells(lines[next_line])
+                        if not row or len(row) != len(headers):
+                            break
+                        rows.append(row)
+                        next_line += 1
+                    if rows:
+                        self._insert_markdown_table(widget, headers, rows)
+                        line_index = next_line
+                        continue
             heading_match = re.match(r"^\s{0,3}(#{1,3})\s+(.*)$", line)
             if heading_match:
                 widget.insert("end", f"{heading_match.group(2)}\n", "heading")
-                continue
-            quote_match = re.match(r"^\s*>\s?(.*)$", line)
-            if quote_match:
-                self._insert_inline_formatted_text(
-                    widget,
-                    quote_match.group(1),
-                    base_tag="quote",
-                )
-                continue
-            list_match = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$", line)
-            if list_match:
-                marker = "•" if list_match.group(2) in {"-", "*", "+"} else f"{list_match.group(2)}"
-                widget.insert("end", f"{list_match.group(1)}{marker}  ")
-                self._insert_inline_formatted_text(widget, list_match.group(3))
-                continue
-            self._insert_inline_formatted_text(widget, line)
+            else:
+                quote_match = re.match(r"^\s*>\s?(.*)$", line)
+                if quote_match:
+                    self._insert_inline_formatted_text(
+                        widget,
+                        quote_match.group(1),
+                        base_tag="quote",
+                    )
+                else:
+                    list_match = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$", line)
+                    if list_match:
+                        marker = (
+                            "•"
+                            if list_match.group(2) in {"-", "*", "+"}
+                            else f"{list_match.group(2)}"
+                        )
+                        widget.insert("end", f"{list_match.group(1)}{marker}  ")
+                        self._insert_inline_formatted_text(widget, list_match.group(3))
+                    else:
+                        self._insert_inline_formatted_text(widget, line)
+            line_index += 1
+
         if text.endswith("\n"):
             widget.insert("end", "\n")
+
+    def _insert_markdown_table(self, widget, headers, rows):
+        for row_index, row in enumerate(rows):
+            if row_index:
+                widget.insert("end", "\n\n")
+            for column_index, (header, value) in enumerate(zip(headers, row)):
+                if column_index:
+                    widget.insert("end", "\n")
+                self._insert_inline_formatted_text(
+                    widget,
+                    f"{header}: ",
+                    base_tag="table_header",
+                )
+                self._insert_inline_formatted_text(
+                    widget,
+                    value,
+                    base_tag="table_primary" if column_index == 0 else None,
+                )
 
     def _set_formatted_text(self, widget, text):
         widget.configure(state="normal")
@@ -3050,7 +3421,13 @@ class AetheraDesktopApp:
                 continue
             tag = base_tag
             value = part
-            if part.startswith(("**", "__")) and part.endswith(part[:2]):
+            if (
+                part.startswith(("***", "___"))
+                and part.endswith(part[:3])
+            ):
+                value = part[3:-3]
+                tag = "bold_italic"
+            elif part.startswith(("**", "__")) and part.endswith(part[:2]):
                 value = part[2:-2]
                 tag = "bold"
             elif part.startswith("~~") and part.endswith("~~"):
@@ -3059,7 +3436,7 @@ class AetheraDesktopApp:
             elif part.startswith("`") and part.endswith("`"):
                 value = part[1:-1]
                 tag = "code"
-            elif part.startswith("*") and part.endswith("*"):
+            elif part.startswith(("*", "_")) and part.endswith(part[0]):
                 value = part[1:-1]
                 tag = "italic"
 
@@ -3070,8 +3447,35 @@ class AetheraDesktopApp:
                     tags = tuple(item for item in (base_tag, tag) if item)
                     widget.insert("end", segment, tags)
                 if index < len(emojis):
-                    tags = tuple(item for item in (base_tag, tag, "emoji") if item)
-                    widget.insert("end", emojis[index], tags)
+                    self._insert_color_emoji(widget, emojis[index])
+
+    def _insert_color_emoji(self, widget, emoji):
+        images = self._emoji_images[widget]
+        image = images.get(emoji)
+        if image is None:
+            if self._emoji_font is None:
+                windows_directory = os.environ.get("WINDIR", r"C:\Windows")
+                font_path = Path(windows_directory) / "Fonts" / "seguiemj.ttf"
+                if not font_path.is_file():
+                    widget.insert("end", emoji, "emoji")
+                    return
+                self._emoji_font = ImageFont.truetype(str(font_path), 18)
+            bounds = self._emoji_font.getbbox(emoji)
+            left, top, right, bottom = bounds
+            emoji_image = Image.new(
+                "RGBA",
+                (max(1, right - left), max(1, bottom - top)),
+                (0, 0, 0, 0),
+            )
+            ImageDraw.Draw(emoji_image).text(
+                (-left, -top),
+                emoji,
+                font=self._emoji_font,
+                embedded_color=True,
+            )
+            image = ImageTk.PhotoImage(emoji_image, master=widget)
+            images[emoji] = image
+        widget.image_create("end", image=image, align="baseline", padx=1)
 
     def _send_from_shortcut(self, _event):
         self._send_message()
@@ -3081,21 +3485,31 @@ class AetheraDesktopApp:
         if self.busy:
             return
         prompt = self.message_input.get("1.0", "end").strip()
-        if self._pdf_loading:
+        if any(document["state"] == "loading" for document in self._attached_pdfs):
             self.pdf_status_label.configure(
-                text="Espera a que termine el procesamiento del PDF.",
+                text="Espera a que termine el procesamiento de los PDF.",
                 fg=COLORS["yellow"],
             )
             return
-        if not prompt and not self._attached_pdf_text:
+        if any(document["state"] == "error" for document in self._attached_pdfs):
+            self.pdf_status_label.configure(
+                text="Quita los PDF con error antes de enviar.",
+                fg=COLORS["red"],
+            )
+            return
+        ready_documents = [
+            document
+            for document in self._attached_pdfs
+            if document["state"] == "ready"
+        ]
+        if not prompt and not ready_documents:
             return
         text = self._compose_user_message(
             prompt,
-            self._attached_pdf_name,
-            self._attached_pdf_text,
+            documents=ready_documents,
         )
         self.message_input.delete("1.0", "end")
-        self._append_message("user", self._user_message_preview(text))
+        self._append_message("user", text)
         self._remove_pdf()
         self.busy = True
         self.send_button.configure(state="disabled")

@@ -3,7 +3,7 @@ from typing import Callable, Optional
 from LLMEngine import LLMEngine
 
 
-class ChatSession:
+class ChatSession: 
     def __init__(
         self,
         motor: LLMEngine,
