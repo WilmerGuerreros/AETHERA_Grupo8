@@ -1,4 +1,4 @@
-"""Interfaz de escritorio para Aethera, construida con Tkinter."""
+"""Interfaz de escritorio para GuIA, construida con Tkinter."""
 
 import queue
 import math
@@ -842,7 +842,7 @@ class AnimatedDropdown(tk.Frame):
 class AetheraDesktopApp:
     def __init__(self, motor, historial, herramientas, guardar_historial):
         self.root = tk.Tk()
-        self.root.title("Aethera | Acompañamiento académico")
+        self.root.title("GuIA | Acompañamiento académico")
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         window_width = min(1560, max(1, screen_width - 32))
@@ -929,7 +929,7 @@ class AetheraDesktopApp:
         title.pack(side="left")
         tk.Label(
             title,
-            text="AETHERA",
+            text="GuIA",
             bg=COLORS["sidebar"],
             fg=COLORS["text"],
             font=(FONT, 16, "bold"),
@@ -1060,7 +1060,7 @@ class AetheraDesktopApp:
         ).pack(side="right", padx=(8, 18), pady=12)
         tk.Label(
             self.header,
-            text="●  AETHERA",
+            text="●  GuIA",
             bg=COLORS["background"],
             fg=COLORS["green"],
             font=(FONT, 10, "bold"),
@@ -1298,7 +1298,7 @@ class AetheraDesktopApp:
         ).pack(anchor="w")
         self._label(
             left,
-            "Cuéntale a Aethera qué tienes pendiente y construyan juntos un siguiente paso.",
+            "Cuéntale a GuIA qué tienes pendiente y construyan juntos un siguiente paso.",
             color="#c4c7e7",
             bg="#171a3a",
             wraplength=640,
@@ -1306,7 +1306,7 @@ class AetheraDesktopApp:
         ).pack(anchor="w", pady=(7, 15))
         self._button(
             left,
-            "Conversar con Aethera  →",
+            "Conversar con GuIA  →",
             lambda: self.show_page("Asistente IA"),
             primary=True,
         ).pack(anchor="w")
@@ -2571,7 +2571,7 @@ class AetheraDesktopApp:
         ).pack(anchor="w", padx=16, pady=(13, 3))
         self._label(
             intro,
-            "Aethera te acompaña a organizarte; tú decides cómo avanzar.",
+            "GuIA te acompaña a organizarte; tú decides cómo avanzar.",
             color=COLORS["muted"],
         ).pack(anchor="w", padx=16, pady=(0, 13))
 
@@ -2601,7 +2601,7 @@ class AetheraDesktopApp:
         if not self.message_list.winfo_children():
             self._append_message(
                 "assistant",
-                "¡Hola! Soy Aethera. ¿Qué te gustaría organizar o conversar hoy?",
+                "¡Hola! Soy GuIA. ¿Qué te gustaría organizar o conversar hoy?",
             )
 
         composer = self._card(self.content)
@@ -2644,7 +2644,7 @@ class AetheraDesktopApp:
         bubble.pack(side="right" if is_user else "left", padx=(80, 0) if is_user else (0, 80))
         tk.Label(
             bubble,
-            text="Tú" if is_user else "Aethera",
+            text="Tú" if is_user else "GuIA",
             bg=bubble_color,
             fg="white" if is_user else COLORS["accent_light"],
             font=(FONT, 10, "bold"),
@@ -2793,13 +2793,13 @@ class AetheraDesktopApp:
         self.send_button.configure(state="disabled")
         self.status_label = self._label(
             self.content,
-            "✦  Aethera está pensando",
+            "✦  GuIA está pensando",
             size=10,
             color=COLORS["accent_light"],
             bg=COLORS["background"],
         )
         self.status_label.pack(anchor="w", pady=(5, 0))
-        self.status_base = "✦  Aethera está pensando"
+        self.status_base = "✦  GuIA está pensando"
         self._typing_phase = 0
         self._pulse_typing_indicator()
         worker = threading.Thread(
@@ -2870,7 +2870,7 @@ class AetheraDesktopApp:
             self.stream_bubble.pack(side="left", padx=(0, 80))
             tk.Label(
                 self.stream_bubble,
-                text="Aethera",
+                text="GuIA",
                 bg=stream_background,
                 fg=COLORS["accent_light"],
                 font=(FONT, 10, "bold"),

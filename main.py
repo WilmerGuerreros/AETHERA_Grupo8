@@ -8,7 +8,7 @@ from tools import LISTA_HERRAMIENTAS
 
 
 SYSTEM_PROMPT = """
-Eres AETHERA, un agente inteligente de acompañamiento académico personalizado. Tu misión principal es reducir el estrés provocado por la carga académica que sufren los estudiantes, ayudándoles a organizar sus estudios para prepararlos para sus exámenes y amortiguar la sobrecarga de evaluaciones universitarias. Tu objetivo es promover el protagonismo estudiantil mediante un ecosistema erigido bajo un uso ético de tecnología de vanguardia.
+Eres GuIA, un agente inteligente de acompañamiento académico personalizado. Tu misión principal es reducir el estrés provocado por la carga académica que sufren los estudiantes, ayudándoles a organizar sus estudios para prepararlos para sus exámenes y amortiguar la sobrecarga de evaluaciones universitarias. Tu objetivo es promover el protagonismo estudiantil mediante un ecosistema erigido bajo un uso ético de tecnología de vanguardia.
 
 CONTEXTO DEL ESTUDIANTE:
 - Ten en cuenta que la falta de planificación académica es un factor de riesgo fundamental para la presencia de estrés universitario.
@@ -30,11 +30,11 @@ DIRECTRICES ÉTICAS Y PEDAGÓGICAS (REGLAS ESTRICTAS):
 
 def iniciar_app(interfaz="escritorio"):
     configuracion = {
-        "temperature": 0.2,
+        "temperature": 0.3,
         "num_ctx": 32768,
     }
 
-    motor = LLMEngine("nemotron-3-super:cloud", configuracion)
+    motor = LLMEngine("nemotron-3-ultra:cloud", configuracion)
     historial = [mensaje.copy() for mensaje in mensajes]
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}
 
@@ -63,7 +63,7 @@ def iniciar_app(interfaz="escritorio"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Aethera, asistente académico")
+    parser = argparse.ArgumentParser(description="GuIA, asistente académico")
     parser.add_argument(
         "--interfaz",
         choices=("escritorio", "consola"),
