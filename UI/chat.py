@@ -2,6 +2,7 @@
 
 from .components import (
     COLORS,
+    datetime,
     EMOJI_CHAR,
     FONT,
     INLINE_MARKDOWN,
@@ -352,7 +353,7 @@ class ChatSection:
 
     @staticmethod
     def _split_user_message(text):
-        parts = re.split(r"(?:\A|\n\n)document: ([^\r\n]*)\r?\n", text)
+        parts = re.split(r"(?:\A|\n\n|\n)document: ([^\r\n]*)\r?\n", text)
         if len(parts) == 1:
             return text, []
         prompt = parts[0]
@@ -680,6 +681,8 @@ class ChatSection:
             prompt,
             documents=ready_documents,
         )
+        ahora = datetime.now()
+        text = f"Fecha: {ahora:%d/%m/%Y} Hora: {ahora:%H:%M}\n{text}"
         self.message_input.delete("1.0", "end")
         self._append_message("user", text)
         self._remove_pdf()

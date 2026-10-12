@@ -20,7 +20,6 @@ Paquete agente.tools
 - agente/tools/crear_evento.py: Crea eventos de día completo en el calendario personal del usuario.
 - agente/tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
 - agente/tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
-- agente/tools/tiempo.py: Obtiene la fecha y hora actuales del sistema.
 - agente/tools/web.py: Busca información pública actual en la web.
 
 Paquete memoria
