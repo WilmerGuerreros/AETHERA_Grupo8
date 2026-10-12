@@ -2,7 +2,7 @@
 
 from .components import (
     COLORS,
-    calendario_academico,
+    buscar_eventos,
     date,
     datetime,
     evaluar_riesgo_sobrecarga,
@@ -137,7 +137,7 @@ class DashboardSection:
 
     def _get_upcoming_events(self):
         today = date.today().isoformat()
-        events = calendario_academico("any", fecha_inicio=today)
+        events = buscar_eventos("any", fecha_inicio=today, origen="academico")
         if events and "error" in events[0]:
             raise ValueError(events[0]["error"])
         return sorted(events, key=lambda event: event["fecha_inicio"])

@@ -8,7 +8,7 @@ from .components import (
     MONTH_NAMES,
     WEEKDAY_NAMES,
     _mix_color,
-    calendario_academico,
+    buscar_eventos,
     date,
     datetime,
     math,
@@ -25,14 +25,14 @@ class CalendarSection:
         title_area.pack(side="left")
         self._label(
             title_area,
-            "Tu calendario académico",
+            "Tu calendario",
             size=24,
             weight="bold",
             bg=COLORS["background"],
         ).pack(anchor="w")
         self._label(
             title_area,
-            "Una vista clara de tus fechas importantes. Organiza tu semana con calma.",
+            "Organiza tus eventos académicos y personales en una sola vista.",
             size=10,
             color=COLORS["muted"],
             bg=COLORS["background"],
@@ -89,6 +89,15 @@ class CalendarSection:
             color=COLORS["muted"],
             bg=COLORS["surface"],
         ).pack(side="left", padx=(0, 8))
+        self.calendar_source_var = tk.StringVar(value="Ambos")
+        self.calendar_source_selector = AnimatedDropdown(
+            filter_area,
+            textvariable=self.calendar_source_var,
+            values=("Ambos", "Académico", "Personal"),
+            width=145,
+            on_select=lambda _value: self._refresh_calendar(),
+        )
+        self.calendar_source_selector.pack(side="left", padx=(0, 7))
         self.calendar_category_var = tk.StringVar(value="Todos los eventos")
         self.calendar_category_selector = AnimatedDropdown(
             filter_area,
@@ -100,7 +109,7 @@ class CalendarSection:
                 "Períodos académicos",
                 "Actividades",
             ),
-            width=270,
+            width=205,
             on_select=lambda _value: self._refresh_calendar(),
         )
         self.calendar_category_selector.pack(side="left")
@@ -166,10 +175,15 @@ class CalendarSection:
         )
         self.calendar_canvas.delete("all")
         try:
-            events = calendario_academico(
+            events = buscar_eventos(
                 "any",
                 fecha_inicio=start.isoformat(),
                 fecha_fin=end.isoformat(),
+                origen={
+                    "Ambos": "ambos",
+                    "Académico": "academico",
+                    "Personal": "personal",
+                }[self.calendar_source_var.get()],
             )
             if events and "error" in events[0]:
                 raise ValueError(events[0]["error"])
@@ -368,7 +382,7 @@ class CalendarSection:
         canvas.create_text(
             left + 14,
             total_height - 17,
-            text="Los eventos académicos se registran por fecha; no incluyen horario.",
+            text="Los eventos se muestran por fecha; no incluyen horario.",
             anchor="w",
             fill="#8490aa",
             font=(FONT, 9),
@@ -529,7 +543,7 @@ class CalendarSection:
                 outline="",
                 tags=(tag, "calendar_event"),
             )
-            label = event.get("resumen") or "Evento académico"
+            label = event.get("resumen") or "Evento"
             font = (FONT, 9, "bold")
             available = max(80, x1 - x0 - 22)
             max_chars = max(12, int(available / 7))
@@ -547,7 +561,11 @@ class CalendarSection:
             canvas.create_text(
                 x0 + 12,
                 y0 + 22,
-                text=self._format_calendar_category(event.get("categoria", "")),
+                text=(
+                    "Personal"
+                    if event.get("origen") == "personal"
+                    else self._format_calendar_category(event.get("categoria", ""))
+                ),
                 anchor="nw",
                 fill="#d0c8e8",
                 font=(FONT, 8),
@@ -698,7 +716,9 @@ class CalendarSection:
 
     def _show_calendar_event(self, event):
         dialog = tk.Toplevel(self.root)
-        dialog.title(event.get("resumen", "Evento académico"))
+        origen = event.get("origen", "academico")
+        nombre_calendario = "Personal" if origen == "personal" else "Académico"
+        dialog.title(event.get("resumen", "Evento"))
         dialog.configure(bg=COLORS["background"])
         dialog.transient(self.root)
         dialog.grab_set()
@@ -712,10 +732,17 @@ class CalendarSection:
         )
         panel.pack(fill="both", expand=True, padx=14, pady=14)
         category = event.get("categoria", "")
-        _, accent, _ = EVENT_STYLES.get(category, (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]))
+        _, accent, _ = EVENT_STYLES.get(
+            category,
+            (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]),
+        )
         self._label(
             panel,
-            self._format_calendar_category(category).upper(),
+            (
+                "PERSONAL"
+                if origen == "personal"
+                else self._format_calendar_category(category).upper()
+            ),
             size=9,
             color=accent,
             weight="bold",
@@ -723,7 +750,7 @@ class CalendarSection:
         ).pack(anchor="w", padx=24, pady=(23, 7))
         self._label(
             panel,
-            event.get("resumen", "Evento académico"),
+            event.get("resumen", "Evento"),
             size=20,
             weight="bold",
             bg="#17213b",
@@ -742,21 +769,28 @@ class CalendarSection:
             color=COLORS["muted"],
             bg="#17213b",
         ).pack(anchor="w", padx=24, pady=(17, 4))
-        district = event.get("distrito_id", "ALL")
+        if origen == "personal":
+            descripcion = event.get("descripcion")
+            detalle = f"Descripción: {descripcion}" if descripcion else "Evento personal"
+        else:
+            district = event.get("distrito_id") or "ALL"
+            detalle = f"Ubicación: {district.replace('DIST_', 'Distrito ').title()}"
         self._label(
             panel,
-            f"Ubicación: {district.replace('DIST_', 'Distrito ').title()}",
-            size=10,
-            color=COLORS["muted"],
-            bg="#17213b",
-        ).pack(anchor="w", padx=24)
-        self._label(
-            panel,
-            "Las fechas provienen del calendario académico institucional.",
+            detalle,
             size=9,
             color=COLORS["muted"],
             bg="#17213b",
+            wraplength=470,
+            justify="left",
         ).pack(anchor="w", padx=24, pady=(14, 14))
+        self._label(
+            panel,
+            f"Calendario: {nombre_calendario}",
+            size=9,
+            color=COLORS["muted"],
+            bg="#17213b",
+        ).pack(anchor="w", padx=24, pady=(0, 14))
         self._button(panel, "Entendido", dialog.destroy, primary=True).pack(
             anchor="e",
             padx=24,

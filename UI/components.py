@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from pypdf import PdfReader
 
 from app_paths import configure_tk_environment
-from agente.tools.calendario_academico import calendario_academico
+from agente.tools.buscar_eventos import buscar_eventos
 from agente.tools.evaluar_carga_academica import evaluar_riesgo_sobrecarga
 from agente.tools.servicios_ayuda import buscar_servicios_ayuda
 
@@ -120,6 +120,7 @@ EVENT_STYLES = {
     "period_start": ("#283f69", "#9dc3ff", "#1e3151"),
     "period_end": ("#56426c", "#d0a7ff", "#382a4a"),
     "university_activity": ("#4b476d", "#b9adff", "#302b4a"),
+    "personal": ("#493b22", "#f6c85f", "#332b1c"),
 }
 
 def extraer_texto_pdf(ruta):

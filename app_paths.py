@@ -28,6 +28,13 @@ def user_data_directory() -> Path:
     return base / "Aethera"
 
 
+def user_calendar_path() -> Path:
+    """Devuelve el calendario personal editable de la aplicación."""
+    if getattr(sys, "frozen", False):
+        return user_data_directory() / "memoria" / "usuario" / "calendario.ics"
+    return resource_path("memoria", "usuario", "calendario.ics")
+
+
 def configure_tk_environment() -> None:
     """Ayuda a Tcl/Tk a localizar sus bibliotecas en instalaciones de Python."""
     if sys.platform != "win32" or getattr(sys, "frozen", False):
