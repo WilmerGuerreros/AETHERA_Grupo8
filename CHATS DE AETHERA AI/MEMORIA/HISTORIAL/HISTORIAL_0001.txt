@@ -313,3 +313,30 @@ Algunas ideas de lo que podríamos hacer juntos:
 5. **Planificar tus próximos pasos** académicos o laborales (búsqueda de becas, admisión universitaria, práctica preprofesional, etc.).
 
 Cuéntame qué tienes en mente y lo vemos juntos, sin presión. 😊📚✨
+
+============================================================
+Fecha: 2026-10-12 15:38:49
+============================================================
+Usuario: puedes crear un evento para mañana ?
+Aethera: ¡Claro que sí! 📅 Hoy es **lunes 12 de octubre de 2026**, así que "mañana" sería **martes 13 de octubre de 2026**.
+
+Para crear el evento en tu calendario personal, necesito un poco más de información:
+
+1. **Título del evento** (ej. "Clase de Cálculo", "Entrega de proyecto", "Cita médica", "Tiempo de estudio", etc.)
+2. **Descripción o detalles** (opcional, pero útil para recordar de qué se trata)
+3. **¿Es un evento de todo el día?** La herramienta crea eventos de día completo. Si necesitas una hora específica, tendrías que anotarlo en la descripción.
+
+¿Me das el título y, si quieres, una breve descripción? 😊
+
+============================================================
+Fecha: 2026-10-12 15:41:11
+============================================================
+Usuario: hacer tarea de matem´aticas, con descripcion de resolver guia 5
+Aethera: ¡Listo! ✅ He creado el evento en tu calendario personal:
+
+**📅 Martes 13 de octubre de 2026**
+- **Título:** Hacer tarea de matemáticas
+- **Descripción:** Resolver guía 5
+- **Tipo:** Evento de día completo
+
+Aparecerá en tu calendario para que no se te pase. ¡Buena suerte con la guía 5! 📐✨ Si necesitas ayuda con algún ejercicio o concepto mientras la resuelves, avísame.
