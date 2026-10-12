@@ -3,4 +3,4 @@ def guardar_interaccion(interacciones, usuario, respuesta):
         interacciones.append({
             "usuario": "\n".join(usuario).strip(),
             "aethera": "\n".join(respuesta).strip(),
-        })
+        }) 
