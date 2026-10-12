@@ -13,7 +13,10 @@ Módulos principales
 - UI/calendario/__init__.py: Expone CalendarSection para la aplicación de escritorio.
 - UI/carga_academica.py: Implementa la sección de análisis de carga académica.
 - UI/servicios.py: Implementa la sección de servicios de apoyo.
-- UI/chat.py: Implementa la sección del chat, adjuntos PDF y formato de mensajes.
+- UI/chat/: Separa la coordinación de la vista del chat (chat_view.py), la lógica de negocio (logica.py) y los componentes de interfaz.
+- UI/chat/components/chat_header.py: Renderiza el título, los subtítulos y el indicador de estado del chat.
+- UI/chat/components/chat_history.py: Renderiza el historial de mensajes y su área desplazable.
+- UI/chat/components/chat_input.py: Renderiza el campo de entrada, el botón enviar y los controles para adjuntar PDF.
 - UI/components.py: Reúne los componentes, estilos y utilidades compartidos por las secciones.
 - config_de_carpetas.py: Define y crea las carpetas donde se guardan historiales, resúmenes e índices de memoria.
 - app_paths.py: Resuelve las rutas de recursos empaquetados y la carpeta persistente del usuario.
