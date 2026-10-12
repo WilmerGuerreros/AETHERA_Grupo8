@@ -1,6 +1,6 @@
 from typing import Callable, Optional
 
-from LLMEngine import LLMEngine
+from .LLMEngine import LLMEngine
 
 
 class ChatSession: 

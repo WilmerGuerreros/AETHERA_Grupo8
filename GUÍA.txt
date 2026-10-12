@@ -2,35 +2,32 @@ GUÍA DE MÓDULOS — AETHERA
 
 Módulos principales
 - main.py: Configura el agente y permite iniciar Aethera en modo escritorio o consola.
-- LLMEngine.py: Conecta el proyecto con Ollama para generar respuestas en streaming.
-- ChatSession.py: Gestiona los turnos del chat y ejecuta las herramientas solicitadas por el modelo.
-- desktop_app.py: Implementa la interfaz de escritorio, con chat, calendario, análisis de carga y servicios de apoyo.
+- agente/LLMEngine.py: Conecta el proyecto con Ollama para generar respuestas en streaming.
+- agente/ChatSession.py: Gestiona los turnos del chat y ejecuta las herramientas solicitadas por el modelo.
+- UI/desktop_app.py: Orquesta la ventana de escritorio y sus secciones.
+- UI/dashboard.py: Implementa la sección de inicio y el resumen académico.
+- UI/calendario.py: Implementa la sección del calendario académico.
+- UI/carga_academica.py: Implementa la sección de análisis de carga académica.
+- UI/servicios.py: Implementa la sección de servicios de apoyo.
+- UI/chat.py: Implementa la sección del chat, adjuntos PDF y formato de mensajes.
+- UI/components.py: Reúne los componentes, estilos y utilidades compartidos por las secciones.
 - config_de_carpetas.py: Define y crea las carpetas donde se guardan historiales, resúmenes e índices de memoria.
 - app_paths.py: Resuelve las rutas de recursos empaquetados y la carpeta persistente del usuario.
 
-Paquete tools
-- tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
-- tools/calendario_academico.py: Consulta eventos académicos desde el calendario institucional y los filtra por fechas y categoría.
-- tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
-- tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
-- tools/tiempo.py: Obtiene la fecha y hora actuales del sistema.
-- tools/web.py: Busca información pública actual en la web.
+Paquete agente.tools
+- agente/tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
+- agente/tools/calendario_academico.py: Consulta eventos académicos desde el calendario institucional y los filtra por fechas y categoría.
+- agente/tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
+- agente/tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
+- agente/tools/tiempo.py: Obtiene la fecha y hora actuales del sistema.
+- agente/tools/web.py: Busca información pública actual en la web.
 
 Paquete memoria
 - memoria/__init__.py: Marca memoria como paquete y describe su propósito general.
-- memoria/actualizar_indice.py: Añade al índice las secciones de historial y sus resúmenes.
-- memoria/cargar_indice.py: Carga el índice de memoria guardado o devuelve uno vacío si aún no existe.
-- memoria/contar_conversaciones.py: Cuenta cuántas interacciones de usuario contiene un archivo de historial.
+- memoria/historial.py: Guarda conversaciones y agrupa la lectura, el conteo, la inicialización y la consulta de historiales.
+- memoria/indice.py: Carga y actualiza el índice de secciones de historial y resúmenes.
+- memoria/resumen.py: Genera y recupera resúmenes de memoria.
 - memoria/contexto_inicial.py: Prepara los mensajes iniciales del agente con resúmenes e interacciones recientes recuperados.
-- memoria/generar_resumen.py: Usa un modelo de lenguaje para resumir un historial y guardar el resultado.
-- memoria/generar_resumen_memoria.py: Proporciona una función de conveniencia para generar resúmenes de memoria.
-- memoria/guardar_historial.py: Guarda cada interacción y, al alcanzar el límite de la sección, genera su resumen y actualiza el índice.
-- memoria/guardar_interaccion.py: Añade una interacción de usuario y Aethera a una lista estructurada.
-- memoria/inicializar_memoria.py: Determina la sección activa y cuántas conversaciones contiene.
-- memoria/leer_interacciones.py: Lee un archivo de historial y convierte sus registros en interacciones estructuradas.
-- memoria/obtener_ultimas_interacciones.py: Recupera las interacciones más recientes de las secciones de historial.
-- memoria/obtener_ultimo_archivo.py: Localiza el archivo de historial más reciente y cuenta sus interacciones.
-- memoria/obtener_ultimo_resumen.py: Lee el resumen de la sección anterior, si existe.
 
 Crear y compartir el ejecutable en Windows
 1. Instala Python 3.10 o posterior y Ollama en el equipo de desarrollo.

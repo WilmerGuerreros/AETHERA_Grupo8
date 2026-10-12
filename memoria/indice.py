@@ -1,8 +1,17 @@
+"""Carga y actualización del índice de resúmenes de memoria."""
+
 import json
 
 from config_de_carpetas import carpeta_indice
 
-from .cargar_indice import cargar_indice
+
+def cargar_indice():
+    archivo_indice = carpeta_indice / "INDICE_MEMORIA.json"
+    if archivo_indice.exists():
+        with open(archivo_indice, "r", encoding="utf-8") as archivo:
+            return json.load(archivo)
+
+    return {"secciones": [], "temas": {}}
 
 
 def actualizar_indice(numero_seccion, archivo_historial, archivo_resumen):

@@ -1,20 +1,9 @@
-from .inicializar_memoria import inicializar_memoria
-from .obtener_ultimas_interacciones import obtener_ultimas_interacciones
-from .obtener_ultimo_resumen import obtener_ultimo_resumen
+from .historial import inicializar_memoria, obtener_ultimas_interacciones
+from .resumen import obtener_ultimo_resumen
 
 
 numero_seccion, contador_mensajes = inicializar_memoria()
-mensajes = [
-    {
-        "role": "system",
-        "content": """
-Eres Aethera, un agente de acompañamiento académico.
-Ayuda al estudiante a organizarse, comprender su carga académica y prepararse para sus evaluaciones.
-No eres un profesional de salud: no diagnostiques, no inventes información ni especules sin bases sólidas.
-Utiliza la memoria recuperada como contexto cuando sea pertinente.
-""",
-    }
-]
+mensajes = [{'':''}]
 
 resumen_anterior = obtener_ultimo_resumen(numero_seccion)
 if resumen_anterior:

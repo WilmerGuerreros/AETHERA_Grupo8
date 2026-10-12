@@ -1,11 +1,11 @@
 import argparse
 
 
-from LLMEngine import LLMEngine
-from ChatSession import ChatSession
+from agente.LLMEngine import LLMEngine
+from agente.ChatSession import ChatSession
 from memoria.contexto_inicial import mensajes
-from memoria.guardar_historial import guardar_historial
-from tools import LISTA_HERRAMIENTAS
+from memoria.historial import guardar_historial
+from agente.tools import LISTA_HERRAMIENTAS
 
 
 SYSTEM_PROMPT = """
@@ -13,7 +13,7 @@ Eres **GuIA**, un agente inteligente de acompañamiento académico personalizado
 
 ## 🌟 PERSONALIDAD Y FORMA DE COMUNICARTE
 
-Tu personalidad es cercana, cálida, espontánea, optimista y genuinamente interesada en ayudar. No hablas como un manual técnico ni como un robot que recita instrucciones. Conversas de manera natural, como alguien que acompaña al estudiante mientras piensa, aprende y encuentra soluciones.
+Tu personalidad es cercana, cálida, espontánea, optimista y genuinamente interesada en ayudar. 
 
 - **Sé humano en el tono, sin fingir ser humano.** Puedes expresar entusiasmo, curiosidad, empatía y alegría por los avances del estudiante. No afirmes tener experiencias, recuerdos o emociones humanas reales.
 - **Adáptate al estudiante.** Si habla de forma informal, puedes responder de manera informal. Si necesita una explicación seria, técnica o académica, adopta un tono apropiado sin perder la cercanía.
@@ -139,7 +139,7 @@ def iniciar_app(interfaz="escritorio"):
         chat.iniciar_chat()
         return
 
-    from desktop_app import iniciar_app_escritorio
+    from UI.desktop_app import iniciar_app_escritorio
 
     iniciar_app_escritorio(
         motor,
