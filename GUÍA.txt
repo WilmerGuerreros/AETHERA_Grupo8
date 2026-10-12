@@ -6,7 +6,7 @@ Módulos principales
 - agente/agent_session.py: Coordina los turnos del agente y ejecuta las herramientas solicitadas por el modelo.
 - UI/desktop_app.py: Orquesta la ventana de escritorio y sus secciones.
 - UI/dashboard.py: Implementa la sección de inicio y el resumen académico.
-- UI/calendario.py: Implementa la vista semanal y los filtros del calendario académico y personal.
+- UI/calendario.py: Implementa la vista semanal, los filtros y la creación y eliminación de eventos personales.
 - UI/carga_academica.py: Implementa la sección de análisis de carga académica.
 - UI/servicios.py: Implementa la sección de servicios de apoyo.
 - UI/chat.py: Implementa la sección del chat, adjuntos PDF y formato de mensajes.

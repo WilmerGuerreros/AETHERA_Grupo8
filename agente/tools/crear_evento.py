@@ -37,6 +37,83 @@ def _plegar_linea_ics(linea: str) -> str:
     return "\r\n".join(segmentos)
 
 
+def eliminar_evento(uid: str) -> dict:
+    """Elimina del calendario personal el evento identificado por su UID."""
+    if not isinstance(uid, str) or not uid.strip():
+        return {"error": "Se requiere un identificador de evento válido."}
+
+    ruta = RUTA_CALENDARIO_PERSONAL
+    temporal = None
+    try:
+        contenido = ruta.read_text(encoding="utf-8")
+        lineas = contenido.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+        if (
+            not lineas
+            or lineas[0] != "BEGIN:VCALENDAR"
+            or lineas[-1] != "END:VCALENDAR"
+        ):
+            return {"error": f"El archivo de calendario personal no es válido: {ruta}"}
+
+        bloques_eventos = []
+        indice = 0
+        while indice < len(lineas):
+            if lineas[indice] != "BEGIN:VEVENT":
+                indice += 1
+                continue
+            fin_evento = indice + 1
+            while fin_evento < len(lineas) and lineas[fin_evento] != "END:VEVENT":
+                fin_evento += 1
+            if fin_evento == len(lineas):
+                return {"error": "El calendario contiene un evento ICS incompleto."}
+            bloque = lineas[indice : fin_evento + 1]
+            desplegado = []
+            for linea in bloque:
+                if linea.startswith((" ", "\t")) and desplegado:
+                    desplegado[-1] += linea[1:]
+                else:
+                    desplegado.append(linea)
+            uid_evento = next(
+                (
+                    linea.split(":", 1)[1]
+                    for linea in desplegado
+                    if linea.startswith("UID:")
+                ),
+                None,
+            )
+            if uid_evento == uid:
+                bloques_eventos.append((indice, fin_evento + 1))
+            indice = fin_evento + 1
+
+        if not bloques_eventos:
+            return {"error": "No se encontró ese evento en el calendario Personal."}
+        if len(bloques_eventos) > 1:
+            return {"error": "El identificador aparece en varios eventos; no se eliminó ninguno."}
+
+        inicio_bloque, fin_bloque = bloques_eventos[0]
+        del lineas[inicio_bloque:fin_bloque]
+        nuevo_contenido = "\r\n".join(lineas) + "\r\n"
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=ruta.parent,
+            prefix=f".{ruta.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as archivo:
+            temporal = archivo.name
+            archivo.write(nuevo_contenido)
+        os.replace(temporal, ruta)
+    except (OSError, UnicodeDecodeError) as error:
+        logging.exception("No se pudo eliminar el evento personal.")
+        return {"error": f"No se pudo eliminar el evento personal: {error}"}
+    finally:
+        if temporal and os.path.exists(temporal):
+            os.unlink(temporal)
+
+    return {"mensaje": "Evento eliminado del calendario Personal."}
+
+
 def crear_evento(
     titulo: str,
     fecha_inicio: str,

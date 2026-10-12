@@ -74,6 +74,7 @@ def _leer_eventos(
                 eventos_encontrados.append(
                     {
                         "resumen": _desescapar_ics(evento_actual.get("SUMMARY", "")),
+                        "uid": evento_actual.get("UID"),
                         "categoria": categoria,
                         "fecha_inicio": inicio_evento.isoformat(),
                         "fecha_fin": fin_evento.isoformat(),

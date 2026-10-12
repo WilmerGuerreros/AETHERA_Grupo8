@@ -340,3 +340,17 @@ Aethera: ¡Listo! ✅ He creado el evento en tu calendario personal:
 - **Tipo:** Evento de día completo
 
 Aparecerá en tu calendario para que no se te pase. ¡Buena suerte con la guía 5! 📐✨ Si necesitas ayuda con algún ejercicio o concepto mientras la resuelves, avísame.
+
+============================================================
+Fecha: 2026-10-12 16:27:32
+============================================================
+Usuario: Fecha: 12/10/2026 Hora: 16:27
+puedes crear un evento para mañana llamado prueba de ingl´es ?
+Aethera: ¡Listo! ✅ He creado el evento en tu calendario personal:
+
+**📅 Martes 13 de octubre de 2026**
+- **Título:** prueba de inglés
+- **Descripción:** Prueba de inglés programada
+- **Tipo:** Evento de día completo
+
+Ya tienes ambos eventos para mañana: la **tarea de matemáticas (guía 5)** y la **prueba de inglés**. ¡Mucho éxito con ambos! 📚🇬🇧✨
