@@ -3,7 +3,7 @@ from typing import Callable, Optional
 from .LLMEngine import LLMEngine
 
 
-class ChatSession: 
+class AgentSession:
     def __init__(
         self,
         motor: LLMEngine,
@@ -16,29 +16,11 @@ class ChatSession:
         self.lista_herramientas = lista_herramientas
         self.al_completar_turno = al_completar_turno
 
-#---------------- METODO DE BUCLE DEL CHAT --------------
-    def iniciar_chat(self):
-        print(
-            """
--------------------------------------
-#         CHAT INICIADO             #
--------------------------------------
-"""
-        )
-        while True:
-            usuario = input("> ")
-            if usuario.strip().lower() in {"salir", "exit", "quit"}:
-                print("Chat finalizado.")
-                break
-
-            self.procesar_turno(usuario)
-
-#---------------- METODO DE BUCLE DE HERRAMIENTAS ----------------
     def procesar_turno(
         self,
         usuario: str,
-        al_emitir_texto: Optional[Callable[[str], None]] = None,
-        al_actualizar_estado: Optional[Callable[[str], None]] = None,
+        al_emitir_texto: Callable[[str], None],
+        al_actualizar_estado: Callable[[str], None],
     ):
         self.historial.append({"role": "user", "content": usuario})
         self._procesar_respuesta(usuario, al_emitir_texto, al_actualizar_estado)
@@ -46,71 +28,50 @@ class ChatSession:
     def _procesar_respuesta(
         self,
         usuario: str,
-        al_emitir_texto: Optional[Callable[[str], None]] = None,
-        al_actualizar_estado: Optional[Callable[[str], None]] = None,
+        al_emitir_texto: Callable[[str], None],
+        al_actualizar_estado: Callable[[str], None],
     ):
         """Maneja el stream y la ejecución cíclica de herramientas si el modelo las solicita."""
 
         while True:
-            if al_emitir_texto is None:
-                print("\nAETHERA> ", end="", flush=True)
-            
             texto_completo = ""
             herramientas_solicitadas = []
 
             herramientas_para_ollama = list(self.lista_herramientas.values())
 
-            # Llamamos al generador pasando el historial y la LISTA de herramientas
             flujo_respuesta = self.motor.generar_stream(
                 historial=self.historial,
-                herramientas=herramientas_para_ollama
+                herramientas=herramientas_para_ollama,
             )
 
             for fragmento in flujo_respuesta:
                 msg = fragmento.get('message', {})
                 
-                # Imprimir texto parcial si viene en el fragmento
                 contenido = msg.get('content', '')
                 if contenido:
-                    if al_emitir_texto is None:
-                        print(contenido, end="", flush=True)
-                    else:
-                        al_emitir_texto(contenido)
+                    al_emitir_texto(contenido)
                     texto_completo += contenido
                 
-                # Detectar si el fragmento contiene llamadas a herramientas
                 if 'tool_calls' in msg and msg['tool_calls']:
                     herramientas_solicitadas.extend(msg['tool_calls'])
                 
-            if al_emitir_texto is None:
-                print()  # Salto de línea al terminar el stream de este turno
-
-            # 2. Registrar la respuesta del asistente en el historial
             mensaje_asistente = {'role': 'assistant', 'content': texto_completo}
             if herramientas_solicitadas:
                 mensaje_asistente['tool_calls'] = herramientas_solicitadas
             
             self.historial.append(mensaje_asistente)
 
-            # 3. Si el modelo no pidió ninguna herramienta, terminamos el turno
             if not herramientas_solicitadas:
                 if self.al_completar_turno is not None:
                     self.al_completar_turno(usuario, texto_completo)
                 break
 
-            # 4. Si pidió herramientas, las ejecutamos en local
             for tool_call in herramientas_solicitadas:
                 nombre_fn = tool_call['function']['name']
                 argumentos = tool_call['function']['arguments']
 
                 estado = f"Consultando {nombre_fn.replace('_', ' ')}..."
-                if al_actualizar_estado is not None:
-                    al_actualizar_estado(estado)
-                else:
-                    print(
-                        f"🛠️ [Ejecutando herramienta '{nombre_fn}' "
-                        f"con argumentos: {argumentos}]"
-                    )
+                al_actualizar_estado(estado)
 
                 if nombre_fn in self.lista_herramientas:
                     try:
@@ -121,12 +82,8 @@ class ChatSession:
                 else:
                     resultado = f"Error: La herramienta '{nombre_fn}' no está registrada."
 
-                # 5. Agregar el resultado de la herramienta al historial
                 self.historial.append({
                     'role': 'tool',
                     'content': str(resultado),
                     'name': nombre_fn
                 })
-
-            # El bucle `while True` vuelve a ejecutarse automáticamente para que el LLM
-            # reciba el resultado en el historial y genere la respuesta explicativa final.

@@ -2,7 +2,6 @@
 
 from .components import (
     COLORS,
-    ChatSession,
     FONT,
     RoundedButton,
     RoundedFrame,
@@ -22,6 +21,7 @@ from .calendario import CalendarSection
 from .carga_academica import WorkloadSection
 from .servicios import ServicesSection
 from .chat import ChatSection
+from agente.agent_session import AgentSession
 
 
 class AetheraDesktopApp(
@@ -76,7 +76,7 @@ class AetheraDesktopApp(
         self.current_page = "Inicio"
         self.busy = False
 
-        self.chat = ChatSession(
+        self.chat = AgentSession(
             motor,
             historial,
             herramientas,

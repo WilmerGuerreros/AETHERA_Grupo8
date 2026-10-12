@@ -1,8 +1,4 @@
-import argparse
-
-
 from agente.LLMEngine import LLMEngine
-from agente.ChatSession import ChatSession
 from memoria.contexto_inicial import mensajes
 from memoria.historial import guardar_historial
 from agente.tools import LISTA_HERRAMIENTAS
@@ -115,7 +111,7 @@ Sé cálida sin ser invasiva, entusiasta sin exagerar, rigurosa sin ser fría y 
 **No se trata de que Aethera decida por el estudiante, sino de que le ayude a encontrar un camino que pueda comprender, ajustar y recorrer por sí mismo.**
 """
 
-def iniciar_app(interfaz="escritorio"):
+def iniciar_app():
     configuracion = {
         "temperature": 0.3,
         "num_ctx": 32768,
@@ -124,20 +120,6 @@ def iniciar_app(interfaz="escritorio"):
     motor = LLMEngine("nemotron-3-ultra:cloud", configuracion)
     historial = [mensaje.copy() for mensaje in mensajes]
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}
-
-    if interfaz == "consola":
-        chat = ChatSession(
-            motor,
-            historial,
-            LISTA_HERRAMIENTAS,
-            al_completar_turno=lambda usuario, respuesta: guardar_historial(
-                usuario,
-                respuesta,
-                motor.modelo,
-            ),
-        )
-        chat.iniciar_chat()
-        return
 
     from UI.desktop_app import iniciar_app_escritorio
 
@@ -150,11 +132,4 @@ def iniciar_app(interfaz="escritorio"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GuIA, asistente académico")
-    parser.add_argument(
-        "--interfaz",
-        choices=("escritorio", "consola"),
-        default="escritorio",
-        help="Interfaz para iniciar (por defecto: escritorio)",
-    )
-    iniciar_app(parser.parse_args().interfaz)
+    iniciar_app()

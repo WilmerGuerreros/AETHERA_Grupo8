@@ -15,7 +15,6 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 from pypdf import PdfReader
 
 from app_paths import configure_tk_environment
-from agente.ChatSession import ChatSession
 from agente.tools.calendario_academico import calendario_academico
 from agente.tools.evaluar_carga_academica import evaluar_riesgo_sobrecarga
 from agente.tools.servicios_ayuda import buscar_servicios_ayuda

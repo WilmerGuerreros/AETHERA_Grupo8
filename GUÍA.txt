@@ -1,9 +1,9 @@
 GUÍA DE MÓDULOS — AETHERA
 
 Módulos principales
-- main.py: Configura el agente y permite iniciar Aethera en modo escritorio o consola.
+- main.py: Configura el agente e inicia la interfaz de escritorio.
 - agente/LLMEngine.py: Conecta el proyecto con Ollama para generar respuestas en streaming.
-- agente/ChatSession.py: Gestiona los turnos del chat y ejecuta las herramientas solicitadas por el modelo.
+- agente/agent_session.py: Coordina los turnos del agente y ejecuta las herramientas solicitadas por el modelo.
 - UI/desktop_app.py: Orquesta la ventana de escritorio y sus secciones.
 - UI/dashboard.py: Implementa la sección de inicio y el resumen académico.
 - UI/calendario.py: Implementa la sección del calendario académico.
