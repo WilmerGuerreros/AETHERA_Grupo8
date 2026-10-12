@@ -2,7 +2,7 @@ import logging
 import os
 import tempfile
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from app_paths import user_calendar_path
 
@@ -119,8 +119,10 @@ def crear_evento(
     fecha_inicio: str,
     fecha_fin: str = "",
     descripcion: str = "",
+    hora_inicio: str = "",
+    hora_fin: str = "",
 ) -> dict:
-    """Crea un evento de día completo en el calendario personal del usuario.
+    """Crea un evento en el calendario personal del usuario.
 
     Args:
         titulo: Nombre breve del evento.
@@ -128,6 +130,10 @@ def crear_evento(
         fecha_fin: Último día inclusivo en formato YYYY-MM-DD; si se omite,
             el evento dura un día.
         descripcion: Detalles opcionales del evento.
+        hora_inicio: Hora local de inicio en formato HH:MM. Si se omite, el
+            evento dura el día completo.
+        hora_fin: Hora local de fin en formato HH:MM; debe acompañar a
+            hora_inicio.
 
     Returns:
         Confirmación con los datos guardados o un diccionario con 'error'.
@@ -155,6 +161,33 @@ def crear_evento(
     if fin == date.max:
         return {"error": "La fecha de fin debe ser anterior al 31/12/9999."}
 
+    if not isinstance(hora_inicio, str) or not isinstance(hora_fin, str):
+        return {"error": "Las horas deben ser texto en formato HH:MM."}
+    hora_inicio = hora_inicio.strip()
+    hora_fin = hora_fin.strip()
+    if bool(hora_inicio) != bool(hora_fin):
+        return {"error": "Debes indicar tanto la hora de inicio como la de fin."}
+
+    inicio_horario = None
+    fin_horario = None
+    if hora_inicio:
+        try:
+            inicio_horario = time.fromisoformat(hora_inicio)
+            fin_horario = time.fromisoformat(hora_fin)
+        except ValueError:
+            return {"error": "Las horas deben tener el formato HH:MM."}
+        if (
+            inicio_horario.strftime("%H:%M") != hora_inicio
+            or fin_horario.strftime("%H:%M") != hora_fin
+        ):
+            return {"error": "Las horas deben tener el formato HH:MM."}
+        fecha_hora_inicio = datetime.combine(inicio, inicio_horario)
+        fecha_hora_fin = datetime.combine(fin, fin_horario)
+        if fecha_hora_fin <= fecha_hora_inicio:
+            return {
+                "error": "La fecha y hora de fin deben ser posteriores a las de inicio."
+            }
+
     ruta = RUTA_CALENDARIO_PERSONAL
     temporal = None
     try:
@@ -179,14 +212,22 @@ def crear_evento(
             )
 
         identificador = f"{uuid.uuid4()}@aethera"
-        fin_exclusivo = fin.toordinal() + 1
-        fecha_fin_ics = date.fromordinal(fin_exclusivo).strftime("%Y%m%d")
+        if inicio_horario and fin_horario:
+            fecha_inicio_ics = fecha_hora_inicio.strftime("%Y%m%dT%H%M%S")
+            fecha_fin_ics = fecha_hora_fin.strftime("%Y%m%dT%H%M%S")
+            propiedad_inicio = f"DTSTART:{fecha_inicio_ics}"
+            propiedad_fin = f"DTEND:{fecha_fin_ics}"
+        else:
+            fin_exclusivo = fin.toordinal() + 1
+            fecha_fin_ics = date.fromordinal(fin_exclusivo).strftime("%Y%m%d")
+            propiedad_inicio = f"DTSTART;VALUE=DATE:{inicio.strftime('%Y%m%d')}"
+            propiedad_fin = f"DTEND;VALUE=DATE:{fecha_fin_ics}"
         evento = [
             "BEGIN:VEVENT",
             f"UID:{identificador}",
             f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
-            f"DTSTART;VALUE=DATE:{inicio.strftime('%Y%m%d')}",
-            f"DTEND;VALUE=DATE:{fecha_fin_ics}",
+            propiedad_inicio,
+            propiedad_fin,
             f"SUMMARY:{_escapar_valor_ics(titulo)}",
             "CATEGORIES:personal",
             "X-AETHERA-SOURCE:PERSONAL",
@@ -226,6 +267,8 @@ def crear_evento(
             "resumen": titulo,
             "fecha_inicio": inicio.isoformat(),
             "fecha_fin": fin.isoformat(),
+            "hora_inicio": hora_inicio or None,
+            "hora_fin": hora_fin or None,
             "descripcion": descripcion,
             "origen": "personal",
         },

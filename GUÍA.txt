@@ -6,7 +6,11 @@ Módulos principales
 - agente/agent_session.py: Coordina los turnos del agente y ejecuta las herramientas solicitadas por el modelo.
 - UI/desktop_app.py: Orquesta la ventana de escritorio y sus secciones.
 - UI/dashboard.py: Implementa la sección de inicio y el resumen académico.
-- UI/calendario.py: Implementa la vista semanal, los filtros y la creación y eliminación de eventos personales.
+- UI/calendario/: Separa la lógica del calendario (logica.py) de su interfaz; calendar_view.py orquesta la vista y components/ contiene el encabezado, la cuadrícula y los diálogos.
+- UI/calendario/components/calendar_header.py: Renderiza el encabezado, los controles de navegación y los filtros.
+- UI/calendario/components/calendar_grid.py: Renderiza la cuadrícula semanal, los eventos y sus animaciones.
+- UI/calendario/components/calendar_modal.py: Gestiona los diálogos para crear, consultar y eliminar eventos.
+- UI/calendario/__init__.py: Expone CalendarSection para la aplicación de escritorio.
 - UI/carga_academica.py: Implementa la sección de análisis de carga académica.
 - UI/servicios.py: Implementa la sección de servicios de apoyo.
 - UI/chat.py: Implementa la sección del chat, adjuntos PDF y formato de mensajes.
@@ -17,7 +21,7 @@ Módulos principales
 Paquete agente.tools
 - agente/tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
 - agente/tools/buscar_eventos.py: Consulta eventos académicos, personales o de ambos calendarios y los filtra por fechas y categoría.
-- agente/tools/crear_evento.py: Crea eventos de día completo en el calendario personal del usuario.
+- agente/tools/crear_evento.py: Crea eventos de día completo o con horario en el calendario personal del usuario.
 - agente/tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
 - agente/tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
 - agente/tools/web.py: Busca información pública actual en la web.

@@ -69,15 +69,28 @@ def _leer_eventos(
             if not coincide_categoria or not inicio_evento or not fin_evento_exclusivo:
                 continue
 
-            fin_evento = fin_evento_exclusivo - timedelta(days=1)
-            if inicio_evento <= dt_fin_busqueda and fin_evento >= dt_inicio_busqueda:
+            es_evento_con_hora = isinstance(inicio_evento, datetime)
+            if es_evento_con_hora:
+                inicio_fecha = inicio_evento.date()
+                fin_fecha = (fin_evento_exclusivo - timedelta(microseconds=1)).date()
+                hora_inicio = inicio_evento.strftime("%H:%M")
+                hora_fin = fin_evento_exclusivo.strftime("%H:%M")
+            else:
+                inicio_fecha = inicio_evento
+                fin_fecha = fin_evento_exclusivo - timedelta(days=1)
+                hora_inicio = None
+                hora_fin = None
+
+            if inicio_fecha <= dt_fin_busqueda and fin_fecha >= dt_inicio_busqueda:
                 eventos_encontrados.append(
                     {
                         "resumen": _desescapar_ics(evento_actual.get("SUMMARY", "")),
                         "uid": evento_actual.get("UID"),
                         "categoria": categoria,
-                        "fecha_inicio": inicio_evento.isoformat(),
-                        "fecha_fin": fin_evento.isoformat(),
+                        "fecha_inicio": inicio_fecha.isoformat(),
+                        "fecha_fin": fin_fecha.isoformat(),
+                        "hora_inicio": hora_inicio,
+                        "hora_fin": hora_fin,
                         "periodo_id": evento_actual.get("X-AETHERA-PERIOD-ID"),
                         "distrito_id": evento_actual.get("X-AETHERA-DISTRICT-ID"),
                         "descripcion": _desescapar_ics(evento_actual.get("DESCRIPTION", "")),
@@ -91,9 +104,12 @@ def _leer_eventos(
 
             if clave in ("DTSTART", "DTEND"):
                 try:
-                    evento_actual[f"_{clave}_OBJ"] = datetime.strptime(
-                        valor, "%Y%m%d"
-                    ).date()
+                    if "VALUE=DATE" in clave_completa or len(valor) == 8:
+                        objeto = datetime.strptime(valor, "%Y%m%d").date()
+                    else:
+                        formato = "%Y%m%dT%H%M%SZ" if valor.endswith("Z") else "%Y%m%dT%H%M%S"
+                        objeto = datetime.strptime(valor, formato)
+                    evento_actual[f"_{clave}_OBJ"] = objeto
                 except ValueError:
                     continue
 
