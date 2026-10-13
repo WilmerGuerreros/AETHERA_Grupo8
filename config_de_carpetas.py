@@ -7,8 +7,6 @@ from app_paths import application_data_directory
 
 
 @dataclass(frozen=True)
-
-
 class RutasMemoria:
     """Agrupa las carpetas donde se guarda la memoria del usuario."""
 

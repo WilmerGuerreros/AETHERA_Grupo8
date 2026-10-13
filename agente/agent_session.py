@@ -1,6 +1,7 @@
 from typing import Callable, Optional
 
 from .LLMEngine import LLMEngine
+from .tools.registro import Herramienta
 
 
 class AgentSession:
@@ -8,12 +9,12 @@ class AgentSession:
         self,
         motor: LLMEngine,
         historial: list,
-        lista_herramientas: dict,
+        registro_herramientas: dict[str, Herramienta],
         al_completar_turno: Optional[Callable[[str, str], None]] = None,
     ):
         self.motor = motor
         self.historial = historial
-        self.lista_herramientas = lista_herramientas
+        self.registro_herramientas = registro_herramientas
         self.al_completar_turno = al_completar_turno
 
     def procesar_turno(
@@ -37,7 +38,10 @@ class AgentSession:
             texto_completo = ""
             herramientas_solicitadas = []
 
-            herramientas_para_ollama = list(self.lista_herramientas.values())
+            herramientas_para_ollama = [
+                herramienta.funcion
+                for herramienta in self.registro_herramientas.values()
+            ]
 
             flujo_respuesta = self.motor.generar_stream(
                 historial=self.historial,
@@ -73,10 +77,12 @@ class AgentSession:
                 estado = f"Consultando {nombre_fn.replace('_', ' ')}..."
                 al_actualizar_estado(estado)
 
-                if nombre_fn in self.lista_herramientas:
+                if nombre_fn in self.registro_herramientas:
                     try:
                         # Ejecutar la función pasando los argumentos desempaquetados
-                        resultado = self.lista_herramientas[nombre_fn](**argumentos)
+                        resultado = self.registro_herramientas[nombre_fn].funcion(
+                            **argumentos
+                        )
                     except Exception as e:
                         resultado = f"Error al ejecutar la herramienta: {str(e)}"
                 else:

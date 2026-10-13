@@ -2,7 +2,8 @@
 
 ## Raíz
 
-- `main.py`: configura el agente e inicia la interfaz de escritorio.
+- `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
+- `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
 - `config.py`: configuración central (modelos de Ollama, opciones de generación y tamaño de las secciones de memoria).
 - `app_paths.py`: resuelve los recursos empaquetados y la **raíz única de datos** del usuario (`datos/` en desarrollo, carpeta del SO al empaquetar); además migra los datos de versiones anteriores.
 - `config_de_carpetas.py`: calcula las rutas de memoria (`RutasMemoria`) sin tocar el disco.
@@ -10,11 +11,13 @@
 ## Paquete `agente/`
 
 - `agente/LLMEngine.py`: conecta con Ollama y genera respuestas en streaming.
+- `agente/prompts.py`: prompt de sistema del agente.
 - `agente/agent_session.py`: coordina los turnos y ejecuta las herramientas solicitadas por el modelo.
 
 ### `agente/tools/` (adaptadores finos hacia `dominio/`)
 
-- `agente/tools/__init__.py`: reúne las herramientas y las publica en el registro que usa el agente.
+- `agente/tools/registro.py`: clase `Herramienta` con los metadatos de cada herramienta (categoría y palabras clave; la descripción se toma del docstring).
+- `agente/tools/__init__.py`: declara `REGISTRO_HERRAMIENTAS`, la lista única de herramientas que usa el agente.
 - `agente/tools/buscar_eventos.py`: consulta y filtra eventos de los calendarios.
 - `agente/tools/crear_evento.py`: crea eventos en el calendario personal.
 - `agente/tools/crear_test.py`: valida y guarda quices educativos.

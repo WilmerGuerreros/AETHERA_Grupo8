@@ -48,11 +48,15 @@ versiones anteriores al arrancar.
 
 ## Estructura
 
-- `agente/`: motor de Ollama, sesión del agente y herramientas (adaptadores finos).
+- `agente/`: motor de Ollama, prompt, sesión del agente y herramientas (adaptadores finos).
 - `dominio/`: lógica de negocio (calendario, carga académica, servicios, web y quices).
 - `memoria/`: historial, resúmenes e índice de la memoria persistente.
 - `ui/`: interfaz de escritorio (tema, widgets, utilidades y secciones).
 - `tests/`: pruebas automatizadas.
+
+`main.py` solo inicia la aplicación; la composición de las dependencias vive en
+`aplicacion.py`, que es el punto donde se agregan componentes nuevos (motor,
+memoria, herramientas, y a futuro un proveedor de embeddings).
 
 Para el detalle módulo a módulo consulta [GUIA.md](GUIA.md).
 
