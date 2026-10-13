@@ -1,15 +1,11 @@
 """Renderizado del historial, formatos y scroll del chat."""
 
 import math
-import os
 import re
-from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
 
-from PIL import Image, ImageDraw, ImageFont, ImageTk
-
-from ...quiz.logica import (
+from core.quizzes import (
     quiz_desde_mensaje,
     quiz_desde_resultado_herramienta,
 )
@@ -133,16 +129,6 @@ class ChatHistory:
         )
         body.tag_configure("table_primary", font=(FONT, 12, "bold"))
         body.tag_configure("strike", overstrike=True)
-        self._emoji_images[body] = {}
-        body.bind(
-            "<Destroy>",
-            lambda event, widget=body: (
-                self._emoji_images.pop(widget, None)
-                if event.widget is widget
-                else None
-            ),
-            add="+",
-        )
         self._insert_formatted_text(body, text)
         body.configure(state="disabled")
         return body
@@ -274,32 +260,7 @@ class ChatHistory:
                     self._insert_color_emoji(widget, emojis[index])
 
     def _insert_color_emoji(self, widget, emoji):
-        images = self._emoji_images[widget]
-        image = images.get(emoji)
-        if image is None:
-            if self._emoji_font is None:
-                windows_directory = os.environ.get("WINDIR", r"C:\Windows")
-                font_path = Path(windows_directory) / "Fonts" / "seguiemj.ttf"
-                if not font_path.is_file():
-                    widget.insert("end", emoji, "emoji")
-                    return
-                self._emoji_font = ImageFont.truetype(str(font_path), 18)
-            bounds = self._emoji_font.getbbox(emoji)
-            left, top, right, bottom = bounds
-            emoji_image = Image.new(
-                "RGBA",
-                (max(1, right - left), max(1, bottom - top)),
-                (0, 0, 0, 0),
-            )
-            ImageDraw.Draw(emoji_image).text(
-                (-left, -top),
-                emoji,
-                font=self._emoji_font,
-                embedded_color=True,
-            )
-            image = ImageTk.PhotoImage(emoji_image, master=widget)
-            images[emoji] = image
-        widget.image_create("end", image=image, align="baseline", padx=1)
+        widget.insert("end", emoji, "emoji")
 
     def _append_stream_chunk(self, chunk):
         if not hasattr(self, "stream_bubble"):
@@ -388,7 +349,7 @@ class ChatHistory:
         self._bind_smooth_scroll(canvas, self.message_list)
 
         assistant_quiz_ids = {
-            quiz["test_id"]
+            quiz["quiz_id"]
             for message in self.chat.historial
             if message.get("role") == "assistant"
             and message.get("content")
@@ -399,10 +360,10 @@ class ChatHistory:
                 self._append_message(message["role"], message["content"])
             elif (
                 message.get("role") == "tool"
-                and message.get("name") == "crear_test"
+                and message.get("name") == "crear_quiz"
             ):
                 quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
-                if quiz is not None and quiz["test_id"] not in assistant_quiz_ids:
+                if quiz is not None and quiz["quiz_id"] not in assistant_quiz_ids:
                     self._append_generated_quiz(quiz)
         if not self.message_list.winfo_children():
             self._append_message(

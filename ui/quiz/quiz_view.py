@@ -8,7 +8,14 @@ from typing import Any, Callable, Protocol
 from ..tema import COLORS, FONT
 from ..widgets import RoundedButton, RoundedFrame
 from .components import QuizCard
-from .logica import QuizLogic
+from core.quizzes import (
+    cargar_intento,
+    eliminar_intento,
+    evaluar_quiz,
+    evaluar_respuesta_alternativa,
+    guardar_intento,
+    listar_quices,
+)
 
 
 class _QuizDesktopHost(Protocol):
@@ -24,7 +31,6 @@ class _QuizDesktopHost(Protocol):
 
 class QuizSection(_QuizDesktopHost):
     def _show_quiz(self):
-        self.quiz_logic = QuizLogic(self.chat.motor)
         self._label(
             self.content,
             "Tus quizzes",
@@ -72,7 +78,7 @@ class QuizSection(_QuizDesktopHost):
 
     def _load_quiz_cards(self):
         try:
-            quizzes = self.quiz_logic.listar_quices()
+            quizzes = listar_quices()
         except (OSError, ValueError) as error:
             self._show_quiz_message(f"No se pudieron cargar los quizzes: {error}")
             return
@@ -83,7 +89,7 @@ class QuizSection(_QuizDesktopHost):
             return
         for quiz in quizzes:
             try:
-                intento = self.quiz_logic.cargar_intento(quiz)
+                intento = cargar_intento(quiz)
             except ValueError as error:
                 self._show_quiz_message(str(error))
                 continue
@@ -107,7 +113,7 @@ class QuizSection(_QuizDesktopHost):
 
     def _start_quiz(self, quiz):
         try:
-            attempt = self.quiz_logic.cargar_intento(quiz)
+            attempt = cargar_intento(quiz)
         except ValueError as error:
             self._show_quiz_message(str(error))
             return
@@ -115,13 +121,14 @@ class QuizSection(_QuizDesktopHost):
 
     def _open_quiz_window(self, quiz, attempt):
         window = tk.Toplevel(self.root)
-        window.title(quiz["test_titulo"])
+        window.title(quiz["quiz_titulo"])
         window.configure(bg=COLORS["background"])
         window.transient(self.root)
         window.geometry("760x680")
         state = {
             "indice": attempt["indice"] if attempt else 0,
             "respuestas": attempt["respuestas"] if attempt else {},
+            "evaluations": {},
             "busy": False,
         }
         window.protocol(
@@ -137,7 +144,7 @@ class QuizSection(_QuizDesktopHost):
         pagina = quiz["paginas"][indice]
         header = self._card(window)
         header.pack(fill="x", padx=20, pady=(20, 10))
-        self._label(header, quiz["test_titulo"], size=14, weight="bold").pack(
+        self._label(header, quiz["quiz_titulo"], size=14, weight="bold").pack(
             anchor="w", padx=18, pady=(15, 4)
         )
         self._label(
@@ -175,7 +182,7 @@ class QuizSection(_QuizDesktopHost):
                 button.pack(fill="x", padx=22, pady=5)
             if state["respuestas"].get(pagina["id"]):
                 key = state["respuestas"][pagina["id"]]
-                feedback = pagina["retroalimentacion"][key]
+                feedback = state["evaluations"].get(pagina["id"])
         else:
             response = tk.Text(
                 content,
@@ -195,10 +202,8 @@ class QuizSection(_QuizDesktopHost):
         if feedback:
             self._label(
                 content,
-                feedback,
-                color=COLORS["green"]
-                if state["respuestas"][pagina["id"]] == pagina["respuesta_correcta"]
-                else COLORS["yellow"],
+                feedback["retroalimentacion"],
+                color=COLORS["green"] if feedback["correcta"] else COLORS["yellow"],
                 wraplength=660,
                 justify="left",
             ).pack(anchor="w", padx=22, pady=12)
@@ -226,6 +231,11 @@ class QuizSection(_QuizDesktopHost):
     def _select_quiz_answer(self, window, quiz, state, key):
         pagina = quiz["paginas"][state["indice"]]
         state["respuestas"][pagina["id"]] = key
+        state["evaluations"][pagina["id"]] = evaluar_respuesta_alternativa(
+            quiz,
+            pagina["id"],
+            key,
+        )
         self._save_quiz_progress(quiz, state)
         self._render_quiz_page(window, quiz, state)
 
@@ -247,10 +257,12 @@ class QuizSection(_QuizDesktopHost):
 
     def _save_quiz_progress(self, quiz, state):
         if not state["respuestas"]:
-            self.quiz_logic.eliminar_intento(quiz["test_id"])
+            eliminar_intento(quiz["quiz_id"])
             return
-        self.quiz_logic.guardar_intento(
-            quiz, state["indice"], state["respuestas"]
+        guardar_intento(
+            quiz,
+            state["indice"],
+            state["respuestas"],
         )
 
     def _close_quiz_window(self, window, quiz, state):
@@ -279,7 +291,7 @@ class QuizSection(_QuizDesktopHost):
 
     def _evaluate_quiz_worker(self, quiz, respuestas, window):
         try:
-            resultado = self.quiz_logic.evaluar(quiz, respuestas)
+            resultado = evaluar_quiz(self.chat.motor, quiz, respuestas)
             self.event_queue.put(("quiz_evaluated", (window, quiz, resultado)))
         except Exception as error:
             self.event_queue.put(("quiz_evaluation_error", (window, str(error))))
@@ -338,7 +350,7 @@ class QuizSection(_QuizDesktopHost):
                 padx=14,
                 pady=10,
             ).pack(fill="x", pady=5)
-        self.quiz_logic.eliminar_intento(quiz["test_id"])
+        eliminar_intento(quiz["quiz_id"])
         tk.Button(
             window,
             text="Cerrar",

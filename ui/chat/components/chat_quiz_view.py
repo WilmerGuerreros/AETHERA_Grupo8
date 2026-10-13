@@ -4,15 +4,19 @@ import threading
 import tkinter as tk
 
 from ...tema import COLORS, FONT
-from ...quiz.logica import QuizLogic
-from dominio.quices import QuizSession, validar_test
+from core.quizzes import (
+    QuizSession,
+    evaluar_quiz,
+    evaluar_respuesta_alternativa,
+    validar_quiz,
+)
 
 
 class ChatQuizView:
     def _render_chat_quiz(self, parent, quiz):
-        quiz = validar_test(quiz)
+        quiz = validar_quiz(quiz)
         session = QuizSession(quiz)
-        state = {"index": 0, "answers": {}, "text": None}
+        state = {"index": 0, "answers": {}, "evaluations": {}, "text": None}
         shell = tk.Frame(
             parent,
             bg=COLORS["surface_light"],
@@ -24,7 +28,7 @@ class ChatQuizView:
         header.pack(fill="x", padx=14, pady=(12, 8))
         title = tk.Label(
             header,
-            text=quiz["test_titulo"],
+            text=quiz["quiz_titulo"],
             bg=COLORS["surface_light"],
             fg=COLORS["text"],
             font=(FONT, 11, "bold"),
@@ -93,21 +97,23 @@ class ChatQuizView:
                     button.pack(fill="x", pady=3)
                 selected = state["answers"].get(page["id"])
                 if selected:
-                    feedback_text = page["retroalimentacion"][selected]
-                    feedback_color = (
-                        COLORS["green"]
-                        if selected == page["respuesta_correcta"]
-                        else COLORS["yellow"]
+                    evaluation = state["evaluations"].get(page["id"])
+                    feedback_text = (
+                        evaluation["retroalimentacion"] if evaluation else ""
                     )
-                    tk.Label(
-                        content,
-                        text=feedback_text,
-                        bg=COLORS["surface_light"],
-                        fg=feedback_color,
-                        font=(FONT, 9),
-                        wraplength=520,
-                        justify="left",
-                    ).pack(anchor="w", pady=(8, 2))
+                    feedback_color = COLORS[
+                        "green" if evaluation and evaluation["correcta"] else "yellow"
+                    ]
+                    if feedback_text:
+                        tk.Label(
+                            content,
+                            text=feedback_text,
+                            bg=COLORS["surface_light"],
+                            fg=feedback_color,
+                            font=(FONT, 9),
+                            wraplength=520,
+                            justify="left",
+                        ).pack(anchor="w", pady=(8, 2))
             else:
                 text_widget = tk.Text(
                     content,
@@ -154,7 +160,8 @@ class ChatQuizView:
         def select_answer(letter):
             page = quiz["paginas"][state["index"]]
             state["answers"][page["id"]] = letter
-            session.responder_alternativa(page["id"], letter)
+            evaluation = evaluar_respuesta_alternativa(quiz, page["id"], letter)
+            state["evaluations"][page["id"]] = evaluation
             draw_page()
 
         def move(offset):
@@ -184,7 +191,7 @@ class ChatQuizView:
 
         def evaluate():
             try:
-                result = QuizLogic(self.chat.motor).evaluar(quiz, state["answers"])
+                result = evaluar_quiz(self.chat.motor, quiz, state["answers"])
                 self.event_queue.put(("chat_quiz_evaluated", (shell, quiz, result)))
             except Exception as error:
                 self.event_queue.put(("chat_quiz_evaluation_error", (shell, str(error))))

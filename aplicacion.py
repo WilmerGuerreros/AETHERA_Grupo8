@@ -6,13 +6,12 @@ escritorio. Aquí es donde se agregarán dependencias nuevas (por ejemplo, un
 proveedor de embeddings) sin tocar las capas internas.
 """
 
-from agente.LLMEngine import LLMEngine
-from agente.prompts import SYSTEM_PROMPT
-from agente.tools import REGISTRO_HERRAMIENTAS
-from app_paths import migrar_datos_heredados
+from agent.llm import LLMEngine
+from agent.prompts import SYSTEM_PROMPT
+from agent.tools import REGISTRO_HERRAMIENTAS
 from config import MODELO, OPCIONES_LLM
-from config_de_carpetas import rutas_memoria
-from memoria.servicio import Memoria
+from core.memory import Memoria
+from data.paths import migrar_datos_heredados
 
 
 def iniciar_aplicacion() -> None:
@@ -20,7 +19,7 @@ def iniciar_aplicacion() -> None:
     migrar_datos_heredados()
 
     motor = LLMEngine(MODELO, dict(OPCIONES_LLM))
-    memoria = Memoria(rutas_memoria(), modelo=motor.modelo)
+    memoria = Memoria(modelo=motor.modelo)
 
     historial = memoria.contexto_inicial()
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}

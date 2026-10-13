@@ -1,6 +1,6 @@
 {
-  "test_id": "quiz_minimal_001",
-  "test_titulo": "Quiz mínimo",
+  "quiz_id": "quiz_minimal_001",
+  "quiz_titulo": "Quiz mínimo",
   "paginas": [
     {
       "id": "p1",

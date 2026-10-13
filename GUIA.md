@@ -5,41 +5,46 @@
 - `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
 - `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
 - `config.py`: configuración central (modelos de Ollama, opciones de generación y tamaño de las secciones de memoria).
-- `app_paths.py`: resuelve los recursos empaquetados y la **raíz única de datos** del usuario (`datos/` en desarrollo, carpeta del SO al empaquetar); además migra los datos de versiones anteriores.
-- `config_de_carpetas.py`: calcula las rutas de memoria (`RutasMemoria`) sin tocar el disco.
+- `app_paths.py`: conserva la configuración de Tcl/Tk; las rutas y la migración de datos están en `data/paths.py`.
 
-## Paquete `agente/`
+## Paquete `data/`
 
-- `agente/LLMEngine.py`: conecta con Ollama y genera respuestas en streaming.
-- `agente/prompts.py`: prompt de sistema del agente.
-- `agente/agent_session.py`: coordina los turnos y ejecuta las herramientas solicitadas por el modelo.
+- `data/paths.py`: rutas de recursos y datos persistentes, además de la migración de datos anteriores.
+- `data/memory.py`: lectura y escritura de historiales, resúmenes e índice de memoria.
+- `data/calendar.py`: lectura y escritura del calendario personal.
+- `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
+- `data/documents.py`: extracción de texto de documentos PDF.
+- `data/resources.py`: lectura de CSV, JSON y texto de recursos de referencia.
+- `data/resources/`: calendarios de referencia, servicios y otros datos de solo lectura.
 
-### `agente/tools/` (adaptadores finos hacia `dominio/`)
+## Paquete `core/`
 
-- `agente/tools/registro.py`: clase `Herramienta` con los metadatos de cada herramienta (categoría y palabras clave; la descripción se toma del docstring).
-- `agente/tools/__init__.py`: declara `REGISTRO_HERRAMIENTAS`, la lista única de herramientas que usa el agente.
-- `agente/tools/buscar_eventos.py`: consulta y filtra eventos de los calendarios.
-- `agente/tools/crear_evento.py`: crea eventos en el calendario personal.
-- `agente/tools/crear_test.py`: valida y guarda quices educativos.
-- `agente/tools/evaluar_carga_academica.py`: adaptador de `dominio/carga_academica`.
-- `agente/tools/servicios_ayuda.py`: adaptador de `dominio/servicios_ayuda`.
-- `agente/tools/web.py`: adaptador de `dominio/web`.
+- `core/workload.py`: agrupación semanal y cálculo del riesgo de sobrecarga.
+- `core/calendar.py`: validación, filtrado, creación y eliminación de eventos.
+- `core/quizzes.py`: construcción, validación y corrección de quizzes e intentos; usa Data para persistirlos.
+- `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
+- `core/documents.py`: delega en Data la lectura de documentos adjuntos.
+- `core/services.py`: selección de servicios por categoría y distrito.
+- `core/web_search.py`: búsqueda de información pública en la web.
 
-## Paquete `dominio/` (lógica de negocio, sin Tkinter ni Ollama)
+## Paquete `agent/`
 
-- `dominio/calendario/`: lectura y edición de los calendarios académico y personal (`lectura.py` y `escritura.py`).
-- `dominio/carga_academica.py`: agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
-- `dominio/servicios_ayuda.py`: busca servicios de apoyo por categoría y, opcionalmente, por distrito.
-- `dominio/web.py`: busca información pública actual en la web.
-- `dominio/quices/quiz_manager.py`: validación, persistencia, listado y sesiones de respuesta de los quices.
-- `dominio/quices/creacion.py`: construye los datos de un quiz a partir del formato compacto del agente.
+- `agent/llm.py`: acceso al cliente Ollama.
+- `agent/prompts.py`: prompts estáticos separados de la lógica de ejecución.
+- `agent/session.py`: ciclo conversacional y llamadas a herramientas, sin dependencias de UI.
+- `agent/quiz_evaluation.py`: petición al LLM y validación de evaluaciones de respuestas abiertas.
+- `agent/memory_summary.py`: generación de texto de resumen con el LLM; el almacenamiento permanece en Data.
 
-## Paquete `memoria/`
+### `agent/tools/` (adaptadores finos hacia `core/`)
 
-- `memoria/historial.py`: guarda conversaciones y agrupa lectura, conteo, inicialización y consulta de historiales a partir de una carpeta explícita.
-- `memoria/indice.py`: carga y actualiza el índice de secciones de historial y resúmenes.
-- `memoria/resumen.py`: genera y recupera resúmenes de memoria.
-- `memoria/servicio.py`: clase `Memoria` con estado explícito; arma el contexto inicial y persiste cada interacción sin variables globales.
+- `agent/tools/registro.py`: metadatos de herramientas.
+- `agent/tools/__init__.py`: registro único de herramientas invocables.
+- `agent/tools/buscar_eventos.py`: adaptador a la consulta de calendario.
+- `agent/tools/crear_evento.py`: adaptador a creación de eventos personales.
+- `agent/tools/crear_quiz.py`: adaptador a construcción y almacenamiento de quices.
+- `agent/tools/evaluar_carga_academica.py`: adaptador a `core/workload`.
+- `agent/tools/servicios_ayuda.py`: adaptador a `core/services`.
+- `agent/tools/web.py`: adaptador a `core/web_search`.
 
 ## Paquete `ui/`
 
@@ -49,20 +54,20 @@
 - `ui/servicios.py`: sección de servicios de apoyo.
 - `ui/tema.py`: colores, tipografías y etiquetas compartidas (`COLORS`, `FONT`, `EVENT_STYLES`, `SERVICE_*`, `WEEKDAYS`, `MONTH_NAMES`).
 - `ui/widgets.py`: widgets reutilizables (`RoundedFrame`, `RoundedButton`, `AnimatedDropdown`) y sus ayudas de dibujo.
-- `ui/utilidades.py`: extracción de texto de PDF y análisis de Markdown del chat.
-- `ui/calendario/`: lógica (`logica.py`), orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos).
+- `ui/utilidades.py`: análisis de Markdown para presentar mensajes del chat.
+- `ui/calendario/`: orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos); las reglas están en `core/calendar.py`.
 - `ui/chat/`: coordinación de la vista (`chat_view.py`), lógica (`logica.py`) y componentes (`components/`: encabezado, historial, entrada y quiz).
-- `ui/quiz/`: tarjetas, intentos y evaluación; las alternativas se corrigen localmente y el modelo asigna un porcentaje a las respuestas de desarrollo.
+- `ui/quiz/`: presentación de quizzes e intentos; las reglas y la evaluación se delegan a Core.
 
 ## Datos persistentes
 
 Todos los datos escribibles viven bajo la raíz única que devuelve `app_paths.application_data_directory()`:
 
-- `datos/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
-- `datos/calendario.ics` — calendario personal editable.
-- `datos/quices/` — quices generados en JSON (UTF-8).
+- `data/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
+- `data/calendario.ics` — calendario personal editable.
+- `data/quices/` — quices generados en JSON (UTF-8).
 
-En desarrollo la raíz es `datos/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo. `app_paths.migrar_datos_heredados()` mueve automáticamente los datos de versiones anteriores.
+En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo. `data.paths.migrar_datos_heredados()` mueve automáticamente los datos de versiones anteriores.
 
 ## Crear y compartir el ejecutable en Windows
 

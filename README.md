@@ -42,21 +42,22 @@ Los valores que suelen ajustarse están en `config.py`:
 ## Datos del usuario
 
 Los datos escribibles (historial de chat, calendario personal y quices) viven bajo una
-raíz única: `datos/` durante el desarrollo y la carpeta de datos del sistema operativo
+raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema operativo
 en el ejecutable empaquetado. `app_paths.migrar_datos_heredados()` reubica los datos de
 versiones anteriores al arrancar.
 
 ## Estructura
 
-- `agente/`: motor de Ollama, prompt, sesión del agente y herramientas (adaptadores finos).
-- `dominio/`: lógica de negocio (calendario, carga académica, servicios, web y quices).
-- `memoria/`: historial, resúmenes e índice de la memoria persistente.
+- `agent/`: cliente LLM, prompts estáticos, sesión conversacional y herramientas finas.
+- `core/`: reglas de calendario, carga académica, quizzes, memoria, servicios y búsqueda web.
+- `data/`: persistencia de memoria, documentos, calendario y quizzes; también contiene los recursos
+  de solo lectura en `data/resources/`.
 - `ui/`: interfaz de escritorio (tema, widgets, utilidades y secciones).
 - `tests/`: pruebas automatizadas.
 
 `main.py` solo inicia la aplicación; la composición de las dependencias vive en
-`aplicacion.py`, que es el punto donde se agregan componentes nuevos (motor,
-memoria, herramientas, y a futuro un proveedor de embeddings).
+`aplicacion.py`. La UI delega reglas a Core; Core coordina Agent y Data, y Data
+concentra las operaciones persistentes.
 
 Para el detalle módulo a módulo consulta [GUIA.md](GUIA.md).
 

@@ -4,8 +4,8 @@ import tkinter as tk
 from datetime import date
 from tkinter import messagebox, ttk
 
+from core.calendar import borrar_evento_personal, guardar_evento_personal
 from ...tema import COLORS, EVENT_STYLES, FONT
-from ..logica import borrar_evento_personal, guardar_evento_personal
 
 
 class CalendarModal:

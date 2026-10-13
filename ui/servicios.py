@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from dominio.servicios_ayuda import buscar_servicios_ayuda
+from core.services import buscar_servicios_ayuda
 from .tema import (
     COLORS,
     FONT,
@@ -190,17 +190,13 @@ class ServicesSection:
 
     def _search_services(self, request_id, category, selected_district, query):
         try:
-            result = buscar_servicios_ayuda(category)
+            result = buscar_servicios_ayuda(category, selected_district)
             if "error" in result:
                 raise ValueError(result["error"])
             services = [
                 service
                 for service in result["servicios"]
                 if (
-                    selected_district is None
-                    or service["ubicacion"]["distrito_id"] == selected_district
-                )
-                and (
                     not query
                     or query
                     in " ".join(

@@ -7,7 +7,8 @@ import tkinter as tk
 from datetime import date, timedelta
 from tkinter import ttk
 
-from app_paths import configure_tk_environment
+from core.conversation import Conversacion
+from data.app_paths import configure_tk_environment
 from .tema import COLORS, FONT
 from .widgets import RoundedButton, RoundedFrame, mezclar_color
 
@@ -17,7 +18,6 @@ from .carga_academica import WorkloadSection
 from .servicios import ServicesSection
 from .chat import ChatSection
 from .quiz import QuizSection
-from agente.agent_session import AgentSession
 
 
 class AetheraDesktopApp(
@@ -73,15 +73,11 @@ class AetheraDesktopApp(
         self.current_page = "Inicio"
         self.busy = False
 
-        self.chat = AgentSession(
+        self.chat = Conversacion(
             motor,
             historial,
             herramientas,
-            al_completar_turno=lambda usuario, respuesta: guardar_interaccion(
-                usuario,
-                respuesta,
-                motor.modelo,
-            ),
+            guardar_interaccion=guardar_interaccion,
         )
 
         self._configure_styles()

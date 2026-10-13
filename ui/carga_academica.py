@@ -1,6 +1,6 @@
 """Sección carga academica de la interfaz de Aethera."""
 
-from dominio.carga_academica import evaluar_riesgo_sobrecarga
+from core.workload import evaluar_riesgo_sobrecarga
 from .tema import COLORS
 
 

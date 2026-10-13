@@ -3,8 +3,8 @@
 import tkinter as tk
 from datetime import date, datetime
 
-from dominio.calendario import buscar_eventos
-from dominio.carga_academica import evaluar_riesgo_sobrecarga
+from core.calendar import buscar_eventos
+from core.workload import evaluar_riesgo_sobrecarga
 from .tema import COLORS
 
 
@@ -139,7 +139,7 @@ class DashboardSection:
         events = buscar_eventos("any", fecha_inicio=today, origen="academico")
         if events and "error" in events[0]:
             raise ValueError(events[0]["error"])
-        return sorted(events, key=lambda event: event["fecha_inicio"])
+        return events
 
     def _event_row(self, parent, event):
         row = tk.Frame(parent, bg=COLORS["surface"])

@@ -4,6 +4,7 @@ import tkinter as tk
 
 from ...tema import COLORS, FONT
 from ...widgets import RoundedFrame
+from core.quizzes import resumir_quiz
 
 
 class QuizCard:
@@ -27,7 +28,7 @@ class QuizCard:
         ).pack(side="left", padx=(0, 12), ipady=4)
         tk.Label(
             top,
-            text=quiz["test_titulo"],
+            text=quiz["quiz_titulo"],
             bg=COLORS["surface_light"],
             fg=COLORS["text"],
             font=(FONT, 12, "bold"),
@@ -35,20 +36,20 @@ class QuizCard:
             justify="left",
         ).pack(side="left", fill="x", expand=True, anchor="w")
 
-        alternativas = sum(
-            pagina["tipo"] == "alternativa" for pagina in quiz["paginas"]
-        )
-        desarrollo = len(quiz["paginas"]) - alternativas
+        resumen = resumir_quiz(quiz)
         tk.Label(
             self.frame,
-            text=f"{alternativas} Alternativa | {desarrollo} Respuesta",
+            text=(
+                f"{resumen['alternativas']} Alternativa | "
+                f"{resumen['desarrollo']} Respuesta"
+            ),
             bg=COLORS["surface_light"],
             fg=COLORS["muted"],
             font=(FONT, 9),
         ).pack(anchor="w", padx=18, pady=(0, 12))
         button = tk.Button(
             self.frame,
-            text="Continuar Test" if continuar else "Iniciar Test",
+            text="Continuar Quiz" if continuar else "Iniciar Quiz",
             command=lambda: on_start(quiz),
             bg=COLORS["accent"],
             fg="white",

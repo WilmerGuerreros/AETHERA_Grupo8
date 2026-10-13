@@ -4,9 +4,9 @@ import tkinter as tk
 from datetime import date, timedelta
 from tkinter import ttk
 
+from core.calendar import obtener_eventos_semana
 from ..tema import COLORS, FONT
 from .components import CalendarGrid, CalendarHeader, CalendarModal
-from .logica import obtener_eventos_semana
 
 
 class CalendarSection(CalendarHeader, CalendarGrid, CalendarModal):

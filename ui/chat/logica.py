@@ -4,13 +4,14 @@ import queue
 import os
 import re
 import threading
-from ..quiz.logica import quiz_desde_resultado_herramienta
 from datetime import datetime
-from pathlib import Path
 
+from core.documents import extraer_texto_pdf
+from core.quizzes import (
+    listar_quices,
+    quiz_desde_resultado_herramienta,
+)
 from ..tema import COLORS
-from ..utilidades import extraer_texto_pdf
-from ..quiz.logica import QuizLogic, quiz_desde_resultado_herramienta
 
 
 class ChatLogic:
@@ -28,7 +29,7 @@ class ChatLogic:
             self._pdf_request_id += 1
             document = {
                 "id": self._pdf_request_id,
-                "name": Path(ruta).name,
+                "name": os.path.basename(ruta),
                 "path": ruta,
                 "text": "",
                 "state": "loading",
@@ -183,19 +184,19 @@ class ChatLogic:
         try:
             history_start = len(self.chat.historial)
             quizzes_before = {
-                quiz["test_id"] for quiz in QuizLogic(self.chat.motor).listar_quices()
+                quiz["quiz_id"] for quiz in listar_quices()
             }
-            self.chat.procesar_turno(
-                text,
-                al_emitir_texto=lambda chunk: self.event_queue.put(("token", chunk)),
-                al_actualizar_estado=lambda status: self.event_queue.put(("status", status)),
-            )
-            quizzes_after = QuizLogic(self.chat.motor).listar_quices()
+            for event_type, value in self.chat.procesar_turno(text):
+                if event_type == "token":
+                    self.event_queue.put(("token", value))
+                elif event_type == "status":
+                    self.event_queue.put(("status", value))
+            quizzes_after = listar_quices()
             for quiz in quizzes_after:
-                if quiz["test_id"] not in quizzes_before:
+                if quiz["quiz_id"] not in quizzes_before:
                     self.event_queue.put(("quiz_generated", quiz))
             for message in self.chat.historial[history_start:]:
-                if message.get("role") != "tool" or message.get("name") != "crear_test":
+                if message.get("role") != "tool" or message.get("name") != "crear_quiz":
                     continue
                 quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
                 if quiz is not None:
