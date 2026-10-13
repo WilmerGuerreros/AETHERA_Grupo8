@@ -1,8 +1,10 @@
+"""Búsqueda de información pública en la web."""
+
 from ddgs import DDGS
 
 
 def buscar_en_web(consulta: str) -> str:
-    """Busca información pública en la web para responder consultas actuales."""
+    """Devuelve resultados públicos de la web para una consulta."""
     consulta = consulta.strip()
     if not consulta:
         return "Escribe qué información quieres buscar en la web."

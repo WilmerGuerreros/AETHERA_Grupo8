@@ -1,6 +1,8 @@
 """Título, subtítulo e estado del chat."""
 
-from ...components import COLORS, FONT, tk
+import tkinter as tk
+
+from ...tema import COLORS, FONT
 
 
 class ChatHeader:

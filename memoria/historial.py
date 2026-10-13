@@ -1,11 +1,7 @@
 """Lectura, escritura y consulta de historiales de conversación."""
 
 from datetime import datetime
-
-from config_de_carpetas import carpeta_historial
-
-from .indice import actualizar_indice
-from .resumen import generar_resumen
+from pathlib import Path
 
 
 def guardar_interaccion(interacciones, usuario, respuesta):
@@ -16,7 +12,7 @@ def guardar_interaccion(interacciones, usuario, respuesta):
         })
 
 
-def leer_interacciones(archivo):
+def leer_interacciones(archivo: Path):
     if not archivo.exists():
         return []
 
@@ -44,7 +40,7 @@ def leer_interacciones(archivo):
     return interacciones
 
 
-def contar_conversaciones(archivo):
+def contar_conversaciones(archivo: Path):
     if not archivo.exists():
         return 0
 
@@ -52,47 +48,52 @@ def contar_conversaciones(archivo):
         return sum(linea.startswith("Usuario:") for linea in historial)
 
 
-def obtener_ultimo_archivo():
+def ruta_historial(carpeta_historial: Path, numero_seccion: int) -> Path:
+    """Devuelve la ruta del archivo de historial de una sección."""
+    return Path(carpeta_historial) / f"HISTORIAL_{numero_seccion:04d}.txt"
+
+
+def obtener_ultimo_archivo(carpeta_historial: Path):
     numero = 1
-    while (carpeta_historial / f"HISTORIAL_{numero:04d}.txt").exists():
+    while ruta_historial(carpeta_historial, numero).exists():
         numero += 1
 
     if numero == 1:
         return None, 0
 
-    archivo = carpeta_historial / f"HISTORIAL_{numero - 1:04d}.txt"
+    archivo = ruta_historial(carpeta_historial, numero - 1)
     return archivo, contar_conversaciones(archivo)
 
 
-def obtener_ultimas_interacciones(numero_seccion, cantidad=4):
+def obtener_ultimas_interacciones(
+    carpeta_historial: Path, numero_seccion, cantidad=4
+):
     interacciones = []
     for numero in range(numero_seccion, 0, -1):
-        archivo = carpeta_historial / f"HISTORIAL_{numero:04d}.txt"
+        archivo = ruta_historial(carpeta_historial, numero)
         interacciones = leer_interacciones(archivo) + interacciones
         if len(interacciones) >= cantidad:
             break
     return interacciones[-cantidad:]
 
 
-def inicializar_memoria():
-    archivo, contador = obtener_ultimo_archivo()
+def inicializar_memoria(carpeta_historial: Path, max_mensajes: int = 20):
+    """Calcula la sección y el contador actuales a partir del disco."""
+    archivo, contador = obtener_ultimo_archivo(carpeta_historial)
     if archivo is None:
         return 1, 0
 
     numero_seccion = int(archivo.stem.split("_")[1])
-    if contador >= 20:
+    if contador >= max_mensajes:
         return numero_seccion + 1, 0
     return numero_seccion, contador
 
 
-numero_seccion, contador_mensajes = inicializar_memoria()
-
-
-def guardar_historial(usuario, respuesta, modelo="nemotron-3-super:cloud"):
-    global numero_seccion
-    global contador_mensajes
-
-    archivo = carpeta_historial / f"HISTORIAL_{numero_seccion:04d}.txt"
+def escribir_interaccion(
+    carpeta_historial: Path, numero_seccion, usuario, respuesta
+) -> Path:
+    """Añade una interacción al historial de la sección y devuelve su ruta."""
+    archivo = ruta_historial(carpeta_historial, numero_seccion)
     archivo.parent.mkdir(parents=True, exist_ok=True)
 
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -102,12 +103,4 @@ def guardar_historial(usuario, respuesta, modelo="nemotron-3-super:cloud"):
         historial.write("=" * 60 + "\n")
         historial.write(f"Usuario: {usuario}\n")
         historial.write(f"Aethera: {respuesta}\n")
-
-    contador_mensajes += 1
-    print(f"[Memoria] HISTORIAL_{numero_seccion:04d} -> {contador_mensajes}/20")
-
-    if contador_mensajes >= 20:
-        archivo_resumen = generar_resumen(archivo, numero_seccion, modelo)
-        actualizar_indice(numero_seccion, archivo, archivo_resumen)
-        numero_seccion += 1
-        contador_mensajes = 0
+    return archivo

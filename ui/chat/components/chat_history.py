@@ -4,6 +4,7 @@ import math
 import os
 import re
 from pathlib import Path
+import tkinter as tk
 from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk
@@ -12,9 +13,12 @@ from ...quiz.logica import (
     quiz_desde_mensaje,
     quiz_desde_resultado_herramienta,
 )
-from ...components import (
-    COLORS, EMOJI_CHAR, FONT, INLINE_MARKDOWN,
-    _is_markdown_table_separator, _markdown_table_cells, tk,
+from ...tema import COLORS, FONT
+from ...utilidades import (
+    EMOJI_CHAR,
+    INLINE_MARKDOWN,
+    _is_markdown_table_separator,
+    _markdown_table_cells,
 )
 
 

@@ -1,8 +1,9 @@
 """Campo de entrada y controles de adjuntos del chat."""
 
+import tkinter as tk
 from tkinter import filedialog
 
-from ...components import COLORS, FONT, tk
+from ...tema import COLORS, FONT
 
 
 class ChatInput:

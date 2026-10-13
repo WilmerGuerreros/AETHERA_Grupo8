@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from UI.quiz.logica import (
+from ui.quiz.logica import (
     QuizLogic,
     quiz_desde_mensaje,
     quiz_desde_resultado_herramienta,
@@ -61,7 +61,7 @@ class QuizLogicTests(unittest.TestCase):
         resultado_herramienta = repr(
             {
                 "test_id": "demo_quiz",
-                "ruta": "test/quices/demo_quiz.json",
+                "ruta": "tests/fixtures/quices/demo_quiz.json",
                 "quiz_data": self.quiz,
             }
         )

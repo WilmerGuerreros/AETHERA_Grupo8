@@ -1,6 +1,9 @@
 """Tarjeta para presentar un quiz disponible."""
 
-from ...components import COLORS, FONT, RoundedFrame, tk
+import tkinter as tk
+
+from ...tema import COLORS, FONT
+from ...widgets import RoundedFrame
 
 
 class QuizCard:

@@ -1,6 +1,9 @@
 """Controles de encabezado y filtros del calendario."""
 
-from ...components import AnimatedDropdown, COLORS, MONTH_NAMES, tk
+import tkinter as tk
+
+from ...tema import COLORS, MONTH_NAMES
+from ...widgets import AnimatedDropdown
 
 
 class CalendarHeader:

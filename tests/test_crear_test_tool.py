@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from agente.tools.crear_test import crear_test as herramienta_crear_test
+from dominio.quices import creacion
 
 
 crear_test_module = import_module("agente.tools.crear_test")
@@ -35,7 +36,7 @@ class CrearTestToolTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
 
     def test_genera_id_timestamp_sin_pedirlo_en_datos(self):
-        with patch.object(crear_test_module.time, "time_ns", return_value=123456789):
+        with patch.object(creacion.time, "time_ns", return_value=123456789):
             result = crear_test_module.crear_test(**self.quiz)
 
         self.assertEqual(result, "Quiz creado y guardado correctamente.")

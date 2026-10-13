@@ -1,53 +1,72 @@
-GUÍA DE MÓDULOS — AETHERA
+# Guía de módulos — Aethera
 
-Módulos principales
-- main.py: Configura el agente e inicia la interfaz de escritorio.
-- agente/LLMEngine.py: Conecta el proyecto con Ollama para generar respuestas en streaming.
-- agente/agent_session.py: Coordina los turnos del agente y ejecuta las herramientas solicitadas por el modelo.
-- UI/desktop_app.py: Orquesta la ventana de escritorio y sus secciones.
-- UI/dashboard.py: Implementa la sección de inicio y el resumen académico.
-- UI/calendario/: Separa la lógica del calendario (logica.py) de su interfaz; calendar_view.py orquesta la vista y components/ contiene el encabezado, la cuadrícula y los diálogos.
-- UI/calendario/components/calendar_header.py: Renderiza el encabezado, los controles de navegación y los filtros.
-- UI/calendario/components/calendar_grid.py: Renderiza la cuadrícula semanal, los eventos y sus animaciones.
-- UI/calendario/components/calendar_modal.py: Gestiona los diálogos para crear, consultar y eliminar eventos.
-- UI/calendario/__init__.py: Expone CalendarSection para la aplicación de escritorio.
-- UI/carga_academica.py: Implementa la sección de análisis de carga académica.
-- UI/servicios.py: Implementa la sección de servicios de apoyo.
-- UI/chat/: Separa la coordinación de la vista del chat (chat_view.py), la lógica de negocio (logica.py) y los componentes de interfaz.
-- UI/chat/components/chat_header.py: Renderiza el título, los subtítulos y el indicador de estado del chat.
-- UI/chat/components/chat_history.py: Renderiza el historial de mensajes y su área desplazable.
-- UI/chat/components/chat_input.py: Renderiza el campo de entrada, el botón enviar y los controles para adjuntar PDF.
-- UI/components.py: Reúne los componentes, estilos y utilidades compartidos por las secciones.
-- config_de_carpetas.py: Define y crea las carpetas donde se guardan historiales, resúmenes e índices de memoria.
-- app_paths.py: Resuelve las rutas de recursos empaquetados y la carpeta persistente del usuario.
+## Raíz
 
-Paquete agente.tools
-- agente/tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
-- agente/tools/buscar_eventos.py: Consulta eventos académicos, personales o de ambos calendarios y los filtra por fechas y categoría.
-- agente/tools/crear_evento.py: Crea eventos de día completo o con horario en el calendario personal del usuario.
-- agente/tools/crear_test.py: Valida y guarda quices educativos en archivos JSON.
-- test/quiz_manager.py: Gestiona validación, persistencia, listado y sesiones de respuesta de los quices.
-- Carpeta persistente de datos del usuario (`Aethera/quices/`): Almacena los quices generados en JSON con UTF-8.
-- UI/quiz/: Renderiza tarjetas, permite continuar intentos y evalúa quizzes; las alternativas se corrigen localmente y el modelo asigna porcentaje a las respuestas de desarrollo.
-- UI/chat/components/chat_quiz_view.py: Renderiza quizzes interactivos dentro de las respuestas del asistente.
-- agente/tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
-- agente/tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
-- agente/tools/web.py: Busca información pública actual en la web.
+- `main.py`: configura el agente e inicia la interfaz de escritorio.
+- `config.py`: configuración central (modelos de Ollama, opciones de generación y tamaño de las secciones de memoria).
+- `app_paths.py`: resuelve los recursos empaquetados y la **raíz única de datos** del usuario (`datos/` en desarrollo, carpeta del SO al empaquetar); además migra los datos de versiones anteriores.
+- `config_de_carpetas.py`: calcula las rutas de memoria (`RutasMemoria`) sin tocar el disco.
 
-Paquete memoria
-- memoria/__init__.py: Marca memoria como paquete y describe su propósito general.
-- memoria/historial.py: Guarda conversaciones y agrupa la lectura, el conteo, la inicialización y la consulta de historiales.
-- memoria/indice.py: Carga y actualiza el índice de secciones de historial y resúmenes.
-- memoria/resumen.py: Genera y recupera resúmenes de memoria.
-- memoria/contexto_inicial.py: Prepara los mensajes iniciales del agente con resúmenes e interacciones recientes recuperados.
+## Paquete `agente/`
 
-Crear y compartir el ejecutable en Windows
+- `agente/LLMEngine.py`: conecta con Ollama y genera respuestas en streaming.
+- `agente/agent_session.py`: coordina los turnos y ejecuta las herramientas solicitadas por el modelo.
+
+### `agente/tools/` (adaptadores finos hacia `dominio/`)
+
+- `agente/tools/__init__.py`: reúne las herramientas y las publica en el registro que usa el agente.
+- `agente/tools/buscar_eventos.py`: consulta y filtra eventos de los calendarios.
+- `agente/tools/crear_evento.py`: crea eventos en el calendario personal.
+- `agente/tools/crear_test.py`: valida y guarda quices educativos.
+- `agente/tools/evaluar_carga_academica.py`: adaptador de `dominio/carga_academica`.
+- `agente/tools/servicios_ayuda.py`: adaptador de `dominio/servicios_ayuda`.
+- `agente/tools/web.py`: adaptador de `dominio/web`.
+
+## Paquete `dominio/` (lógica de negocio, sin Tkinter ni Ollama)
+
+- `dominio/calendario/`: lectura y edición de los calendarios académico y personal (`lectura.py` y `escritura.py`).
+- `dominio/carga_academica.py`: agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
+- `dominio/servicios_ayuda.py`: busca servicios de apoyo por categoría y, opcionalmente, por distrito.
+- `dominio/web.py`: busca información pública actual en la web.
+- `dominio/quices/quiz_manager.py`: validación, persistencia, listado y sesiones de respuesta de los quices.
+- `dominio/quices/creacion.py`: construye los datos de un quiz a partir del formato compacto del agente.
+
+## Paquete `memoria/`
+
+- `memoria/historial.py`: guarda conversaciones y agrupa lectura, conteo, inicialización y consulta de historiales a partir de una carpeta explícita.
+- `memoria/indice.py`: carga y actualiza el índice de secciones de historial y resúmenes.
+- `memoria/resumen.py`: genera y recupera resúmenes de memoria.
+- `memoria/servicio.py`: clase `Memoria` con estado explícito; arma el contexto inicial y persiste cada interacción sin variables globales.
+
+## Paquete `ui/`
+
+- `ui/desktop_app.py`: orquesta la ventana de escritorio y sus secciones.
+- `ui/dashboard.py`: sección de inicio y resumen académico.
+- `ui/carga_academica.py`: sección de análisis de carga académica.
+- `ui/servicios.py`: sección de servicios de apoyo.
+- `ui/tema.py`: colores, tipografías y etiquetas compartidas (`COLORS`, `FONT`, `EVENT_STYLES`, `SERVICE_*`, `WEEKDAYS`, `MONTH_NAMES`).
+- `ui/widgets.py`: widgets reutilizables (`RoundedFrame`, `RoundedButton`, `AnimatedDropdown`) y sus ayudas de dibujo.
+- `ui/utilidades.py`: extracción de texto de PDF y análisis de Markdown del chat.
+- `ui/calendario/`: lógica (`logica.py`), orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos).
+- `ui/chat/`: coordinación de la vista (`chat_view.py`), lógica (`logica.py`) y componentes (`components/`: encabezado, historial, entrada y quiz).
+- `ui/quiz/`: tarjetas, intentos y evaluación; las alternativas se corrigen localmente y el modelo asigna un porcentaje a las respuestas de desarrollo.
+
+## Datos persistentes
+
+Todos los datos escribibles viven bajo la raíz única que devuelve `app_paths.application_data_directory()`:
+
+- `datos/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
+- `datos/calendario.ics` — calendario personal editable.
+- `datos/quices/` — quices generados en JSON (UTF-8).
+
+En desarrollo la raíz es `datos/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo. `app_paths.migrar_datos_heredados()` mueve automáticamente los datos de versiones anteriores.
+
+## Crear y compartir el ejecutable en Windows
+
 1. Instala Python 3.10 o posterior y Ollama en el equipo de desarrollo.
-2. Desde PowerShell, en la carpeta del proyecto, ejecuta: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1
-3. El ejecutable se crea en dist\Aethera.exe; comparte ese archivo junto con esta guía.
+2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1`.
+3. El ejecutable se crea en `dist\Aethera.exe`; comparte ese archivo junto con esta guía.
 
-El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose en el equipo, conexión a Internet y acceso al modelo configurado en main.py; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
-
-Los eventos personales se guardan en `memoria/usuario/calendario.ics` durante el desarrollo y en la carpeta local de datos de Aethera cuando se ejecuta el programa empaquetado.
+El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `config.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
 
 Si la aplicación muestra «No module named 'tkinter'», cierra todas las ventanas de Aethera y vuelve a generar el ejecutable con el script anterior; no compartas una compilación anterior. El script configura Tcl/Tk desde la instalación de Python usada para compilar.

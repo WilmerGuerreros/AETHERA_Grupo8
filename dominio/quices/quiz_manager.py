@@ -8,10 +8,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from app_paths import user_data_directory
+from app_paths import quizzes_directory
 
 
-DIRECTORIO_QUICES = user_data_directory() / "quices"
+DIRECTORIO_QUICES = quizzes_directory()
 _TEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$")
 _TEST_KEYS = {"test_id", "test_titulo", "paginas"}
 _ALTERNATIVE_PAGE_KEYS = {

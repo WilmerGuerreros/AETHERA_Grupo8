@@ -1,6 +1,10 @@
 """Orquestación de la sección de calendario."""
 
-from ..components import COLORS, FONT, date, timedelta, tk, ttk
+import tkinter as tk
+from datetime import date, timedelta
+from tkinter import ttk
+
+from ..tema import COLORS, FONT
 from .components import CalendarGrid, CalendarHeader, CalendarModal
 from .logica import obtener_eventos_semana
 

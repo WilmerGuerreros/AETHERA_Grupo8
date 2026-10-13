@@ -1,13 +1,12 @@
 """Sección dashboard de la interfaz de Aethera."""
 
-from .components import (
-    COLORS,
-    buscar_eventos,
-    date,
-    datetime,
-    evaluar_riesgo_sobrecarga,
-    tk,
-)
+import tkinter as tk
+from datetime import date, datetime
+
+from dominio.calendario import buscar_eventos
+from dominio.carga_academica import evaluar_riesgo_sobrecarga
+from .tema import COLORS
+
 
 class DashboardSection:
     def _show_dashboard(self):

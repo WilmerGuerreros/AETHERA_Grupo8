@@ -1,10 +1,11 @@
 """Quiz interactivo incrustado en una respuesta del asistente."""
 
 import threading
+import tkinter as tk
 
-from ...components import COLORS, FONT, tk
+from ...tema import COLORS, FONT
 from ...quiz.logica import QuizLogic
-from test.quiz_manager import QuizSession, validar_test
+from dominio.quices import QuizSession, validar_test
 
 
 class ChatQuizView:

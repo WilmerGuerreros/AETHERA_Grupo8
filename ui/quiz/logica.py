@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from test.quiz_manager import QuizManager, QuizSession, validar_test
+from dominio.quices import QuizManager, QuizSession, validar_test
 
 
 class QuizLogic:

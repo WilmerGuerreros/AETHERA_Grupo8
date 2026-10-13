@@ -8,7 +8,8 @@ from ..quiz.logica import quiz_desde_resultado_herramienta
 from datetime import datetime
 from pathlib import Path
 
-from ..components import COLORS, extraer_texto_pdf
+from ..tema import COLORS
+from ..utilidades import extraer_texto_pdf
 from ..quiz.logica import QuizLogic, quiz_desde_resultado_herramienta
 
 

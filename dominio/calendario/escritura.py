@@ -1,3 +1,5 @@
+"""Creación y eliminación de eventos en el calendario personal."""
+
 import logging
 import os
 import tempfile
@@ -5,9 +7,6 @@ import uuid
 from datetime import date, datetime, time, timezone
 
 from app_paths import user_calendar_path
-
-
-RUTA_CALENDARIO_PERSONAL = user_calendar_path()
 
 
 def _escapar_valor_ics(valor: str) -> str:
@@ -42,7 +41,7 @@ def eliminar_evento(uid: str) -> dict:
     if not isinstance(uid, str) or not uid.strip():
         return {"error": "Se requiere un identificador de evento válido."}
 
-    ruta = RUTA_CALENDARIO_PERSONAL
+    ruta = user_calendar_path()
     temporal = None
     try:
         contenido = ruta.read_text(encoding="utf-8")
@@ -122,22 +121,7 @@ def crear_evento(
     hora_inicio: str = "",
     hora_fin: str = "",
 ) -> dict:
-    """Crea un evento en el calendario personal del usuario.
-
-    Args:
-        titulo: Nombre breve del evento.
-        fecha_inicio: Primer día del evento en formato YYYY-MM-DD.
-        fecha_fin: Último día inclusivo en formato YYYY-MM-DD; si se omite,
-            el evento dura un día.
-        descripcion: Detalles opcionales del evento.
-        hora_inicio: Hora local de inicio en formato HH:MM. Si se omite, el
-            evento dura el día completo.
-        hora_fin: Hora local de fin en formato HH:MM; debe acompañar a
-            hora_inicio.
-
-    Returns:
-        Confirmación con los datos guardados o un diccionario con 'error'.
-    """
+    """Crea un evento de día completo o con horario en el calendario personal."""
     if not isinstance(titulo, str) or not titulo.strip():
         return {"error": "El título del evento no puede estar vacío."}
     titulo = titulo.strip()
@@ -188,7 +172,7 @@ def crear_evento(
                 "error": "La fecha y hora de fin deben ser posteriores a las de inicio."
             }
 
-    ruta = RUTA_CALENDARIO_PERSONAL
+    ruta = user_calendar_path()
     temporal = None
     try:
         ruta.parent.mkdir(parents=True, exist_ok=True)

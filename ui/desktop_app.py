@@ -1,20 +1,15 @@
 """Orquesta la ventana de escritorio y sus secciones."""
 
-from .components import (
-    COLORS,
-    FONT,
-    RoundedButton,
-    RoundedFrame,
-    _mix_color,
-    configure_tk_environment,
-    date,
-    math,
-    queue,
-    time,
-    timedelta,
-    tk,
-    ttk,
-)
+import math
+import queue
+import time
+import tkinter as tk
+from datetime import date, timedelta
+from tkinter import ttk
+
+from app_paths import configure_tk_environment
+from .tema import COLORS, FONT
+from .widgets import RoundedButton, RoundedFrame, mezclar_color
 
 from .dashboard import DashboardSection
 from .calendario import CalendarSection
@@ -33,7 +28,7 @@ class AetheraDesktopApp(
     ChatSection,
     QuizSection,
 ):
-    def __init__(self, motor, historial, herramientas, guardar_historial):
+    def __init__(self, motor, historial, herramientas, guardar_interaccion):
         configure_tk_environment()
         self.root = tk.Tk()
         self.root.title("GuIA | Acompañamiento académico")
@@ -82,7 +77,7 @@ class AetheraDesktopApp(
             motor,
             historial,
             herramientas,
-            al_completar_turno=lambda usuario, respuesta: guardar_historial(
+            al_completar_turno=lambda usuario, respuesta: guardar_interaccion(
                 usuario,
                 respuesta,
                 motor.modelo,
@@ -307,7 +302,7 @@ class AetheraDesktopApp(
                     return
                 progress = min(1.0, index / steps)
                 eased = 1 - (1 - progress) ** 3
-                widget.configure(**{option: _mix_color(start, target, eased)})
+                widget.configure(**{option: mezclar_color(start, target, eased)})
             except tk.TclError:
                 self._widget_color_animations.pop(key, None)
                 return
@@ -324,7 +319,7 @@ class AetheraDesktopApp(
     def _bind_native_widget_animations(self, widget):
         if isinstance(widget, tk.Button):
             base_color = widget.cget("bg")
-            hover_color = _mix_color(base_color, COLORS["accent"], 0.32)
+            hover_color = mezclar_color(base_color, COLORS["accent"], 0.32)
             widget.bind(
                 "<Enter>",
                 lambda _event: self._animate_widget_color(
@@ -555,7 +550,7 @@ class AetheraDesktopApp(
             else:
                 widget.pack_configure(pady=(top, bottom))
             if rounded:
-                rounded.border = _mix_color(
+                rounded.border = mezclar_color(
                     parent_bg,
                     original_border,
                     eased,
@@ -580,5 +575,6 @@ class AetheraDesktopApp(
     def run(self):
         self.root.mainloop()
 
-def iniciar_app_escritorio(motor, historial, herramientas, guardar_historial):
-    AetheraDesktopApp(motor, historial, herramientas, guardar_historial).run()
+
+def iniciar_app_escritorio(motor, historial, herramientas, guardar_interaccion):
+    AetheraDesktopApp(motor, historial, herramientas, guardar_interaccion).run()

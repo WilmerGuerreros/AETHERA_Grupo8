@@ -1,18 +1,10 @@
 """Dibujo de la cuadrícula semanal y sus animaciones."""
 
-from datetime import time
+import math
+from datetime import date, datetime, time, timedelta
 
-from ...components import (
-    COLORS,
-    EVENT_STYLES,
-    FONT,
-    WEEKDAY_NAMES,
-    _mix_color,
-    date,
-    datetime,
-    math,
-    timedelta,
-)
+from ...tema import COLORS, EVENT_STYLES, FONT, WEEKDAY_NAMES
+from ...widgets import mezclar_color
 
 
 class CalendarGrid:
@@ -648,8 +640,8 @@ class CalendarGrid:
         start_x = -direction * 22
         canvas.move(tag, start_x, start_y - y0)
         background_tag = f"{tag}_bg"
-        initial_fill = _mix_color(fill, COLORS["surface"], 0.76)
-        initial_outline = _mix_color(fill, COLORS["surface"], 0.55)
+        initial_fill = mezclar_color(fill, COLORS["surface"], 0.76)
+        initial_outline = mezclar_color(fill, COLORS["surface"], 0.55)
         canvas.itemconfigure(
             background_tag,
             fill=initial_fill,
@@ -669,8 +661,8 @@ class CalendarGrid:
             )
             canvas.itemconfigure(
                 background_tag,
-                fill=_mix_color(initial_fill, fill, eased),
-                outline=_mix_color(initial_outline, fill, eased),
+                fill=mezclar_color(initial_fill, fill, eased),
+                outline=mezclar_color(initial_outline, fill, eased),
             )
             if index < 16:
                 self._schedule_calendar_animation(

@@ -1,3 +1,5 @@
+"""Análisis de la carga académica y detección de semanas de sobrecarga."""
+
 import csv
 import logging
 from datetime import date, datetime, timedelta
@@ -5,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from app_paths import resource_path
-
 
 RUTA_CALENDARIO_CSV = resource_path("Resources", "D7_calendar.csv")
 
@@ -25,17 +26,7 @@ def _cargar_csv_data(file_path: Path) -> list[dict[str, str]]:
 
 
 def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
-    """
-    Analiza el calendario académico, fragmenta las evaluaciones por semanas 
-    y detecta semanas críticas según la intensidad total de evaluaciones.
-
-    Args:
-        umbral (int): Intensidad mínima de evaluaciones en una misma semana para considerar
-            sobrecarga (por defecto es 3).
-
-    Returns:
-        dict[str, Any]: Semanas analizadas, semanas con sobrecarga y recomendación para bienestar.
-    """
+    """Agrupa las evaluaciones por semana y detecta semanas de sobrecarga."""
     if not isinstance(umbral, int) or isinstance(umbral, bool) or umbral < 1:
         return {"error": "El umbral debe ser un entero mayor que cero."}
 

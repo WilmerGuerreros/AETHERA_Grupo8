@@ -1,0 +1,13 @@
+{
+  "test_id": "test_dev_001",
+  "test_titulo": "Test de desarrollo simple",
+  "paginas": [
+    {
+      "id": "q1",
+      "tipo": "desarrollo",
+      "pregunta": "Explica qué es una variable en programación.",
+      "guia_evaluacion": "Respuesta breve",
+      "respuesta_sugerida": "Una variable es un espacio de memoria con un nombre simbólico que almacena un valor que puede cambiar durante la ejecución del programa."
+    }
+  ]
+}

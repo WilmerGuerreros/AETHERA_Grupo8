@@ -1,7 +1,11 @@
 """Sección servicios de la interfaz de Aethera."""
 
-from .components import (
-    AnimatedDropdown,
+import threading
+import tkinter as tk
+from tkinter import ttk
+
+from dominio.servicios_ayuda import buscar_servicios_ayuda
+from .tema import (
     COLORS,
     FONT,
     SERVICE_CATEGORIES,
@@ -9,11 +13,9 @@ from .components import (
     SERVICE_DISTRICTS,
     SERVICE_TYPES,
     WEEKDAYS,
-    buscar_servicios_ayuda,
-    threading,
-    tk,
-    ttk,
 )
+from .widgets import AnimatedDropdown
+
 
 class ServicesSection:
     def _show_services(self):

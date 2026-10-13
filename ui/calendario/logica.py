@@ -3,8 +3,7 @@
 from datetime import date
 from typing import Any
 
-from agente.tools.buscar_eventos import buscar_eventos
-from agente.tools.crear_evento import crear_evento, eliminar_evento
+from dominio.calendario import buscar_eventos, crear_evento, eliminar_evento
 
 
 ORIGENES_CALENDARIO = {

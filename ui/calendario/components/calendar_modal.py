@@ -1,8 +1,10 @@
 """Diálogos para crear, consultar y eliminar eventos."""
 
-from tkinter import messagebox
+import tkinter as tk
+from datetime import date
+from tkinter import messagebox, ttk
 
-from ...components import COLORS, EVENT_STYLES, FONT, date, tk, ttk
+from ...tema import COLORS, EVENT_STYLES, FONT
 from ..logica import borrar_evento_personal, guardar_evento_personal
 
 

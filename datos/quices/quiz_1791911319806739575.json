@@ -1,0 +1,164 @@
+{
+  "test_id": "quiz_1791911319806739575",
+  "test_titulo": "Quiz de Matemáticas Básicas",
+  "paginas": [
+    {
+      "id": "p1",
+      "tipo": "alternativa",
+      "pregunta": "¿Cuál es el resultado de 15 + 27?",
+      "alternativas": {
+        "A": "42",
+        "B": "32",
+        "C": "43",
+        "D": "41"
+      },
+      "retroalimentacion": {
+        "A": "Correcto. Esta es la respuesta adecuada.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "A"
+    },
+    {
+      "id": "p2",
+      "tipo": "alternativa",
+      "pregunta": "Si multiplicamos 8 × 12, ¿cuál es el producto?",
+      "alternativas": {
+        "A": "86",
+        "B": "96",
+        "C": "76",
+        "D": "106"
+      },
+      "retroalimentacion": {
+        "A": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "B": "Correcto. Esta es la respuesta adecuada.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "B"
+    },
+    {
+      "id": "p3",
+      "tipo": "alternativa",
+      "pregunta": "¿Cuál de las siguientes fracciones es equivalente a 3/4?",
+      "alternativas": {
+        "A": "6/8",
+        "B": "9/12",
+        "C": "12/16",
+        "D": "Todas las anteriores"
+      },
+      "retroalimentacion": {
+        "A": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Correcto. Esta es la respuesta adecuada."
+      },
+      "respuesta_correcta": "D"
+    },
+    {
+      "id": "p4",
+      "tipo": "alternativa",
+      "pregunta": "Convierte el decimal 0.75 a fracción simplificada.",
+      "alternativas": {
+        "A": "3/4",
+        "B": "75/100",
+        "C": "15/20",
+        "D": "7/10"
+      },
+      "retroalimentacion": {
+        "A": "Correcto. Esta es la respuesta adecuada.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "A"
+    },
+    {
+      "id": "p5",
+      "tipo": "alternativa",
+      "pregunta": "¿Cuánto es el 20% de 150?",
+      "alternativas": {
+        "A": "25",
+        "B": "30",
+        "C": "35",
+        "D": "40"
+      },
+      "retroalimentacion": {
+        "A": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "B": "Correcto. Esta es la respuesta adecuada.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "B"
+    },
+    {
+      "id": "p6",
+      "tipo": "alternativa",
+      "pregunta": "Resuelve para x: 3x + 7 = 22",
+      "alternativas": {
+        "A": "x = 5",
+        "B": "x = 4",
+        "C": "x = 6",
+        "D": "x = 3"
+      },
+      "retroalimentacion": {
+        "A": "Correcto. Esta es la respuesta adecuada.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "A"
+    },
+    {
+      "id": "p7",
+      "tipo": "alternativa",
+      "pregunta": "¿Cuál es el área de un rectángulo con base 10 cm y altura 6 cm?",
+      "alternativas": {
+        "A": "60 cm²",
+        "B": "16 cm²",
+        "C": "32 cm²",
+        "D": "60 cm"
+      },
+      "retroalimentacion": {
+        "A": "Correcto. Esta es la respuesta adecuada.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "A"
+    },
+    {
+      "id": "p8",
+      "tipo": "desarrollo",
+      "pregunta": "La raíz cuadrada de 144 es 12.",
+      "guia_evaluacion": "true",
+      "respuesta_sugerida": "La raíz cuadrada de 144 es 12 porque 12 × 12 = 144."
+    },
+    {
+      "id": "p9",
+      "tipo": "desarrollo",
+      "pregunta": "Calcula el perímetro de un cuadrado de lado 8 cm.",
+      "guia_evaluacion": "32 cm",
+      "respuesta_sugerida": "El perímetro de un cuadrado se calcula como 4 × lado. 4 × 8 = 32 cm."
+    },
+    {
+      "id": "p10",
+      "tipo": "alternativa",
+      "pregunta": "¿Cuál de los siguientes números es primo?",
+      "alternativas": {
+        "A": "21",
+        "B": "27",
+        "C": "29",
+        "D": "33"
+      },
+      "retroalimentacion": {
+        "A": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "B": "Incorrecto. Revisa la pregunta e inténtalo de nuevo.",
+        "C": "Correcto. Esta es la respuesta adecuada.",
+        "D": "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+      },
+      "respuesta_correcta": "C"
+    }
+  ]
+}

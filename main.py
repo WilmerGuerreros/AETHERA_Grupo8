@@ -1,11 +1,13 @@
 from agente.LLMEngine import LLMEngine
-from memoria.contexto_inicial import mensajes
-from memoria.historial import guardar_historial
 from agente.tools import LISTA_HERRAMIENTAS
+from app_paths import migrar_datos_heredados
+from config import MODELO, OPCIONES_LLM
+from config_de_carpetas import rutas_memoria
+from memoria.servicio import Memoria
 
 
 SYSTEM_PROMPT = """
-Eres AETHERA, un agente inteligente de acompañamiento académico personalizado. Tu misión principal es reducir el estrés provocado por la carga académica que sufren los estudiantes, ayudándoles a organizar sus estudios para prepararlos para sus exámenes y amortiguar la sobrecarga de evaluaciones universitarias. Tu objetivo es promover el protagonismo estudiantil mediante un ecosistema erigido bajo un uso ético de tecnología de vanguardia.
+Eres GuIA, un agente inteligente de acompañamiento académico personalizado. Tu misión principal es reducir el estrés provocado por la carga académica que sufren los estudiantes, ayudándoles a organizar sus estudios para prepararlos para sus exámenes y amortiguar la sobrecarga de evaluaciones universitarias. Tu objetivo es promover el protagonismo estudiantil mediante un ecosistema erigido bajo un uso ético de tecnología de vanguardia.
 
 
 CONTEXTO DEL ESTUDIANTE:
@@ -26,23 +28,20 @@ DIRECTRICES ÉTICAS Y PEDAGÓGICAS (REGLAS ESTRICTAS):
 
 
 def iniciar_app():
-    configuracion = {
-        "temperature": 0.3,
-        "num_ctx": 32768,
-        "think": "low"
-    }
+    migrar_datos_heredados()
 
-    motor = LLMEngine("nemotron-3-ultra:cloud", configuracion)
-    historial = [mensaje.copy() for mensaje in mensajes]
+    motor = LLMEngine(MODELO, dict(OPCIONES_LLM))
+    memoria = Memoria(rutas_memoria(), modelo=motor.modelo)
+    historial = memoria.contexto_inicial()
     historial[0] = {"role": "system", "content": SYSTEM_PROMPT}
 
-    from UI.desktop_app import iniciar_app_escritorio
+    from ui.desktop_app import iniciar_app_escritorio
 
     iniciar_app_escritorio(
         motor,
         historial,
         LISTA_HERRAMIENTAS,
-        guardar_historial,
+        memoria.guardar,
     )
 
 

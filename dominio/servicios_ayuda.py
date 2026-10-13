@@ -1,9 +1,10 @@
+"""Búsqueda de servicios de apoyo por categoría y distrito."""
+
 import json
 import logging
 from typing import Any
 
 from app_paths import resource_path
-
 
 RUTA_SERVICIOS = resource_path("Resources", "D6_services_map.geojson")
 
@@ -54,21 +55,7 @@ SERVICIOS_POR_CATEGORIA = {
 def buscar_servicios_ayuda(
     categoria: str, distrito: str | None = None
 ) -> dict[str, Any]:
-    """
-    Busca los servicios asociados a un motivo de orientación y sus datos de derivación.
-
-    Args:
-        categoria: Uno de 'academic_pressure', 'social_support',
-            'career_concern', 'sleep_and_routine' o 'service_navigation'.
-        distrito: Identificador opcional: 'DIST_GAIA', 'DIST_HORIZON',
-            'DIST_NEBULA', 'DIST_QUANTUM' o 'DIST_VECTOR'. Si se omite,
-            se devuelven los servicios de todos los distritos.
-
-    Returns:
-        Un diccionario con la categoría y los servicios relacionados.
-        Cada servicio incluye ubicación, horario, canales,
-        elegibilidad e información requerida para derivar.
-    """
+    """Devuelve los servicios de apoyo de una categoría y distrito opcional."""
     if (
         not isinstance(categoria, str)
         or categoria.strip().lower() not in SERVICIOS_POR_CATEGORIA

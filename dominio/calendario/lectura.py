@@ -1,10 +1,11 @@
+"""Lectura de eventos desde los calendarios académico y personal."""
+
 import logging
 from datetime import date, datetime, timedelta
 
 from app_paths import resource_path, user_calendar_path
 
 RUTA_RECURSOS = resource_path("Resources", "D7_calendar.ics")
-RUTA_CALENDARIO_PERSONAL = user_calendar_path()
 
 
 def _desescapar_ics(valor: str) -> str:
@@ -122,18 +123,7 @@ def buscar_eventos(
     fecha_fin: str = "2100-01-01",
     origen: str = "ambos",
 ) -> list[dict]:
-    """
-Consulta eventos académicos, personales o de ambos calendarios en un rango inclusivo.
-
-Args:
-    tipo: Categoría exacta o 'any' para todas.
-    fecha_inicio: Fecha inicial en formato 'YYYY-MM-DD'.
-    fecha_fin: Fecha final en formato 'YYYY-MM-DD'.
-    origen: 'academico', 'personal' o 'ambos'. Por defecto busca en ambos.
-
-Returns:
-    Lista de eventos etiquetados con su origen, o [{'error': 'motivo'}].
-    """
+    """Devuelve los eventos de un rango inclusivo filtrados por tipo y origen."""
     try:
         dt_inicio_busqueda = date.fromisoformat(fecha_inicio)
         dt_fin_busqueda = date.fromisoformat(fecha_fin)
@@ -165,12 +155,13 @@ Returns:
         ]
 
     origen_normalizado = origen.strip().lower() if isinstance(origen, str) else ""
+    ruta_personal = user_calendar_path()
     rutas = {
         "academico": ((RUTA_RECURSOS, "academico"),),
-        "personal": ((RUTA_CALENDARIO_PERSONAL, "personal"),),
+        "personal": ((ruta_personal, "personal"),),
         "ambos": (
             (RUTA_RECURSOS, "academico"),
-            (RUTA_CALENDARIO_PERSONAL, "personal"),
+            (ruta_personal, "personal"),
         ),
     }
     if origen_normalizado not in rutas:

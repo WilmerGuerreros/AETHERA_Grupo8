@@ -1,9 +1,12 @@
 """Orquestador de la sección de quizzes."""
 
 import threading
+import tkinter as tk
+from tkinter import ttk
 from typing import Any, Callable, Protocol
 
-from ..components import COLORS, FONT, RoundedButton, RoundedFrame, tk, ttk
+from ..tema import COLORS, FONT
+from ..widgets import RoundedButton, RoundedFrame
 from .components import QuizCard
 from .logica import QuizLogic
 

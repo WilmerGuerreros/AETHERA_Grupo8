@@ -43,6 +43,5 @@ if ($LASTEXITCODE -ne 0) {
     throw "Falló la creación del ejecutable."
 }
 
-$guideName = "GU" + [char]0x00CD + "A.txt"
-Copy-Item (Join-Path $PSScriptRoot $guideName) (Join-Path $PSScriptRoot "dist\$guideName") -Force
+Copy-Item (Join-Path $PSScriptRoot "GUIA.md") (Join-Path $PSScriptRoot "dist\GUIA.md") -Force
 Write-Host "Ejecutable creado en dist\Aethera.exe"

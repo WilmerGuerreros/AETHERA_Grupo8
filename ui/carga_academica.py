@@ -1,9 +1,8 @@
 """Sección carga academica de la interfaz de Aethera."""
 
-from .components import (
-    COLORS,
-    evaluar_riesgo_sobrecarga,
-)
+from dominio.carga_academica import evaluar_riesgo_sobrecarga
+from .tema import COLORS
+
 
 class WorkloadSection:
     def _show_workload(self):
