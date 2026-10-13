@@ -4,10 +4,12 @@ import queue
 import os
 import re
 import threading
+from ..quiz.logica import quiz_desde_resultado_herramienta
 from datetime import datetime
 from pathlib import Path
 
 from ..components import COLORS, extraer_texto_pdf
+from ..quiz.logica import QuizLogic, quiz_desde_resultado_herramienta
 
 
 class ChatLogic:
@@ -159,6 +161,7 @@ class ChatLogic:
         self._append_message("user", text)
         self._remove_pdf()
         self.busy = True
+        self._pending_chat_quizzes = []
         self.send_button.configure(state="disabled")
         self.status_label = self.chat_status_label
         self.status_base = "✦  GuIA está pensando"
@@ -177,11 +180,25 @@ class ChatLogic:
 
     def _run_chat_turn(self, text):
         try:
+            history_start = len(self.chat.historial)
+            quizzes_before = {
+                quiz["test_id"] for quiz in QuizLogic(self.chat.motor).listar_quices()
+            }
             self.chat.procesar_turno(
                 text,
                 al_emitir_texto=lambda chunk: self.event_queue.put(("token", chunk)),
                 al_actualizar_estado=lambda status: self.event_queue.put(("status", status)),
             )
+            quizzes_after = QuizLogic(self.chat.motor).listar_quices()
+            for quiz in quizzes_after:
+                if quiz["test_id"] not in quizzes_before:
+                    self.event_queue.put(("quiz_generated", quiz))
+            for message in self.chat.historial[history_start:]:
+                if message.get("role") != "tool" or message.get("name") != "crear_test":
+                    continue
+                quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
+                if quiz is not None:
+                    self.event_queue.put(("quiz_generated", quiz))
             self.event_queue.put(("complete", None))
         except Exception as error:
             self.event_queue.put(("error", str(error)))
@@ -209,6 +226,16 @@ class ChatLogic:
                     self._handle_pdf_loaded(*value)
                 elif event == "pdf_error":
                     self._handle_pdf_error(*value)
+                elif event == "chat_quiz_evaluated":
+                    self._show_chat_quiz_results(*value)
+                elif event == "chat_quiz_evaluation_error":
+                    self._show_chat_quiz_error(*value)
+                elif event == "quiz_generated":
+                    self._pending_chat_quizzes.append(value)
+                elif event == "quiz_evaluated":
+                    self._show_quiz_results(*value)
+                elif event == "quiz_evaluation_error":
+                    self._show_quiz_evaluation_error(*value)
         except queue.Empty:
             pass
         self.root.after(80, self._process_queue)
@@ -236,6 +263,17 @@ class ChatLogic:
             )
 
     def _finish_chat_turn(self):
+        if self.current_page == "Asistente IA":
+            has_stream_quiz = self._attach_stream_quiz()
+            if not has_stream_quiz:
+                pending_quizzes = getattr(self, "_pending_chat_quizzes", [])
+                if hasattr(self, "stream_bubble"):
+                    for quiz in pending_quizzes:
+                        self._render_chat_quiz(self.stream_bubble, quiz)
+                elif hasattr(self, "message_list"):
+                    for quiz in pending_quizzes:
+                        self._append_generated_quiz(quiz)
+        self._pending_chat_quizzes = []
         typing_after_id = getattr(self, "_typing_after_id", None)
         if typing_after_id:
             self.root.after_cancel(typing_after_id)

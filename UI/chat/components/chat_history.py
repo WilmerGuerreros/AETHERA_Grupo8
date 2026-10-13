@@ -8,6 +8,10 @@ from tkinter import ttk
 
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
+from ...quiz.logica import (
+    quiz_desde_mensaje,
+    quiz_desde_resultado_herramienta,
+)
 from ...components import (
     COLORS, EMOJI_CHAR, FONT, INLINE_MARKDOWN,
     _is_markdown_table_separator, _markdown_table_cells, tk,
@@ -17,6 +21,7 @@ from ...components import (
 class ChatHistory:
     def _append_message(self, role, text):
         is_user = role == "user"
+        quiz = None if is_user else quiz_desde_mensaje(text)
         attachments = []
         if is_user:
             text = re.sub(
@@ -47,7 +52,7 @@ class ChatHistory:
             fg="white" if is_user else COLORS["accent_light"],
             font=(FONT, 10, "bold"),
         ).pack(anchor="w", padx=18, pady=(14, 4))
-        if text:
+        if text and quiz is None:
             body = self._create_formatted_message(
                 bubble,
                 text,
@@ -60,6 +65,8 @@ class ChatHistory:
                 padx=18,
                 pady=(0, 8 if attachments else 15),
             )
+        if quiz is not None:
+            self._render_chat_quiz(bubble, quiz)
         if attachments:
             attachment_frame = tk.Frame(bubble, bg=bubble_color)
             attachment_frame.pack(fill="x", padx=18, pady=(0, 12))
@@ -324,6 +331,37 @@ class ChatHistory:
         self._set_formatted_text(self.stream_text, self.stream_content)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
+    def _attach_stream_quiz(self):
+        if not hasattr(self, "stream_content"):
+            return False
+        quiz = quiz_desde_mensaje(self.stream_content)
+        if quiz is None:
+            return False
+        self.stream_text.destroy()
+        self._render_chat_quiz(self.stream_bubble, quiz)
+        return True
+
+    def _append_generated_quiz(self, quiz):
+        outer = tk.Frame(self.message_list, bg=COLORS["background"])
+        outer.pack(fill="x", padx=15, pady=8)
+        bubble = self._card(
+            outer,
+            bg=COLORS["surface"],
+            border=COLORS["border"],
+            radius=24,
+        )
+        bubble.pack(side="left", padx=(0, 80))
+        tk.Label(
+            bubble,
+            text="GuIA",
+            bg=COLORS["surface"],
+            fg=COLORS["accent_light"],
+            font=(FONT, 10, "bold"),
+        ).pack(anchor="w", padx=18, pady=(14, 4))
+        self._render_chat_quiz(bubble, quiz)
+        self._animate_card_in(outer)
+        self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
+
     def _render_chat_history(self):
         transcript = self._card(self.content)
         transcript.pack(fill="both", expand=True)
@@ -345,9 +383,23 @@ class ChatHistory:
         self.canvas = canvas
         self._bind_smooth_scroll(canvas, self.message_list)
 
+        assistant_quiz_ids = {
+            quiz["test_id"]
+            for message in self.chat.historial
+            if message.get("role") == "assistant"
+            and message.get("content")
+            and (quiz := quiz_desde_mensaje(message["content"])) is not None
+        }
         for message in self.chat.historial:
             if message.get("role") in {"assistant", "user"} and message.get("content"):
                 self._append_message(message["role"], message["content"])
+            elif (
+                message.get("role") == "tool"
+                and message.get("name") == "crear_test"
+            ):
+                quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
+                if quiz is not None and quiz["test_id"] not in assistant_quiz_ids:
+                    self._append_generated_quiz(quiz)
         if not self.message_list.winfo_children():
             self._append_message(
                 "assistant",

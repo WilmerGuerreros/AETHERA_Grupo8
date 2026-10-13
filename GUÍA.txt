@@ -25,6 +25,11 @@ Paquete agente.tools
 - agente/tools/__init__.py: Reúne las herramientas disponibles y las publica en el registro que usa el agente.
 - agente/tools/buscar_eventos.py: Consulta eventos académicos, personales o de ambos calendarios y los filtra por fechas y categoría.
 - agente/tools/crear_evento.py: Crea eventos de día completo o con horario en el calendario personal del usuario.
+- agente/tools/crear_test.py: Valida y guarda quices educativos en archivos JSON.
+- test/quiz_manager.py: Gestiona validación, persistencia, listado y sesiones de respuesta de los quices.
+- Carpeta persistente de datos del usuario (`Aethera/quices/`): Almacena los quices generados en JSON con UTF-8.
+- UI/quiz/: Renderiza tarjetas, permite continuar intentos y evalúa quizzes; las alternativas se corrigen localmente y el modelo asigna porcentaje a las respuestas de desarrollo.
+- UI/chat/components/chat_quiz_view.py: Renderiza quizzes interactivos dentro de las respuestas del asistente.
 - agente/tools/evaluar_carga_academica.py: Agrupa evaluaciones por semana e identifica posibles períodos de sobrecarga.
 - agente/tools/servicios_ayuda.py: Busca servicios de apoyo relacionados con una categoría y, opcionalmente, un distrito.
 - agente/tools/web.py: Busca información pública actual en la web.

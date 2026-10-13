@@ -21,6 +21,7 @@ from .calendario import CalendarSection
 from .carga_academica import WorkloadSection
 from .servicios import ServicesSection
 from .chat import ChatSection
+from .quiz import QuizSection
 from agente.agent_session import AgentSession
 
 
@@ -30,6 +31,7 @@ class AetheraDesktopApp(
     WorkloadSection,
     ServicesSection,
     ChatSection,
+    QuizSection,
 ):
     def __init__(self, motor, historial, herramientas, guardar_historial):
         configure_tk_environment()
@@ -161,6 +163,7 @@ class AetheraDesktopApp(
             ("Calendario", "▦"),
             ("Carga académica", "▤"),
             ("Servicios de apoyo", "♡"),
+            ("Quiz", "⚗"),
         ):
             row = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
             row.pack(fill="x", padx=12, pady=2)
@@ -457,6 +460,8 @@ class AetheraDesktopApp(
             self._show_workload()
         elif page == "Servicios de apoyo":
             self._show_services()
+        elif page == "Quiz":
+            self._show_quiz()
 
     def _animate_nav_selection(self, selected_page):
         duration = 0.18

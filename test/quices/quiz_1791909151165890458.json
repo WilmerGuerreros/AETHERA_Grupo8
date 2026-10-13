@@ -1,0 +1,13 @@
+{
+  "test_id": "quiz_1791909151165890458",
+  "test_titulo": "Quiz Básico Desarrollo",
+  "paginas": [
+    {
+      "id": "p1",
+      "tipo": "desarrollo",
+      "pregunta": "¿Cuál es la capital de España?",
+      "guia_evaluacion": "Se evalúa que la respuesta mencione Madrid como capital.",
+      "respuesta_sugerida": "Madrid es la capital de España desde 1561."
+    }
+  ]
+}

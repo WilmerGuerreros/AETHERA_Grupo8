@@ -20,3 +20,12 @@ class LLMEngine:
             stream=True,
             options=self.configuracion,
         )
+
+    def generar_respuesta(self, historial: List[Dict[str, Any]]) -> Any:
+        """Envía una consulta no streaming al mismo modelo configurado."""
+        return ollama.chat(
+            model=self.modelo,
+            messages=historial,
+            stream=False,
+            options=self.configuracion,
+        )
