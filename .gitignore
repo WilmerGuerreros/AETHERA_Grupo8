@@ -2,6 +2,5 @@ __pycache__/
 *.py[cod]
 MEMORIA DE AETHERA AI/
 .venv/
-build/
-dist/
-memoria/usuario/
+data/memoria/
+data/quices/
