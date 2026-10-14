@@ -74,7 +74,7 @@ class DashboardSection:
                 raise ValueError(risk["error"])
             critical_weeks = len(risk["semanas_con_sobrecarga"])
             cards = [
-                ("Próximos eventos", str(len(events)), "En el calendario académico", COLORS["accent_light"]),
+                ("Próximos eventos", str(len(events)), "En tu calendario", COLORS["accent_light"]),
                 ("Semanas críticas", str(critical_weeks), "Detectadas en el calendario", COLORS["yellow"]),
                 ("Planificación", "A tu ritmo", "Un paso concreto cada vez", COLORS["green"]),
             ]
@@ -101,7 +101,7 @@ class DashboardSection:
             if not events:
                 self._label(
                     upcoming,
-                    "No hay eventos próximos en el calendario académico.",
+                    "No hay eventos próximos en tu calendario.",
                     color=COLORS["muted"],
                 ).pack(anchor="w", padx=18, pady=18)
             else:
@@ -110,7 +110,7 @@ class DashboardSection:
         except (OSError, ValueError, KeyError, TypeError) as error:
             self._notice(
                 upcoming,
-                f"No se pudo leer el calendario académico: {error}",
+                f"No se pudo leer el calendario: {error}",
                 COLORS["red"],
             )
         self._button(
@@ -136,10 +136,17 @@ class DashboardSection:
 
     def _get_upcoming_events(self):
         today = date.today().isoformat()
-        events = buscar_eventos("any", fecha_inicio=today, origen="academico")
+        events = buscar_eventos("any", fecha_inicio=today, origen="ambos")
         if events and "error" in events[0]:
             raise ValueError(events[0]["error"])
-        return events
+        return sorted(
+            events,
+            key=lambda evento: (
+                evento["fecha_inicio"],
+                evento.get("hora_inicio") or "",
+                evento.get("resumen", ""),
+            ),
+        )
 
     def _event_row(self, parent, event):
         row = tk.Frame(parent, bg=COLORS["surface"])
@@ -156,13 +163,18 @@ class DashboardSection:
         details.pack(side="left", fill="x", expand=True, pady=6)
         self._label(
             details,
-            event.get("resumen") or "Evento académico",
+            event.get("resumen") or "Evento",
             size=9,
             weight="bold",
         ).pack(anchor="w")
+        etiqueta = (
+            "Personal"
+            if event.get("origen") == "personal"
+            else event.get("categoria", "").replace("_", " ").title()
+        )
         self._label(
             details,
-            event.get("categoria", "").replace("_", " ").title(),
+            etiqueta,
             size=8,
             color=COLORS["muted"],
         ).pack(anchor="w", pady=(3, 0))

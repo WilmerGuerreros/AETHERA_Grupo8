@@ -4,31 +4,6 @@ PRODID:-//Aethera//Calendario Personal//ES
 CALSCALE:GREGORIAN
 X-WR-CALNAME:Personal
 BEGIN:VEVENT
-UID:f6c94be2-0c6e-4a70-b78b-27b857876beb@aethera
-DTSTAMP:20261014T154022Z
-DTSTART:20261014T120000
-DTEND:20261014T140000
-SUMMARY:📅 Planificación semanal + Matemáticas: Repaso inicial
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-13:00 Planificación: revisar sílabos\, fechas de exáme
- nes y objetivos de la semana.\n13:00-14:00 Matemáticas: Repaso de concept
- os clave / teoría de la unidad actual.
-END:VEVENT
-BEGIN:VEVENT
-UID:626bb7c0-6f21-4b03-ab0c-046a51bc6f4a@aethera
-DTSTAMP:20261014T154035Z
-DTSTART:20261015T120000
-DTEND:20261015T140000
-SUMMARY:📖 Lenguaje: Lectura comprensiva + Análisis textual
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-12:50 Lectura activa de texto obligatorio (subrayado\, gl
- osario\, esquema).\n12:50-13:00 Pausa activa (estirar\, agua\, respiració
- n).\n13:00-13:50 Análisis: estructura\, tesis\, argumentos\, recursos ret
- óricos.\n13:50-14:00 Resumen en 3 frases + dudas para tutoría.
-END:VEVENT
-BEGIN:VEVENT
 UID:359c95d0-2388-4268-a177-79b093da7256@aethera
 DTSTAMP:20261014T154046Z
 DTSTART:20261016T120000
@@ -95,5 +70,94 @@ DESCRIPTION:12:00-12:50 Matemáticas: Repaso de errores del simulacro (sáb
  página por asignatura (qué sé\, qué falla\, qué pregunto en tutoría)
  .\n13:40-14:00 Planificación rápida semana siguiente (3 objetivos claros
  ).
+END:VEVENT
+BEGIN:VEVENT
+UID:40d30a26-8d18-4292-9f92-072b9094e763@aethera
+DTSTAMP:20261014T165832Z
+DTSTART:20261015T120000
+DTEND:20261015T123000
+SUMMARY:enviar solicitud a espacio burbuja pares
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Recordatorio para enviar solicitud al Espacio Brújula Pares (s
+ ervicio de apoyo entre pares para presión académica en Distrito Gaia)
+END:VEVENT
+BEGIN:VEVENT
+UID:9c5ac5d2-0852-4435-be0d-3902378e777b@aethera
+DTSTAMP:20261014T165948Z
+DTSTART:20261014T140000
+DTEND:20261014T141000
+SUMMARY:Activación y planificación
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Respiración 4-7-8\, revisión de objetivos de la sesión\, hid
+ ratación. Preparación mental para bloques de estudio.
+END:VEVENT
+BEGIN:VEVENT
+UID:58295598-c3fe-4a4c-b8aa-44b401104b19@aethera
+DTSTAMP:20261014T165952Z
+DTSTART:20261014T141000
+DTEND:20261014T154000
+SUMMARY:Bloque 1: Materia prioritaria (90 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Lectura activa + resumen en una hoja. Técnica: subrayado selec
+ tivo\, parafraseo\, esquema final. Al terminar: escribe 3 ideas clave.
+END:VEVENT
+BEGIN:VEVENT
+UID:9b5df5f2-2aac-4e97-b7b6-a2718280dd04@aethera
+DTSTAMP:20261014T165958Z
+DTSTART:20261014T154000
+DTEND:20261014T155500
+SUMMARY:Pausa larga (15 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Levántate\, estira\, come algo ligero\, sin pantallas. Movimie
+ nto suave y hidratación.
+END:VEVENT
+BEGIN:VEVENT
+UID:2ee075ab-3684-423f-90a0-28b29de41e4a@aethera
+DTSTAMP:20261014T170007Z
+DTSTART:20261014T155500
+DTEND:20261014T172500
+SUMMARY:Bloque 2: Segunda materia / ejercicios (90 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Autoexplicación en voz alta o mapa conceptual. Alterna con mat
+ eria del Bloque 1 si son distintas. Al terminar: resuelve 2-3 problemas ti
+ po examen.
+END:VEVENT
+BEGIN:VEVENT
+UID:c63a355b-45f6-4aa8-bf06-6209f087d11e@aethera
+DTSTAMP:20261014T170027Z
+DTSTART:20261014T172500
+DTEND:20261014T173500
+SUMMARY:Pausa corta (10 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Movimiento\, hidratación\, estiramiento breve. Sin pantallas.
+END:VEVENT
+BEGIN:VEVENT
+UID:08d9397a-e0f4-4524-b3ca-5e9ee52c4ce5@aethera
+DTSTAMP:20261014T170038Z
+DTSTART:20261014T173500
+DTEND:20261014T183500
+SUMMARY:Bloque 3: Práctica / flashcards (60 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Tarea práctica\, preguntas tipo examen\, flashcards. Recuperac
+ ión activa: genera tus propias preguntas. Al terminar: anota dudas para r
+ esolver mañana.
+END:VEVENT
+BEGIN:VEVENT
+UID:463152a6-b61c-4340-b842-8a2e7c868a8c@aethera
+DTSTAMP:20261014T170044Z
+DTSTART:20261014T183500
+DTEND:20261014T184500
+SUMMARY:Cierre y planificación mañana (10 min)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:¿Qué lograste? ¿Qué queda pendiente? Anota 3 tareas concret
+ as para mañana. Guarda materiales y apaga pantallas.
 END:VEVENT
 END:VCALENDAR

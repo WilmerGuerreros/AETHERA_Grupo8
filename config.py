@@ -13,7 +13,7 @@ MODELO_RESUMEN = "nemotron-3-super:cloud"
 # Opciones que se envían a Ollama en cada generación de la conversación.
 OPCIONES_LLM = {
     "temperature": 0.3,
-    "num_ctx": 32768,
+    "num_ctx": 200000,#solo para cloud.
     "think": "low",
 }
 
