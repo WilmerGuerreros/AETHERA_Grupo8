@@ -5,11 +5,10 @@
 - `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
 - `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
 - `config.py`: configuración central (modelos de Ollama, opciones de generación y tamaño de las secciones de memoria).
-- `app_paths.py`: conserva la configuración de Tcl/Tk; las rutas y la migración de datos están en `data/paths.py`.
 
 ## Paquete `data/`
 
-- `data/paths.py`: rutas de recursos y datos persistentes, además de la migración de datos anteriores.
+- `data/paths.py`: rutas de recursos y datos persistentes.
 - `data/memory.py`: lectura y escritura de historiales, resúmenes e índice de memoria.
 - `data/calendar.py`: lectura y escritura del calendario personal.
 - `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
@@ -22,7 +21,7 @@
 - `core/conversation.py`: coordina los turnos conversacionales y ofrece el historial actual a Core al solicitar la evaluación final de un quiz.
 - `core/workload.py`: agrupación semanal y cálculo del riesgo de sobrecarga.
 - `core/calendar.py`: validación, filtrado, creación y eliminación de eventos.
-- `core/quizzes.py`: construcción, validación y corrección de quizzes e intentos; procesa y persiste las selecciones de alternativas, y coordina la evaluación final con Agent.
+- `core/quizzes/`: paquete con la construcción, validación y corrección de quizzes e intentos. Se divide en `schema` (esquema), `session` (intento en memoria), `scoring` (puntajes), `store` (persistencia en Data) y `evaluation` (cierre con Agent); la fachada `__init__.py` expone el contrato estable.
 - `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
 - `core/documents.py`: delega en Data la lectura de documentos adjuntos.
 - `core/services.py`: selección de servicios por categoría y distrito.
@@ -50,6 +49,7 @@
 ## Paquete `ui/`
 
 - `ui/desktop_app.py`: orquesta la ventana de escritorio y sus secciones.
+- `ui/tk_env.py`: configuración de las bibliotecas Tcl/Tk para la ventana de escritorio.
 - `ui/dashboard.py`: sección de inicio y resumen académico.
 - `ui/carga_academica.py`: sección de análisis de carga académica.
 - `ui/servicios.py`: sección de servicios de apoyo.
@@ -62,13 +62,13 @@
 
 ## Datos persistentes
 
-Todos los datos escribibles viven bajo la raíz única que devuelve `app_paths.application_data_directory()`:
+Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.application_data_directory()`:
 
 - `data/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
 - `data/calendario.ics` — calendario personal editable.
-- `data/quices/` — quices generados en JSON (UTF-8); el campo `avance` del mismo archivo guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`.
+- `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`).
 
-En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo. `data.paths.migrar_datos_heredados()` mueve automáticamente los datos de versiones anteriores.
+En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo.
 
 ## Crear y compartir el ejecutable en Windows
 

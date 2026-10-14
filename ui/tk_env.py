@@ -1,4 +1,4 @@
-"""Configuración de Tcl/Tk para las rutas de instalación de Python."""
+"""Localización de las bibliotecas Tcl/Tk para la ventana de escritorio."""
 
 import os
 import sys

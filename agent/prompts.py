@@ -32,14 +32,7 @@ QUIZ_EVALUATION_SYSTEM_PROMPT = (
     "No agregues texto adicional, explicaciones ni formato fuera del JSON."
 )
 
-QUIZ_DEVELOPMENT_EVALUATION_SYSTEM_PROMPT = (
-    "Eres un evaluador docente justo. Analiza solo la información "
-    "proporcionada y devuelve ÚNICAMENTE un JSON con la estructura exacta solicitada. "
-    "No agregues texto adicional, explicaciones ni formato fuera del JSON. "
-    "La respuesta debe ser ÚNICAMENTE el JSON solicitado."
-)
-
-QUIZ_DEVELOPMENT_EVALUATION_USER_PROMPT = (
+QUIZ_EVALUATION_USER_PROMPT = (
     "Evalúa todas las preguntas de desarrollo de un quiz educativo, incluso "
     "si la respuesta del estudiante está vacía; en ese caso asigna puntaje_normalizado 0.0. "
     "Para cada respuesta asigna puntaje_normalizado estrictamente entre 0.0 y 1.0 "
@@ -52,14 +45,11 @@ QUIZ_DEVELOPMENT_EVALUATION_USER_PROMPT = (
     '      "puntaje_normalizado": 0.8,\n'
     '      "feedback_especifico": "Texto del feedback directo al usuario sobre esta pregunta."\n'
     '    }\n'
-    '  ],\n'
-    '  "feedback_general": "Comentario general sobre el desempeño en el quiz."\n'
+    '  ]\n'
     "}\n"
     "Incluye cada pregunta exactamente una vez.\n\n"
     "{quiz_payload}"
 )
-
-QUIZ_EVALUATION_USER_PROMPT = QUIZ_DEVELOPMENT_EVALUATION_USER_PROMPT
 
 QUIZ_RESULTS_FEEDBACK_SYSTEM_PROMPT = (
     "Eres un tutor académico. Da una retroalimentación breve, constructiva y "

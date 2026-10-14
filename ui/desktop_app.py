@@ -8,8 +8,8 @@ from datetime import date, timedelta
 from tkinter import ttk
 
 from core.conversation import Conversacion
-from data.app_paths import configure_tk_environment
 from .tema import COLORS, FONT
+from .tk_env import configure_tk_environment
 from .widgets import RoundedButton, RoundedFrame, mezclar_color
 
 from .dashboard import DashboardSection

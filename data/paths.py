@@ -1,7 +1,6 @@
 """Rutas de recursos y datos persistentes de Aethera."""
 
 import os
-import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,65 +67,15 @@ class MemoryPaths:
         return self
 
 
-def memory_paths() -> MemoryPaths:
-    """Calcula las rutas de memoria sin crear carpetas."""
-    raiz = application_data_directory() / "memoria"
+def memory_paths(raiz: Path | None = None) -> MemoryPaths:
+    """Calcula las rutas de memoria sin crear carpetas.
+
+    La raíz solo se indica para inyectar una ubicación alternativa en pruebas.
+    """
+    raiz = Path(raiz) if raiz is not None else application_data_directory() / "memoria"
     return MemoryPaths(
         historial=raiz / "HISTORIAL",
         resumen=raiz / "RESUMEN",
         indice=raiz / "INDICE",
         adjuntos=raiz / "ARCHIVOS ADJUNTOS",
     )
-
-
-def _mover_contenido(origen: Path, destino: Path) -> None:
-    """Mueve datos heredados sin sobrescribir los archivos existentes."""
-    if not origen.exists():
-        return
-    if origen.is_file():
-        if not destino.exists():
-            destino.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(origen), str(destino))
-        return
-    destino.mkdir(parents=True, exist_ok=True)
-    for elemento in origen.iterdir():
-        objetivo = destino / elemento.name
-        if elemento.is_dir() and objetivo.is_dir():
-            _mover_contenido(elemento, objetivo)
-        elif not objetivo.exists():
-            shutil.move(str(elemento), str(objetivo))
-    if not any(origen.iterdir()):
-        origen.rmdir()
-
-
-def migrar_datos_heredados() -> None:
-    """Reúne en la raíz única los datos guardados por versiones anteriores."""
-    destino = application_data_directory()
-    if getattr(sys, "frozen", False):
-        raiz = user_data_directory()
-        origenes = (
-            (raiz / "CHATS DE AETHERA AI" / "MEMORIA", destino / "memoria"),
-            (
-                raiz / "memoria" / "usuario" / "calendario.ics",
-                destino / "calendario.ics",
-            ),
-        )
-    else:
-        origenes = (
-            (APPLICATION_ROOT / "datos", destino),
-            (
-                APPLICATION_ROOT / "CHATS DE AETHERA AI" / "MEMORIA",
-                destino / "memoria",
-            ),
-            (
-                APPLICATION_ROOT / "memoria" / "usuario" / "calendario.ics",
-                destino / "calendario.ics",
-            ),
-            (
-                APPLICATION_ROOT / "memoria" / "usuario" / "quices",
-                destino / "quices",
-            ),
-            (user_data_directory() / "quices", destino / "quices"),
-        )
-    for origen, destino_item in origenes:
-        _mover_contenido(origen, destino_item)

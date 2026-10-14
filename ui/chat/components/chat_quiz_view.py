@@ -507,26 +507,17 @@ class ChatQuizView(_ChatQuizHost):
             return
         for child in shell.winfo_children():
             child.destroy()
-        if "detalle_evaluaciones" in result and "retroalimentacion" not in result:
-            result["retroalimentacion"] = result["detalle_evaluaciones"]
-        if "puntaje_total" in result:
-            total_preguntas = len(quiz["paginas"])
-            if "porcentaje_total" not in result:
-                try:
-                    result["porcentaje_total"] = round((float(result["puntaje_total"]) / total_preguntas) * 100) if total_preguntas else 0
-                except Exception:
-                    result["porcentaje_total"] = result["puntaje_total"]
         tk.Label(
             shell,
-            text=f"Resultado general: {result.get('porcentaje_total', result.get('puntaje_total', 0))}%",
+            text=f"Resultado general: {result['porcentaje_total']}%",
             bg=COLORS["surface_light"],
             fg=COLORS["green"],
             font=(FONT, 11, "bold"),
         ).pack(anchor="w", padx=14, pady=(12, 8))
-        if result.get("feedback_final") or result.get("feedback_general"):
+        if result.get("feedback_final"):
             tk.Label(
                 shell,
-                text=result.get("feedback_final") or result.get("feedback_general", ""),
+                text=result["feedback_final"],
                 bg=COLORS["surface_light"],
                 fg=COLORS["text"],
                 font=(FONT, 9),
@@ -545,22 +536,17 @@ class ChatQuizView(_ChatQuizHost):
                 font=(FONT, 9, "bold"),
             ).pack(anchor="w", padx=14, pady=(0, 8))
         pages = {page["id"]: page for page in quiz["paginas"]}
-        for item in result.get("retroalimentacion", []):
+        for item in result["retroalimentacion"]:
             page = pages.get(item["pregunta_id"])
             if page is None:
                 continue
-            if "correcta" in item:
-                label = "Correcta" if item.get("correcta") else "Incorrecta"
-            elif "porcentaje" in item:
-                label = f"{item['porcentaje']}% de acierto"
-            elif "puntaje_normalizado" in item:
-                label = f"{round(float(item['puntaje_normalizado'])*100)}% de acierto"
+            if item["tipo"] == "alternativa":
+                label = "Correcta" if item["correcta"] else "Incorrecta"
             else:
-                label = ""
-            feedback_text = item.get("retroalimentacion") or item.get("feedback_especifico") or ""
+                label = f"{item['porcentaje']}% de acierto"
             tk.Label(
                 shell,
-                text=f"{page['pregunta']}\n{label} · {feedback_text}",
+                text=f"{page['pregunta']}\n{label} · {item['retroalimentacion']}",
                 bg=COLORS["surface_light"],
                 fg=COLORS["text"],
                 font=(FONT, 9),

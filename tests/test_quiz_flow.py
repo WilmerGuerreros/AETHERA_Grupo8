@@ -12,7 +12,7 @@ from core.quizzes import (
     cargar_intento,
     finalizar_quiz,
 )
-from data.quizzes import guardar_resultado_quiz
+from data.quizzes import QuizStore
 from ui.chat.logica import ChatLogic
 
 
@@ -52,7 +52,6 @@ class _FakeMotor:
                             "feedback_especifico": "Vas por buen camino.",
                         }
                     ],
-                    "feedback_general": "Comentario general.",
                 }
             ),
             "Buen trabajo; sigue practicando.",
@@ -76,14 +75,14 @@ class QuizFlowTests(unittest.TestCase):
     def test_listar_y_cargar_quiz_con_resultado_final_persistido(self):
         with tempfile.TemporaryDirectory() as directorio:
             directorio = Path(directorio)
+            store = QuizStore(directorio)
             quiz = _quiz_de_ejemplo()
-            QuizManager(directorio).guardar(quiz)
+            QuizManager(store).guardar(quiz)
             # Simula un quiz ya finalizado: el archivo incluye resultado_final.
-            guardar_resultado_quiz(
+            store.guardar_resultado(
                 quiz["quiz_id"],
                 75.0,
                 [{"pregunta_id": "p1", "correcta": True}],
-                directorio,
             )
 
             en_disco = json.loads(
@@ -91,83 +90,59 @@ class QuizFlowTests(unittest.TestCase):
             )
             self.assertIn("resultado_final", en_disco)
 
-            manager = QuizManager(directorio)
+            manager = QuizManager(store)
             self.assertEqual(manager.cargar(quiz["quiz_id"]), quiz)
             self.assertEqual(manager.listar(), [quiz])
 
     def test_finalizar_quiz_evalua_desarrollo_y_persiste_resultado(self):
         with tempfile.TemporaryDirectory() as directorio:
             directorio = Path(directorio)
+            store = QuizStore(directorio)
             quiz = _quiz_de_ejemplo()
-            QuizManager(directorio).guardar(quiz)
+            QuizManager(store).guardar(quiz)
             motor = _FakeMotor()
             sesion = _FakeAgentSession()
 
             resultado = finalizar_quiz(
-                quiz_id=quiz,
-                respuestas_usuario={"p1": "A", "p2": "Respuesta parcial."},
-                origen="chat",
-                quiz=quiz,
+                quiz,
+                respuestas={"p1": "A", "p2": "Respuesta parcial."},
                 motor=motor,
                 historial_chat=[{"role": "user", "content": "Estoy repasando."}],
-                directorio_intentos=directorio,
+                origen="chat",
+                store=store,
                 agent_session=sesion,
             )
 
             self.assertEqual(resultado["porcentaje_total"], 75)
-            self.assertEqual(resultado["puntaje_total"], 75)
             self.assertEqual(resultado["feedback_final"], "Buen trabajo; sigue practicando.")
             self.assertEqual(
                 [item["pregunta_id"] for item in resultado["retroalimentacion"]],
                 ["p1", "p2"],
             )
+            self.assertEqual(resultado["retroalimentacion"][0]["tipo"], "alternativa")
+            self.assertTrue(resultado["retroalimentacion"][0]["correcta"])
+            self.assertEqual(resultado["retroalimentacion"][1]["tipo"], "desarrollo")
+            self.assertIsNone(resultado["retroalimentacion"][1]["correcta"])
+            self.assertEqual(resultado["retroalimentacion"][1]["porcentaje"], 50)
             # El desarrollo viaja al modelo en segundo plano.
             payload = json.loads(
                 motor.historiales[0][-1]["content"].split("\n\n", 1)[1]
             )
             self.assertEqual(payload["respuestas"][0]["respuesta_alumno"], "Respuesta parcial.")
-            # El resultado queda persistido y el intento activo se elimina.
+            # El resultado queda persistido con el contrato canónico y el intento se elimina.
             en_disco = json.loads(
                 (directorio / f"{quiz['quiz_id']}.json").read_text(encoding="utf-8")
             )
-            self.assertIn("resultado_final", en_disco)
+            resultado_final = en_disco["resultado_final"]
+            self.assertEqual(resultado_final["porcentaje_total"], 75)
+            self.assertTrue(resultado_final["retroalimentacion"])
+            self.assertNotIn("puntaje_total", resultado_final)
+            self.assertNotIn("detalle_evaluaciones", resultado_final)
             self.assertNotIn("avance", en_disco)
-            self.assertIsNone(cargar_intento(quiz, directorio))
+            self.assertIsNone(cargar_intento(quiz, store))
             # Listar sigue funcionando tras finalizar (era el fallo del chat).
-            self.assertEqual(QuizManager(directorio).listar(), [quiz])
+            self.assertEqual(QuizManager(store).listar(), [quiz])
             self.assertEqual(len(sesion.contextos), 1)
-
-    def test_finalizar_quiz_reutiliza_formato_legacy_de_porcentaje(self):
-        class _MotorLegacy(_FakeMotor):
-            def __init__(self):
-                super().__init__()
-                self.contents[0] = json.dumps(
-                    {
-                        "evaluaciones": [
-                            {
-                                "pregunta_id": "p2",
-                                "porcentaje": 50,
-                                "retroalimentacion": "Parcial.",
-                            }
-                        ]
-                    }
-                )
-
-        with tempfile.TemporaryDirectory() as directorio:
-            directorio = Path(directorio)
-            quiz = _quiz_de_ejemplo()
-            QuizManager(directorio).guardar(quiz)
-
-            resultado = finalizar_quiz(
-                quiz_id=quiz,
-                respuestas_usuario={"p1": "A", "p2": "Parcial."},
-                quiz=quiz,
-                motor=_MotorLegacy(),
-                directorio_intentos=directorio,
-            )
-
-            self.assertEqual(resultado["porcentaje_total"], 75)
-            self.assertEqual(resultado["porcentaje_desarrollo"], 50)
 
 
 class _ConversacionQuizTests(unittest.TestCase):
@@ -176,8 +151,9 @@ class _ConversacionQuizTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directorio:
             directorio = Path(directorio)
+            store = QuizStore(directorio)
             quiz = _quiz_de_ejemplo()
-            QuizManager(directorio).guardar(quiz)
+            QuizManager(store).guardar(quiz)
             historial = [
                 {"role": "system", "content": "Prompt inicial."},
                 {"role": "user", "content": "Estoy estudiando."},
@@ -187,17 +163,14 @@ class _ConversacionQuizTests(unittest.TestCase):
                 historial,
                 {},
                 guardar_interaccion=lambda *_args: None,
+                quiz_store=store,
             )
 
-            with (
-                patch("core.quizzes.DIRECTORIO_QUICES", directorio),
-                patch("data.paths.quizzes_directory", return_value=directorio),
-            ):
-                resultado = conversacion.finalizar_quiz(
-                    quiz,
-                    {"p1": "A", "p2": "Respuesta parcial."},
-                    origen="chat",
-                )
+            resultado = conversacion.finalizar_quiz(
+                quiz,
+                {"p1": "A", "p2": "Respuesta parcial."},
+                origen="chat",
+            )
 
             self.assertEqual(resultado["porcentaje_total"], 75)
             contexto = historial[-1]

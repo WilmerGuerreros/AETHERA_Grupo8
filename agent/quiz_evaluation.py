@@ -43,13 +43,7 @@ def evaluar_respuestas_desarrollo(
             raise ValueError("El modelo devolvió una evaluación con formato inválido.")
         pregunta_id = evaluacion.get("pregunta_id")
         puntaje_normalizado = evaluacion.get("puntaje_normalizado")
-        if puntaje_normalizado is None and "porcentaje" in evaluacion:
-            porcentaje = evaluacion.get("porcentaje")
-            if isinstance(porcentaje, (int, float)) and not isinstance(porcentaje, bool):
-                puntaje_normalizado = float(porcentaje) / 100.0
-        feedback_especifico = evaluacion.get("feedback_especifico") or evaluacion.get(
-            "retroalimentacion"
-        )
+        feedback_especifico = evaluacion.get("feedback_especifico")
         if (
             pregunta_id not in expected_ids
             or not isinstance(puntaje_normalizado, (int, float))
@@ -64,8 +58,6 @@ def evaluar_respuestas_desarrollo(
             "pregunta_id": pregunta_id,
             "puntaje_normalizado": float(puntaje_normalizado),
             "feedback_especifico": feedback_especifico.strip(),
-            "porcentaje": int(round(float(puntaje_normalizado) * 100)),
-            "retroalimentacion": feedback_especifico.strip(),
         }
     if set(evaluaciones_por_id) != expected_ids:
         raise ValueError("El modelo no evaluó todas las respuestas de desarrollo.")

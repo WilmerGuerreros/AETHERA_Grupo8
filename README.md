@@ -43,8 +43,7 @@ Los valores que suelen ajustarse están en `config.py`:
 
 Los datos escribibles (historial de chat, calendario personal y quices) viven bajo una
 raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema operativo
-en el ejecutable empaquetado. `app_paths.migrar_datos_heredados()` reubica los datos de
-versiones anteriores al arrancar.
+en el ejecutable empaquetado.
 
 ## Estructura
 

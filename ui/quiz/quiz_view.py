@@ -500,30 +500,17 @@ class QuizSection(_QuizDesktopHost):
             return
         for child in window.winfo_children():
             child.destroy()
-        # Adaptar resultado a diferentes formatos
-        if "puntaje_total" in resultado and "porcentaje_total" not in resultado:
-            try:
-                total_preguntas = len(quiz["paginas"])
-                resultado["porcentaje_total"] = round((float(resultado["puntaje_total"]) / total_preguntas) * 100) if total_preguntas else 0
-            except Exception:
-                resultado["porcentaje_total"] = 0
-        if "detalle_evaluaciones" in resultado and "retroalimentacion" not in resultado:
-            resultado["retroalimentacion"] = resultado["detalle_evaluaciones"]
         tk.Label(
             window,
-            text=(
-                f"Resultado general: {resultado.get('porcentaje_total', round(resultado.get('puntaje_total', 0)*100) if isinstance(resultado.get('puntaje_total'), (int,float)) and resultado.get('puntaje_total') <= 1 else resultado.get('puntaje_total', 0))}%"
-                if "porcentaje_total" in resultado
-                else f"Puntaje total: {resultado.get('puntaje_total', 0)}"
-            ),
+            text=f"Resultado general: {resultado['porcentaje_total']}%",
             bg=COLORS["background"],
             fg=COLORS["green"],
             font=(FONT, 20, "bold"),
         ).pack(anchor="w", padx=24, pady=(22, 12))
-        if resultado.get("feedback_final") or resultado.get("feedback_general"):
+        if resultado.get("feedback_final"):
             tk.Label(
                 window,
-                text=resultado.get("feedback_final") or resultado.get("feedback_general", ""),
+                text=resultado["feedback_final"],
                 bg=COLORS["background"],
                 fg=COLORS["text"],
                 font=(FONT, 10),
@@ -543,30 +530,18 @@ class QuizSection(_QuizDesktopHost):
             ).pack(anchor="w", padx=24, pady=(0, 10))
         frame = tk.Frame(window, bg=COLORS["background"])
         frame.pack(fill="both", expand=True, padx=24)
-        for feedback in resultado.get("retroalimentacion", []):
-            page = next(
-                (p for p in quiz["paginas"] if p["id"] == feedback["pregunta_id"]),
-                None,
-            )
-            if page is None:
+        paginas = {pagina["id"]: pagina for pagina in quiz["paginas"]}
+        for item in resultado["retroalimentacion"]:
+            pagina = paginas.get(item["pregunta_id"])
+            if pagina is None:
                 continue
-            line_parts = [page["pregunta"]]
-            if "correcta" in feedback:
-                line_parts.append(
-                    f"{'Correcta' if feedback['correcta'] else 'Incorrecta'} · "
-                )
-            elif "porcentaje" in feedback:
-                line_parts.append(f"{feedback['porcentaje']}% de acierto · ")
-            elif "puntaje_normalizado" in feedback:
-                line_parts.append(f"{round(float(feedback['puntaje_normalizado'])*100)}% de acierto · ")
-            if "retroalimentacion" in feedback:
-                line_parts.append(feedback["retroalimentacion"])
-            if "feedback_especifico" in feedback:
-                line_parts.append(feedback["feedback_especifico"])
-            line = " ".join(p for p in line_parts if p)
+            if item["tipo"] == "alternativa":
+                etiqueta = "Correcta" if item["correcta"] else "Incorrecta"
+            else:
+                etiqueta = f"{item['porcentaje']}% de acierto"
             tk.Label(
                 frame,
-                text=line,
+                text=f"{pagina['pregunta']} {etiqueta} · {item['retroalimentacion']}",
                 bg=COLORS["surface"],
                 fg=COLORS["text"],
                 font=(FONT, 9),

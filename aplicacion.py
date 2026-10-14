@@ -11,13 +11,10 @@ from agent.prompts import SYSTEM_PROMPT
 from agent.tools import REGISTRO_HERRAMIENTAS
 from config import MODELO, OPCIONES_LLM
 from core.memory import Memoria
-from data.paths import migrar_datos_heredados
 
 
 def iniciar_aplicacion() -> None:
     """Ensambla las dependencias y abre la interfaz de escritorio."""
-    migrar_datos_heredados()
-
     motor = LLMEngine(MODELO, dict(OPCIONES_LLM))
     memoria = Memoria(modelo=motor.modelo)
 

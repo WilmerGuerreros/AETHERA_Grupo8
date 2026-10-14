@@ -5,11 +5,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from data.paths import resource_path
-from data.resources import leer_csv
-
-
-RUTA_CALENDARIO_CSV = resource_path("D7_calendar.csv")
+from data.resources import leer_recurso_csv
 
 
 def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
@@ -18,13 +14,13 @@ def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
         return {"error": "El umbral debe ser un entero mayor que cero."}
 
     try:
-        calendar_data = leer_csv(RUTA_CALENDARIO_CSV)
+        calendar_data = leer_recurso_csv("D7_calendar.csv")
     except (OSError, UnicodeDecodeError, csv.Error, ValueError) as error:
         logging.error("Error al leer el calendario académico: %s", error)
         calendar_data = []
 
     if not calendar_data:
-        return {"error": f"No se pudieron cargar los datos desde {RUTA_CALENDARIO_CSV}"}
+        return {"error": "No se pudieron cargar los datos del calendario académico."}
 
     columnas_requeridas = {
         "calendar_event_id",

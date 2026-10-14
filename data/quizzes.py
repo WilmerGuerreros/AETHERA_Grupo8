@@ -7,6 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from data.paths import quizzes_directory
+
 
 # Metadatos internos que la aplicación agrega al archivo del quiz. No forman
 # parte del esquema validable, así que se ocultan al leerlos para no romper la
@@ -14,115 +16,134 @@ from typing import Any
 _METADATOS_INTERNOS = ("avance", "resultado_final")
 
 
-def guardar_quiz_json(
-    directorio: Path, quiz: dict[str, Any]
-) -> Path:
-    """Guarda un quiz sin sobrescribir un archivo existente."""
-    ruta_destino = directorio / f"{quiz['quiz_id']}.json"
-    temporal = None
-    try:
-        directorio.mkdir(parents=True, exist_ok=True)
-        contenido = json.dumps(quiz, ensure_ascii=False, indent=2) + "\n"
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=directorio,
-            prefix=f".{quiz['quiz_id']}.",
-            suffix=".tmp",
-            delete=False,
-        ) as archivo:
-            temporal = archivo.name
-            archivo.write(contenido)
-            archivo.flush()
-            os.fsync(archivo.fileno())
-        os.link(temporal, ruta_destino)
-    finally:
-        if temporal and os.path.exists(temporal):
-            try:
-                os.unlink(temporal)
-            except OSError:
-                logging.exception("No se pudo limpiar el archivo temporal del quiz.")
-    return ruta_destino
+class QuizStore:
+    """Repositorio de quizzes que encapsula rutas, lectura y escritura.
 
+    El directorio solo se indica para inyectar una ubicación alternativa en
+    pruebas; en producción se resuelve con ``quizzes_directory()``.
+    """
 
-def listar_archivos_quiz(directorio: Path) -> list[Path]:
-    """Devuelve ordenadas las rutas de quizzes JSON almacenados."""
-    if not directorio.exists():
-        return []
-    return sorted(directorio.glob("*.json"))
+    def __init__(self, directorio: Path | str | None = None) -> None:
+        self.directorio = (
+            Path(directorio) if directorio is not None else quizzes_directory()
+        )
 
+    # --- quizzes ---
 
-def leer_quiz_json(ruta: Path) -> Any:
-    """Lee un quiz y oculta los metadatos de avance y resultado locales."""
-    with ruta.open("r", encoding="utf-8") as archivo:
-        quiz = json.load(archivo)
-    if isinstance(quiz, dict):
-        for clave in _METADATOS_INTERNOS:
-            quiz.pop(clave, None)
-    return quiz
+    def guardar(self, quiz: dict[str, Any]) -> Path:
+        """Guarda un quiz sin sobrescribir un archivo existente."""
+        ruta_destino = self._ruta(quiz["quiz_id"])
+        temporal = None
+        try:
+            self.directorio.mkdir(parents=True, exist_ok=True)
+            contenido = json.dumps(quiz, ensure_ascii=False, indent=2) + "\n"
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="",
+                dir=self.directorio,
+                prefix=f".{quiz['quiz_id']}.",
+                suffix=".tmp",
+                delete=False,
+            ) as archivo:
+                temporal = archivo.name
+                archivo.write(contenido)
+                archivo.flush()
+                os.fsync(archivo.fileno())
+            os.link(temporal, ruta_destino)
+        finally:
+            if temporal and os.path.exists(temporal):
+                try:
+                    os.unlink(temporal)
+                except OSError:
+                    logging.exception("No se pudo limpiar el archivo temporal del quiz.")
+        return ruta_destino
 
+    def listar(self) -> list[Any]:
+        """Devuelve los quizzes guardados, con sus metadatos internos ocultos."""
+        if not self.directorio.exists():
+            return []
+        return [self._leer(ruta) for ruta in sorted(self.directorio.glob("*.json"))]
 
-def leer_intento_quiz(carpeta: Path, quiz_id: str) -> Any | None:
-    """Lee el avance guardado dentro del JSON del quiz."""
-    carpeta = Path(carpeta)
-    ruta = carpeta / f"{quiz_id}.json"
-    try:
-        with ruta.open("r", encoding="utf-8") as archivo:
-            quiz = json.load(archivo)
-    except FileNotFoundError:
-        return _leer_intento_heredado(carpeta, quiz_id)
-    if not isinstance(quiz, dict):
-        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
-    avance = quiz.get("avance")
-    if avance is not None:
+    def cargar(self, quiz_id: str) -> Any:
+        """Lee un quiz por identificador, ocultando los metadatos internos."""
+        return self._leer(self._ruta(quiz_id))
+
+    # --- avance ---
+
+    def leer_avance(self, quiz_id: str) -> Any | None:
+        """Lee el avance guardado dentro del JSON del quiz."""
+        try:
+            quiz = self._leer_crudo(self._ruta(quiz_id))
+        except FileNotFoundError:
+            return None
+        if not isinstance(quiz, dict):
+            raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+        avance = quiz.get("avance")
+        if avance is None:
+            return None
         return _decodificar_avance(avance, quiz_id)
-    return _leer_intento_heredado(carpeta, quiz_id)
 
+    def guardar_avance(self, quiz_id: str, intento: dict[str, Any]) -> Path:
+        """Persiste el avance en el mismo JSON donde está guardado el quiz."""
+        ruta = self._ruta(quiz_id)
+        quiz = self._leer_crudo(ruta)
+        if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
+            raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+        quiz["avance"] = _codificar_avance(quiz, intento)
+        return _reemplazar_json(ruta, quiz)
 
-def guardar_intento_quiz(
-    carpeta: Path,
-    quiz_id: str,
-    intento: dict[str, Any],
-) -> Path:
-    """Persiste el avance en el mismo JSON donde está guardado el quiz."""
-    carpeta = Path(carpeta)
-    ruta = carpeta / f"{quiz_id}.json"
-    with ruta.open("r", encoding="utf-8") as archivo:
-        quiz = json.load(archivo)
-    if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
-        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
-    quiz["avance"] = _codificar_avance(quiz, intento)
-    _reemplazar_json(ruta, quiz)
-    _eliminar_intento_heredado(carpeta, quiz_id)
-    return ruta
+    def eliminar_avance(self, quiz_id: str) -> None:
+        """Elimina el avance del JSON del quiz, si existe."""
+        ruta = self._ruta(quiz_id)
+        try:
+            quiz = self._leer_crudo(ruta)
+        except FileNotFoundError:
+            return
+        if not isinstance(quiz, dict):
+            raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+        if quiz.pop("avance", None) is not None:
+            _reemplazar_json(ruta, quiz)
 
+    # --- resultado final ---
 
-def eliminar_intento_quiz(carpeta: Path, quiz_id: str) -> None:
-    """Elimina el avance del JSON del quiz, si existe."""
-    carpeta = Path(carpeta)
-    ruta = carpeta / f"{quiz_id}.json"
-    try:
-        with ruta.open("r", encoding="utf-8") as archivo:
-            quiz = json.load(archivo)
-    except FileNotFoundError:
-        _eliminar_intento_heredado(carpeta, quiz_id)
-        return
-    if not isinstance(quiz, dict):
-        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
-    if quiz.pop("avance", None) is not None:
-        _reemplazar_json(ruta, quiz)
-    _eliminar_intento_heredado(carpeta, quiz_id)
+    def guardar_resultado(
+        self,
+        quiz_id: str,
+        porcentaje_total: float | int,
+        retroalimentacion: list[dict[str, Any]] | dict[str, Any],
+    ) -> Path:
+        """Guarda el resultado final de un quiz en el JSON del usuario."""
+        ruta = self._ruta(quiz_id)
+        try:
+            quiz = self._leer_crudo(ruta)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"No existe el quiz '{quiz_id}'.")
+        if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
+            raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
 
+        quiz["resultado_final"] = {
+            "porcentaje_total": porcentaje_total,
+            "retroalimentacion": retroalimentacion,
+        }
+        return _reemplazar_json(ruta, quiz)
 
-def _leer_intento_heredado(carpeta: Path, quiz_id: str) -> Any | None:
-    """Lee intentos del formato anterior para conservar progreso existente."""
-    ruta = carpeta / ".intentos" / f"{quiz_id}.json"
-    try:
+    # --- helpers internos ---
+
+    def _ruta(self, quiz_id: str) -> Path:
+        return self.directorio / f"{quiz_id}.json"
+
+    def _leer(self, ruta: Path) -> Any:
+        datos = self._leer_crudo(ruta)
+        if isinstance(datos, dict):
+            for clave in _METADATOS_INTERNOS:
+                datos.pop(clave, None)
+        return datos
+
+    @staticmethod
+    def _leer_crudo(ruta: Path) -> Any:
         with ruta.open("r", encoding="utf-8") as archivo:
             return json.load(archivo)
-    except FileNotFoundError:
-        return None
 
 
 def _codificar_avance(
@@ -170,42 +191,6 @@ def _decodificar_avance(avance: Any, quiz_id: str) -> dict[str, Any]:
         "indice": avance.get("indice", 0),
         "respuestas": respuestas_por_id,
     }
-
-
-def _eliminar_intento_heredado(carpeta: Path, quiz_id: str) -> None:
-    ruta = carpeta / ".intentos" / f"{quiz_id}.json"
-    try:
-        ruta.unlink()
-    except FileNotFoundError:
-        pass
-
-
-def guardar_resultado_quiz(
-    quiz_id: str,
-    puntaje_total: float | int,
-    detalle_evaluaciones: list[dict[str, Any]] | dict[str, Any],
-    carpeta: Path | None = None,
-) -> Path:
-    """Guarda el resultado final de un quiz en el JSON del usuario."""
-    from data.paths import quizzes_directory
-
-    carpeta = Path(carpeta) if carpeta else quizzes_directory()
-    ruta = carpeta / f"{quiz_id}.json"
-    try:
-        with ruta.open("r", encoding="utf-8") as archivo:
-            quiz = json.load(archivo)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"No existe el quiz '{quiz_id}'.")
-    if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
-        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
-
-    resultado = {
-        "puntaje_total": puntaje_total,
-        "detalle_evaluaciones": detalle_evaluaciones,
-    }
-    quiz["resultado_final"] = resultado
-
-    return _reemplazar_json(ruta, quiz)
 
 
 def _reemplazar_json(ruta: Path, datos: dict[str, Any]) -> Path:

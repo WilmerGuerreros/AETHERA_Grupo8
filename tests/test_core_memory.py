@@ -3,36 +3,24 @@ import unittest
 from pathlib import Path
 
 from core.memory import Memoria
-from data.memory import (
-    contar_conversaciones,
-    leer_indice_memoria,
-    leer_interacciones,
-    leer_resumen_memoria,
-)
-from data.paths import MemoryPaths
+from data.memory import MemoryStore
 
 
 class CoreMemoryTests(unittest.TestCase):
-    def _paths(self, directory):
-        root = Path(directory) / "memory"
-        return MemoryPaths(
-            historial=root / "HISTORIAL",
-            resumen=root / "RESUMEN",
-            indice=root / "INDICE",
-            adjuntos=root / "ATTACHMENTS",
-        )
+    def _store(self, directory):
+        return MemoryStore(Path(directory) / "memory")
 
     def test_inicia_contexto_vacio(self):
         with tempfile.TemporaryDirectory() as directory:
-            memoria = Memoria(self._paths(directory))
+            memoria = Memoria(self._store(directory))
 
             self.assertEqual(memoria.contexto_inicial(), [{"": ""}])
 
     def test_persiste_turnos_y_cierra_seccion_con_resumen(self):
         with tempfile.TemporaryDirectory() as directory:
-            rutas = self._paths(directory)
+            store = self._store(directory)
             memoria = Memoria(
-                rutas,
+                store,
                 max_mensajes_por_seccion=2,
                 resumir=lambda contenido, modelo: "resumen generado",
             )
@@ -42,17 +30,13 @@ class CoreMemoryTests(unittest.TestCase):
 
             self.assertEqual(memoria.numero_seccion, 2)
             self.assertEqual(memoria.contador_mensajes, 0)
-            historial = rutas.historial / "HISTORIAL_0001.txt"
-            self.assertEqual(contar_conversaciones(historial), 2)
+            self.assertEqual(store.contar_conversaciones(1), 2)
             self.assertEqual(
-                [item["usuario"] for item in leer_interacciones(historial)],
+                [item["usuario"] for item in store.leer_interacciones(1)],
                 ["hola", "continuación"],
             )
-            self.assertEqual(
-                leer_resumen_memoria(rutas.resumen, 1),
-                "resumen generado",
-            )
-            indice = leer_indice_memoria(rutas.indice)
+            self.assertEqual(store.leer_resumen(1), "resumen generado")
+            indice = store.leer_indice()
             self.assertEqual(
                 [item["id"] for item in indice["secciones"]],
                 [1],
@@ -60,16 +44,16 @@ class CoreMemoryTests(unittest.TestCase):
 
     def test_recupera_seccion_y_contexto_reciente(self):
         with tempfile.TemporaryDirectory() as directory:
-            rutas = self._paths(directory)
+            store = self._store(directory)
             primera = Memoria(
-                rutas,
+                store,
                 max_mensajes_por_seccion=5,
                 resumir=lambda contenido, modelo: "resumen",
             )
             primera.guardar("hola", "respuesta")
 
             segunda = Memoria(
-                rutas,
+                store,
                 max_mensajes_por_seccion=5,
                 resumir=lambda contenido, modelo: "resumen",
             )

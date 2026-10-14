@@ -3,7 +3,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from core.conversation import Conversacion
 from core.quizzes import (
@@ -19,6 +18,7 @@ from core.quizzes import (
     seleccionar_respuesta_alternativa,
     validar_quiz,
 )
+from data.quizzes import QuizStore
 
 
 class FakeMotor:
@@ -90,7 +90,7 @@ class CoreQuizTests(unittest.TestCase):
 
     def test_persiste_y_carga_quiz_mediante_core(self):
         with tempfile.TemporaryDirectory() as directorio:
-            manager = QuizManager(directorio)
+            manager = QuizManager(QuizStore(directorio))
             manager.guardar(self.quiz)
 
             self.assertEqual(manager.cargar("demo_quiz"), self.quiz)
@@ -98,12 +98,13 @@ class CoreQuizTests(unittest.TestCase):
 
     def test_guarda_carga_y_elimina_intento(self):
         with tempfile.TemporaryDirectory() as directorio:
-            QuizManager(directorio).guardar(self.quiz)
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(self.quiz)
             guardar_intento(
                 self.quiz,
                 1,
                 {"p1": "A", "p2": "Respuesta parcial."},
-                directorio,
+                store,
             )
 
             quiz_en_disco = json.loads(
@@ -116,9 +117,9 @@ class CoreQuizTests(unittest.TestCase):
                     {"pregunta_id": "p2", "respuesta": "Respuesta parcial."},
                 ],
             )
-            self.assertEqual(QuizManager(directorio).cargar("demo_quiz"), self.quiz)
+            self.assertEqual(QuizManager(store).cargar("demo_quiz"), self.quiz)
             self.assertEqual(
-                cargar_intento(self.quiz, directorio),
+                cargar_intento(self.quiz, store),
                 {
                     "indice": 1,
                     "respuestas": {
@@ -133,8 +134,8 @@ class CoreQuizTests(unittest.TestCase):
                     },
                 },
             )
-            eliminar_intento("demo_quiz", directorio)
-            self.assertIsNone(cargar_intento(self.quiz, directorio))
+            eliminar_intento("demo_quiz", store)
+            self.assertIsNone(cargar_intento(self.quiz, store))
             quiz_en_disco = json.loads(
                 (Path(directorio) / "demo_quiz.json").read_text(encoding="utf-8")
             )
@@ -142,20 +143,21 @@ class CoreQuizTests(unittest.TestCase):
 
     def test_selecciona_y_persiste_alternativa_sin_permitir_cambiarla(self):
         with tempfile.TemporaryDirectory() as directorio:
-            QuizManager(directorio).guardar(self.quiz)
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(self.quiz)
             resultado = seleccionar_respuesta_alternativa(
                 self.quiz,
                 0,
                 {"p2": "Borrador de desarrollo"},
                 "p1",
                 "B",
-                directorio,
+                store,
             )
 
             self.assertFalse(resultado["correcta"])
             self.assertEqual(resultado["retroalimentacion"], "Incorrecto.")
             self.assertEqual(
-                cargar_intento(self.quiz, directorio)["respuestas"],
+                cargar_intento(self.quiz, store)["respuestas"],
                 {"p1": "B", "p2": "Borrador de desarrollo"},
             )
             quiz_en_disco = json.loads(
@@ -178,22 +180,23 @@ class CoreQuizTests(unittest.TestCase):
                     {"p1": "B"},
                     "p1",
                     "A",
-                    directorio,
+                    store,
                 )
 
     def test_rechaza_respuesta_guardada_que_no_existe(self):
         with tempfile.TemporaryDirectory() as directorio:
-            QuizManager(directorio).guardar(self.quiz)
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(self.quiz)
             with self.assertRaisesRegex(ValueError, "no es válida"):
-                guardar_intento(self.quiz, 0, {"p1": "Z"}, directorio)
+                guardar_intento(self.quiz, 0, {"p1": "Z"}, store)
 
     def test_califica_respuesta_abierta_y_alternativa(self):
         contenido = json.dumps({
             "evaluaciones": [
                 {
                     "pregunta_id": "p2",
-                    "porcentaje": 50,
-                    "retroalimentacion": "La respuesta está parcialmente completa.",
+                    "puntaje_normalizado": 0.5,
+                    "feedback_especifico": "La respuesta está parcialmente completa.",
                 }
             ]
         })
@@ -204,16 +207,17 @@ class CoreQuizTests(unittest.TestCase):
             {"role": "user", "content": "Estoy repasando."},
         ]
         with tempfile.TemporaryDirectory() as directorio:
-            QuizManager(directorio).guardar(self.quiz)
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(self.quiz)
             resultado = evaluar_quiz(
                 motor,
                 self.quiz,
                 {"p1": "A", "p2": "Respuesta parcial."},
                 historial_chat,
-                directorio,
+                store,
             )
 
-        self.assertEqual(resultado["puntaje"], 100)
+        self.assertEqual(resultado["porcentaje_alternativas"], 100)
         self.assertEqual(resultado["porcentaje_desarrollo"], 50)
         self.assertEqual(resultado["porcentaje_total"], 75)
         self.assertEqual(
@@ -251,7 +255,7 @@ class CoreQuizTests(unittest.TestCase):
             [item["pregunta_id"] for item in resultado["retroalimentacion"]],
             ["p1", "p2"],
         )
-        self.assertEqual(cargar_intento(self.quiz, directorio), None)
+        self.assertEqual(cargar_intento(self.quiz, store), None)
 
     def test_envia_resultado_de_quiz_sin_desarrollo_al_modelo_con_historial(self):
         quiz = {
@@ -265,16 +269,17 @@ class CoreQuizTests(unittest.TestCase):
         ]
         motor = FakeMotor("Buen dominio del tema.")
         with tempfile.TemporaryDirectory() as directorio:
-            with patch("core.quizzes.DIRECTORIO_QUICES", Path(directorio)):
-                QuizManager(directorio).guardar(quiz)
-                conversacion = Conversacion(
-                    motor,
-                    historial,
-                    {},
-                    guardar_interaccion=lambda *_args: None,
-                )
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(quiz)
+            conversacion = Conversacion(
+                motor,
+                historial,
+                {},
+                guardar_interaccion=lambda *_args: None,
+                quiz_store=store,
+            )
 
-                resultado = conversacion.evaluar_quiz(quiz, {"p1": "A"})
+            resultado = conversacion.evaluar_quiz(quiz, {"p1": "A"})
 
         self.assertEqual(len(motor.historiales), 1)
         self.assertEqual(resultado["porcentaje_total"], 100)
@@ -333,25 +338,26 @@ class CoreQuizTests(unittest.TestCase):
             "evaluaciones": [
                 {
                     "pregunta_id": "p2",
-                    "porcentaje": 50,
-                    "retroalimentacion": "Parcial.",
+                    "puntaje_normalizado": 0.5,
+                    "feedback_especifico": "Parcial.",
                 },
                 {
                     "pregunta_id": "p3",
-                    "porcentaje": 0,
-                    "retroalimentacion": "No respondiste esta pregunta.",
+                    "puntaje_normalizado": 0.0,
+                    "feedback_especifico": "No respondiste esta pregunta.",
                 },
             ]
         })
         motor = FakeMotor(contenido)
 
         with tempfile.TemporaryDirectory() as directorio:
-            QuizManager(directorio).guardar(quiz)
+            store = QuizStore(directorio)
+            QuizManager(store).guardar(quiz)
             resultado = evaluar_quiz(
                 motor,
                 quiz,
                 {"p2": "Respuesta parcial."},
-                directorio_intentos=directorio,
+                store=store,
             )
 
         evaluacion_payload = json.loads(

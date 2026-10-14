@@ -5,6 +5,23 @@ import json
 from pathlib import Path
 from typing import Any
 
+from data.paths import resource_path
+
+
+def leer_recurso_csv(nombre: str) -> list[dict[str, str]]:
+    """Lee las filas de un CSV de referencia por nombre de recurso."""
+    return leer_csv(resource_path(nombre))
+
+
+def leer_recurso_json(nombre: str) -> Any:
+    """Lee y decodifica un JSON de referencia por nombre de recurso."""
+    return leer_json(resource_path(nombre))
+
+
+def leer_recurso_texto(nombre: str) -> str:
+    """Lee un texto de referencia por nombre de recurso."""
+    return leer_texto(resource_path(nombre))
+
 
 def leer_csv(ruta: Path) -> list[dict[str, str]]:
     """Lee filas de un CSV codificado en UTF-8."""

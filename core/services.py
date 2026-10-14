@@ -3,11 +3,8 @@
 import logging
 from typing import Any
 
-from data.paths import resource_path
-from data.resources import leer_json
+from data.resources import leer_recurso_json
 
-
-RUTA_SERVICIOS = resource_path("D6_services_map.geojson")
 
 SERVICIOS_POR_CATEGORIA = {
     "academic_pressure": {
@@ -76,7 +73,7 @@ def buscar_servicios_ayuda(
         return {"error": "El distrito debe ser un identificador no vacío de D6."}
 
     try:
-        mapa_servicios = leer_json(RUTA_SERVICIOS)
+        mapa_servicios = leer_recurso_json("D6_services_map.geojson")
     except (OSError, ValueError) as error:
         logging.exception("No se pudieron cargar los datos de derivación.")
         return {"error": f"No se pudieron cargar los datos de derivación: {error}"}

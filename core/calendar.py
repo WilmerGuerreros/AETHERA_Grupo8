@@ -5,11 +5,13 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
-from data.calendar import guardar_calendario_personal, leer_calendario
-from data.paths import resource_path, user_calendar_path
+from data.calendar import (
+    guardar_calendario_personal,
+    leer_calendario_academico,
+    leer_calendario_personal,
+)
 
 
-RUTA_RECURSOS = resource_path("D7_calendar.ics")
 ORIGENES_CALENDARIO = {
     "Ambos": "ambos",
     "Académico": "academico",
@@ -43,18 +45,20 @@ def _desescapar_ics(valor: str) -> str:
 
 
 def _leer_eventos(
-    ruta,
     origen: str,
     dt_inicio_busqueda: date,
     dt_fin_busqueda: date,
     tipo_normalizado: str,
 ) -> list[dict[str, Any]]:
     try:
-        contenido = leer_calendario(ruta)
+        if origen == "personal":
+            contenido = leer_calendario_personal()
+        else:
+            contenido = leer_calendario_academico()
     except FileNotFoundError:
         if origen == "personal":
             return []
-        raise OSError(f"No se encontró el archivo en la ruta: {ruta}")
+        raise OSError("No se encontró el calendario académico.")
     lineas = contenido.splitlines()
 
     lineas_plegadas = []
@@ -178,24 +182,19 @@ def buscar_eventos(
         ]
 
     origen_normalizado = origen.strip().lower() if isinstance(origen, str) else ""
-    ruta_personal = user_calendar_path()
-    rutas = {
-        "academico": ((RUTA_RECURSOS, "academico"),),
-        "personal": ((ruta_personal, "personal"),),
-        "ambos": (
-            (RUTA_RECURSOS, "academico"),
-            (ruta_personal, "personal"),
-        ),
+    origenes = {
+        "academico": ("academico",),
+        "personal": ("personal",),
+        "ambos": ("academico", "personal"),
     }
-    if origen_normalizado not in rutas:
+    if origen_normalizado not in origenes:
         return [{"error": "El origen debe ser 'academico', 'personal' o 'ambos'."}]
 
     try:
         eventos = []
-        for ruta, nombre_origen in rutas[origen_normalizado]:
+        for nombre_origen in origenes[origen_normalizado]:
             eventos.extend(
                 _leer_eventos(
-                    ruta,
                     nombre_origen,
                     dt_inicio_busqueda,
                     dt_fin_busqueda,
@@ -269,16 +268,15 @@ def eliminar_evento(uid: str) -> dict[str, str]:
     if not isinstance(uid, str) or not uid.strip():
         return {"error": "Se requiere un identificador de evento válido."}
 
-    ruta = user_calendar_path()
     try:
-        contenido = leer_calendario(ruta)
+        contenido = leer_calendario_personal()
         lineas = contenido.replace("\r\n", "\n").replace("\r", "\n").splitlines()
         if (
             not lineas
             or lineas[0] != "BEGIN:VCALENDAR"
             or lineas[-1] != "END:VCALENDAR"
         ):
-            return {"error": f"El archivo de calendario personal no es válido: {ruta}"}
+            return {"error": "El archivo de calendario personal no es válido."}
 
         bloques_eventos = []
         indice = 0
@@ -391,7 +389,7 @@ def crear_evento(
 
     try:
         try:
-            contenido = leer_calendario(user_calendar_path())
+            contenido = leer_calendario_personal()
         except FileNotFoundError:
             contenido = ""
         if contenido.strip():
@@ -403,12 +401,7 @@ def crear_evento(
                 or lineas_calendario[0] != "BEGIN:VCALENDAR"
                 or lineas_calendario[-1] != "END:VCALENDAR"
             ):
-                return {
-                    "error": (
-                        "El archivo de calendario personal no es válido: "
-                        f"{user_calendar_path()}"
-                    )
-                }
+                return {"error": "El archivo de calendario personal no es válido."}
             contenido = "\r\n".join(lineas_calendario[:-1])
         else:
             contenido = (

@@ -17,10 +17,12 @@ class Conversacion:
         historial: list,
         registro_herramientas: dict[str, Herramienta],
         guardar_interaccion: Callable[[str, str, str], None],
+        quiz_store: Any | None = None,
     ):
         self.motor = motor
         self.historial = historial
         self._guardar_interaccion = guardar_interaccion
+        self._quiz_store = quiz_store
         self._sesion = AgentSession(motor, historial, registro_herramientas)
 
     def evaluar_quiz(
@@ -36,6 +38,7 @@ class Conversacion:
             quiz,
             respuestas,
             list(self.historial),
+            self._quiz_store,
         )
 
     def finalizar_quiz(
@@ -53,12 +56,12 @@ class Conversacion:
         from core.quizzes import finalizar_quiz as finalizar_quiz_core
 
         return finalizar_quiz_core(
-            quiz_id=quiz,
-            respuestas_usuario=respuestas,
-            origen=origen,
-            quiz=quiz,
+            quiz,
+            respuestas,
             motor=self.motor,
             historial_chat=self.historial,
+            origen=origen,
+            store=self._quiz_store,
             agent_session=self._sesion,
         )
 

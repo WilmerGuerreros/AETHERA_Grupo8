@@ -1,20 +1,19 @@
-"""Lectura y escritura del calendario personal."""
+"""Lectura y escritura del calendario personal y académico."""
 
 import os
 import tempfile
-from pathlib import Path
 
-from data.paths import user_calendar_path
+from data.paths import resource_path, user_calendar_path
 
 
-def leer_calendario(ruta: Path) -> str:
-    """Lee contenido ICS desde la ruta indicada."""
-    return ruta.read_text(encoding="utf-8")
+def leer_calendario_academico() -> str:
+    """Lee el calendario académico empaquetado con la aplicación."""
+    return resource_path("D7_calendar.ics").read_text(encoding="utf-8")
 
 
 def leer_calendario_personal() -> str:
     """Lee el contenido ICS del calendario personal."""
-    return leer_calendario(user_calendar_path())
+    return user_calendar_path().read_text(encoding="utf-8")
 
 
 def guardar_calendario_personal(contenido: str) -> None:
