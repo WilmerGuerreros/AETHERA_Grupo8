@@ -1,158 +1,34 @@
-"""Reglas de selección de servicios de apoyo."""
+"""Selección de servicios de apoyo.
+
+``core`` es ciego al catálogo y al recurso: recibe la petición, la transmite a
+Data y reenvía el resultado. Si Data lanza una excepción (categoría inexistente,
+distrito inválido o servicios faltantes), aquí solo se captura y se reenvía como
+error para que el agente lo comunique. No valida ni conoce las categorías.
+"""
 
 import logging
 from typing import Any
 
-from data.resources import leer_recurso_json
-
-
-SERVICIOS_POR_CATEGORIA = {
-    "academic_pressure": {
-        "SRV_AE_002",
-        "SRV_AE_004",
-        "SRV_AE_007",
-        "SRV_AE_009",
-        "SRV_AE_012",
-        "SRV_AE_014",
-    },
-    "social_support": {
-        "SRV_AE_001",
-        "SRV_AE_004",
-        "SRV_AE_006",
-        "SRV_AE_009",
-        "SRV_AE_011",
-        "SRV_AE_014",
-    },
-    "career_concern": {
-        "SRV_AE_001",
-        "SRV_AE_003",
-        "SRV_AE_006",
-        "SRV_AE_008",
-        "SRV_AE_011",
-        "SRV_AE_013",
-    },
-    "sleep_and_routine": {
-        "SRV_AE_003",
-        "SRV_AE_005",
-        "SRV_AE_008",
-        "SRV_AE_010",
-        "SRV_AE_013",
-        "SRV_AE_015",
-    },
-    "service_navigation": {
-        "SRV_AE_002",
-        "SRV_AE_005",
-        "SRV_AE_007",
-        "SRV_AE_010",
-        "SRV_AE_012",
-        "SRV_AE_015",
-    },
-}
+from data.services import (
+    CategoriaDesconocida,
+    DistritoDesconocido,
+    ServiciosFaltantes,
+    buscar_servicios,
+)
 
 
 def buscar_servicios_ayuda(
-    categoria: str, distrito: str | None = None
+    categoria: object, distrito: object = None
 ) -> dict[str, Any]:
-    """Devuelve los servicios de una categoría y distrito opcional."""
-    if (
-        not isinstance(categoria, str)
-        or categoria.strip().lower() not in SERVICIOS_POR_CATEGORIA
-    ):
-        return {
-            "error": (
-                f"Categoría inválida: {categoria!r}. Usa una de estas opciones: "
-                f"{', '.join(sorted(SERVICIOS_POR_CATEGORIA))}."
-            )
-        }
+    """Devuelve los servicios de una categoría y distrito opcional.
 
-    categoria_normalizada = categoria.strip().lower()
-    if distrito is not None and not isinstance(distrito, str):
-        return {"error": "El distrito debe ser una cadena con un identificador de D6."}
-    distrito_normalizado = distrito.strip().upper() if distrito is not None else None
-    if distrito is not None and not distrito_normalizado:
-        return {"error": "El distrito debe ser un identificador no vacío de D6."}
-
+    No valida la categoría: delega en Data la resolución y, si no existe, Data
+    lanza ``CategoriaDesconocida`` y aquí se reenvía como error.
+    """
     try:
-        mapa_servicios = leer_recurso_json("D6_services_map.geojson")
+        return buscar_servicios(categoria, distrito)
+    except (CategoriaDesconocida, DistritoDesconocido, ServiciosFaltantes) as error:
+        return {"error": str(error)}
     except (OSError, ValueError) as error:
         logging.exception("No se pudieron cargar los datos de derivación.")
         return {"error": f"No se pudieron cargar los datos de derivación: {error}"}
-
-    ids_servicio = SERVICIOS_POR_CATEGORIA[categoria_normalizada]
-    if not ids_servicio:
-        return {
-            "error": (
-                f"No hay servicios asociados a la categoría "
-                f"{categoria_normalizada!r}."
-            )
-        }
-
-    servicios_por_id = {
-        feature["properties"]["service_id"]: feature
-        for feature in mapa_servicios["features"]
-    }
-    distritos_disponibles = {
-        feature["properties"]["district_id"]
-        for feature in mapa_servicios["features"]
-    }
-    if distrito_normalizado and distrito_normalizado not in distritos_disponibles:
-        return {
-            "error": (
-                f"Distrito inválido: {distrito!r}. Usa uno de estos identificadores: "
-                f"{', '.join(sorted(distritos_disponibles))}."
-            )
-        }
-
-    ids_faltantes = ids_servicio - servicios_por_id.keys()
-    if ids_faltantes:
-        logging.error("Faltan servicios en el mapa: %s", sorted(ids_faltantes))
-        return {
-            "error": (
-                "El mapa no contiene los servicios referidos: "
-                + ", ".join(sorted(ids_faltantes))
-            )
-        }
-
-    if distrito_normalizado:
-        ids_servicio = {
-            service_id
-            for service_id in ids_servicio
-            if servicios_por_id[service_id]["properties"]["district_id"]
-            == distrito_normalizado
-        }
-        if not ids_servicio:
-            return {
-                "error": (
-                    f"No hay servicios para la categoría {categoria_normalizada!r} "
-                    f"en el distrito {distrito_normalizado!r}."
-                )
-            }
-
-    servicios = []
-    for service_id in sorted(ids_servicio):
-        feature = servicios_por_id[service_id]
-        properties = feature["properties"]
-        longitud, latitud = feature["geometry"]["coordinates"]
-        servicios.append(
-            {
-                "service_id": service_id,
-                "nombre": properties["name"],
-                "tipo_servicio": properties["service_type"],
-                "ubicacion": {
-                    "distrito_id": properties["district_id"],
-                    "coordenadas": {"longitud": longitud, "latitud": latitud},
-                },
-                "horario_atencion": properties["schedule"],
-                "canales_atencion": properties["channels"],
-                "eligibilidad": "Aethera students",
-                "informacion_requerida_derivacion": properties[
-                    "referral_information"
-                ],
-            }
-        )
-
-    return {
-        "categoria": categoria_normalizada,
-        "distrito": distrito_normalizado,
-        "servicios": servicios,
-    }

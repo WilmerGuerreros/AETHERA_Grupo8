@@ -1,14 +1,19 @@
-"""Reglas, validaciones y consultas de calendario."""
+"""Reglas, validaciones y consultas de calendario.
+
+``core`` es ciego al almacenamiento: valida la petición, delega la lectura y la
+escritura en el repositorio de Data y devuelve el resultado. No conoce rutas,
+archivos ni el formato ICS.
+"""
 
 import logging
-import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time
 from typing import Any
 
 from data.calendar import (
-    guardar_calendario_personal,
-    leer_calendario_academico,
-    leer_calendario_personal,
+    CalendarioInvalido,
+    CalendarStore,
+    EventoAmbiguo,
+    EventoNoEncontrado,
 )
 
 
@@ -25,123 +30,9 @@ CATEGORIAS_CALENDARIO = {
 }
 
 
-def _desescapar_ics(valor: str) -> str:
-    caracteres = []
-    indice = 0
-    while indice < len(valor):
-        if valor[indice] == "\\" and indice + 1 < len(valor):
-            siguiente = valor[indice + 1]
-            if siguiente in "nN":
-                caracteres.append("\n")
-                indice += 2
-                continue
-            if siguiente in "\\,;":
-                caracteres.append(siguiente)
-                indice += 2
-                continue
-        caracteres.append(valor[indice])
-        indice += 1
-    return "".join(caracteres)
-
-
-def _leer_eventos(
-    origen: str,
-    dt_inicio_busqueda: date,
-    dt_fin_busqueda: date,
-    tipo_normalizado: str,
-) -> list[dict[str, Any]]:
-    try:
-        if origen == "personal":
-            contenido = leer_calendario_personal()
-        else:
-            contenido = leer_calendario_academico()
-    except FileNotFoundError:
-        if origen == "personal":
-            return []
-        raise OSError("No se encontró el calendario académico.")
-    lineas = contenido.splitlines()
-
-    lineas_plegadas = []
-    for linea in lineas:
-        if linea.startswith((" ", "\t")) and lineas_plegadas:
-            lineas_plegadas[-1] += linea[1:]
-        else:
-            lineas_plegadas.append(linea)
-
-    eventos_encontrados = []
-    evento_actual = {}
-    en_evento = False
-
-    for linea in lineas_plegadas:
-        if linea == "BEGIN:VEVENT":
-            en_evento = True
-            evento_actual = {}
-        elif linea == "END:VEVENT" and en_evento:
-            en_evento = False
-            categoria = evento_actual.get(
-                "CATEGORIES", "personal" if origen == "personal" else ""
-            )
-            coincide_categoria = (
-                tipo_normalizado == "any"
-                or tipo_normalizado == categoria.lower()
-            )
-            inicio_evento = evento_actual.get("_DTSTART_OBJ")
-            fin_evento_exclusivo = evento_actual.get("_DTEND_OBJ")
-
-            if not coincide_categoria or not inicio_evento or not fin_evento_exclusivo:
-                continue
-
-            es_evento_con_hora = isinstance(inicio_evento, datetime)
-            if es_evento_con_hora:
-                inicio_fecha = inicio_evento.date()
-                fin_fecha = (fin_evento_exclusivo - timedelta(microseconds=1)).date()
-                hora_inicio = inicio_evento.strftime("%H:%M")
-                hora_fin = fin_evento_exclusivo.strftime("%H:%M")
-            else:
-                inicio_fecha = inicio_evento
-                fin_fecha = fin_evento_exclusivo - timedelta(days=1)
-                hora_inicio = None
-                hora_fin = None
-
-            if inicio_fecha <= dt_fin_busqueda and fin_fecha >= dt_inicio_busqueda:
-                eventos_encontrados.append(
-                    {
-                        "resumen": _desescapar_ics(evento_actual.get("SUMMARY", "")),
-                        "uid": evento_actual.get("UID"),
-                        "categoria": categoria,
-                        "fecha_inicio": inicio_fecha.isoformat(),
-                        "fecha_fin": fin_fecha.isoformat(),
-                        "hora_inicio": hora_inicio,
-                        "hora_fin": hora_fin,
-                        "periodo_id": evento_actual.get("X-AETHERA-PERIOD-ID"),
-                        "distrito_id": evento_actual.get("X-AETHERA-DISTRICT-ID"),
-                        "descripcion": _desescapar_ics(
-                            evento_actual.get("DESCRIPTION", "")
-                        ),
-                        "origen": origen,
-                    }
-                )
-        elif en_evento and ":" in linea:
-            clave_completa, valor = linea.split(":", 1)
-            clave = clave_completa.split(";")[0]
-            evento_actual[clave] = valor
-
-            if clave in ("DTSTART", "DTEND"):
-                try:
-                    if "VALUE=DATE" in clave_completa or len(valor) == 8:
-                        objeto = datetime.strptime(valor, "%Y%m%d").date()
-                    else:
-                        formato = (
-                            "%Y%m%dT%H%M%SZ"
-                            if valor.endswith("Z")
-                            else "%Y%m%dT%H%M%S"
-                        )
-                        objeto = datetime.strptime(valor, formato)
-                    evento_actual[f"_{clave}_OBJ"] = objeto
-                except ValueError:
-                    continue
-
-    return eventos_encontrados
+def _resolver_store(store: CalendarStore | None) -> CalendarStore:
+    """Devuelve el repositorio indicado o el de producción."""
+    return store if store is not None else CalendarStore()
 
 
 def buscar_eventos(
@@ -149,6 +40,7 @@ def buscar_eventos(
     fecha_inicio: str = "1900-01-01",
     fecha_fin: str = "2100-01-01",
     origen: str = "ambos",
+    store: CalendarStore | None = None,
 ) -> list[dict[str, Any]]:
     """Devuelve eventos filtrados por rango, categoría y origen."""
     try:
@@ -190,15 +82,17 @@ def buscar_eventos(
     if origen_normalizado not in origenes:
         return [{"error": "El origen debe ser 'academico', 'personal' o 'ambos'."}]
 
+    categorias = None if tipo_normalizado == "any" else {tipo_normalizado}
     try:
+        almacen = _resolver_store(store)
         eventos = []
         for nombre_origen in origenes[origen_normalizado]:
             eventos.extend(
-                _leer_eventos(
+                almacen.listar(
                     nombre_origen,
                     dt_inicio_busqueda,
                     dt_fin_busqueda,
-                    tipo_normalizado,
+                    categorias,
                 )
             )
         return sorted(
@@ -215,6 +109,7 @@ def obtener_eventos_semana(
     fecha_fin: date,
     origen: str,
     categoria: str,
+    store: CalendarStore | None = None,
 ) -> list[dict[str, Any]]:
     """Carga eventos de un rango y aplica el origen y categoría seleccionados."""
     origen_consulta = ORIGENES_CALENDARIO.get(origen)
@@ -226,6 +121,7 @@ def obtener_eventos_semana(
         fecha_inicio=fecha_inicio.isoformat(),
         fecha_fin=fecha_fin.isoformat(),
         origen=origen_consulta,
+        store=store,
     )
     if eventos and "error" in eventos[0]:
         raise ValueError(eventos[0]["error"])
@@ -236,91 +132,17 @@ def obtener_eventos_semana(
     return [evento for evento in eventos if evento.get("categoria") in categorias]
 
 
-def _escapar_ics(valor: str) -> str:
-    return (
-        valor.replace("\\", "\\\\")
-        .replace("\r\n", "\n")
-        .replace("\r", "\n")
-        .replace("\n", r"\n")
-        .replace(",", r"\,")
-        .replace(";", r"\;")
-    )
-
-
-def _plegar_linea_ics(linea: str) -> str:
-    segmentos = []
-    segmento = ""
-    longitud = 0
-    for caracter in linea:
-        bytes_caracter = len(caracter.encode("utf-8"))
-        if longitud + bytes_caracter > 75:
-            segmentos.append(segmento)
-            segmento = " "
-            longitud = 1
-        segmento += caracter
-        longitud += bytes_caracter
-    segmentos.append(segmento)
-    return "\r\n".join(segmentos)
-
-
-def eliminar_evento(uid: str) -> dict[str, str]:
+def eliminar_evento(
+    uid: str, store: CalendarStore | None = None
+) -> dict[str, str]:
     """Elimina un evento personal identificado por su UID."""
     if not isinstance(uid, str) or not uid.strip():
         return {"error": "Se requiere un identificador de evento válido."}
 
     try:
-        contenido = leer_calendario_personal()
-        lineas = contenido.replace("\r\n", "\n").replace("\r", "\n").splitlines()
-        if (
-            not lineas
-            or lineas[0] != "BEGIN:VCALENDAR"
-            or lineas[-1] != "END:VCALENDAR"
-        ):
-            return {"error": "El archivo de calendario personal no es válido."}
-
-        bloques_eventos = []
-        indice = 0
-        while indice < len(lineas):
-            if lineas[indice] != "BEGIN:VEVENT":
-                indice += 1
-                continue
-            fin_evento = indice + 1
-            while fin_evento < len(lineas) and lineas[fin_evento] != "END:VEVENT":
-                fin_evento += 1
-            if fin_evento == len(lineas):
-                return {"error": "El calendario contiene un evento ICS incompleto."}
-            bloque = lineas[indice : fin_evento + 1]
-            desplegado = []
-            for linea in bloque:
-                if linea.startswith((" ", "\t")) and desplegado:
-                    desplegado[-1] += linea[1:]
-                else:
-                    desplegado.append(linea)
-            uid_evento = next(
-                (
-                    linea.split(":", 1)[1]
-                    for linea in desplegado
-                    if linea.startswith("UID:")
-                ),
-                None,
-            )
-            if uid_evento == uid:
-                bloques_eventos.append((indice, fin_evento + 1))
-            indice = fin_evento + 1
-
-        if not bloques_eventos:
-            return {"error": "No se encontró ese evento en el calendario Personal."}
-        if len(bloques_eventos) > 1:
-            return {
-                "error": (
-                    "El identificador aparece en varios eventos; "
-                    "no se eliminó ninguno."
-                )
-            }
-
-        inicio_bloque, fin_bloque = bloques_eventos[0]
-        del lineas[inicio_bloque:fin_bloque]
-        guardar_calendario_personal("\r\n".join(lineas) + "\r\n")
+        _resolver_store(store).eliminar(uid)
+    except (CalendarioInvalido, EventoNoEncontrado, EventoAmbiguo) as error:
+        return {"error": str(error)}
     except (OSError, UnicodeDecodeError) as error:
         logging.exception("No se pudo eliminar el evento personal.")
         return {"error": f"No se pudo eliminar el evento personal: {error}"}
@@ -335,6 +157,7 @@ def crear_evento(
     descripcion: str = "",
     hora_inicio: str = "",
     hora_fin: str = "",
+    store: CalendarStore | None = None,
 ) -> dict[str, Any]:
     """Valida y crea un evento de día completo o con horario."""
     if not isinstance(titulo, str) or not titulo.strip():
@@ -388,61 +211,16 @@ def crear_evento(
             }
 
     try:
-        try:
-            contenido = leer_calendario_personal()
-        except FileNotFoundError:
-            contenido = ""
-        if contenido.strip():
-            lineas_calendario = (
-                contenido.replace("\r\n", "\n").replace("\r", "\n").splitlines()
-            )
-            if (
-                not lineas_calendario
-                or lineas_calendario[0] != "BEGIN:VCALENDAR"
-                or lineas_calendario[-1] != "END:VCALENDAR"
-            ):
-                return {"error": "El archivo de calendario personal no es válido."}
-            contenido = "\r\n".join(lineas_calendario[:-1])
-        else:
-            contenido = (
-                "BEGIN:VCALENDAR\r\n"
-                "VERSION:2.0\r\n"
-                "PRODID:-//Aethera//Calendario Personal//ES\r\n"
-                "CALSCALE:GREGORIAN\r\n"
-                "X-WR-CALNAME:Personal"
-            )
-
-        identificador = f"{uuid.uuid4()}@aethera"
-        if inicio_horario and fin_horario:
-            fecha_inicio_ics = fecha_hora_inicio.strftime("%Y%m%dT%H%M%S")
-            fecha_fin_ics = fecha_hora_fin.strftime("%Y%m%dT%H%M%S")
-            propiedad_inicio = f"DTSTART:{fecha_inicio_ics}"
-            propiedad_fin = f"DTEND:{fecha_fin_ics}"
-        else:
-            fecha_fin_ics = date.fromordinal(fin.toordinal() + 1).strftime("%Y%m%d")
-            propiedad_inicio = f"DTSTART;VALUE=DATE:{inicio.strftime('%Y%m%d')}"
-            propiedad_fin = f"DTEND;VALUE=DATE:{fecha_fin_ics}"
-        evento = [
-            "BEGIN:VEVENT",
-            f"UID:{identificador}",
-            f"DTSTAMP:{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
-            propiedad_inicio,
-            propiedad_fin,
-            f"SUMMARY:{_escapar_ics(titulo)}",
-            "CATEGORIES:personal",
-            "X-AETHERA-SOURCE:PERSONAL",
-        ]
-        if descripcion:
-            evento.append(f"DESCRIPTION:{_escapar_ics(descripcion)}")
-        evento.append("END:VEVENT")
-
-        nuevo_contenido = (
-            contenido.rstrip("\r\n")
-            + "\r\n"
-            + "\r\n".join(_plegar_linea_ics(linea) for linea in evento)
-            + "\r\nEND:VCALENDAR\r\n"
+        _resolver_store(store).agregar(
+            titulo,
+            inicio,
+            fin,
+            descripcion,
+            inicio_horario,
+            fin_horario,
         )
-        guardar_calendario_personal(nuevo_contenido)
+    except CalendarioInvalido as error:
+        return {"error": str(error)}
     except (OSError, UnicodeDecodeError) as error:
         logging.exception("No se pudo guardar el evento personal.")
         return {"error": f"No se pudo guardar el evento personal: {error}"}
@@ -468,6 +246,7 @@ def guardar_evento_personal(
     descripcion: str = "",
     hora_inicio: str = "",
     hora_fin: str = "",
+    store: CalendarStore | None = None,
 ) -> dict[str, Any]:
     """Crea un evento personal usando las mismas reglas del calendario."""
     return crear_evento(
@@ -477,14 +256,17 @@ def guardar_evento_personal(
         descripcion,
         hora_inicio,
         hora_fin,
+        store=store,
     )
 
 
-def borrar_evento_personal(evento: dict[str, Any]) -> dict[str, str]:
+def borrar_evento_personal(
+    evento: dict[str, Any], store: CalendarStore | None = None
+) -> dict[str, str]:
     """Elimina un evento solo cuando su origen es el calendario personal."""
     if evento.get("origen") != "personal":
         return {"error": "Solo se pueden eliminar eventos del calendario Personal."}
     uid = evento.get("uid")
     if not isinstance(uid, str) or not uid.strip():
         return {"error": "El evento personal no contiene un identificador válido."}
-    return eliminar_evento(uid)
+    return eliminar_evento(uid, store=store)

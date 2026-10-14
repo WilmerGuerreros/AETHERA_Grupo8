@@ -14,6 +14,7 @@
 - `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
 - `data/documents.py`: extracción de texto de documentos PDF.
 - `data/resources.py`: lectura de CSV, JSON y texto de recursos de referencia.
+- `data/services.py`: catálogo de categorías y lectura/filtrado del mapa de servicios (D6); lanza excepciones explícitas si la categoría, el distrito o un servicio no existen.
 - `data/resources/`: calendarios de referencia, servicios y otros datos de solo lectura.
 
 ## Paquete `core/`
@@ -24,7 +25,7 @@
 - `core/quizzes/`: paquete con la construcción, validación y corrección de quizzes e intentos. Se divide en `schema` (esquema), `session` (intento en memoria), `scoring` (puntajes), `store` (persistencia en Data) y `evaluation` (cierre con Agent); la fachada `__init__.py` expone el contrato estable.
 - `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
 - `core/documents.py`: delega en Data la lectura de documentos adjuntos.
-- `core/services.py`: selección de servicios por categoría y distrito.
+- `core/services.py`: delega en Data la búsqueda de servicios por categoría y distrito y reenvía su resultado o error; no conoce el catálogo ni el recurso.
 - `core/web_search.py`: búsqueda de información pública en la web.
 
 ## Paquete `agent/`
