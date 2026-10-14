@@ -50,12 +50,12 @@ def crear_quiz(title: str, pages: list[list[Any]]) -> dict[str, Any]:
 
         tipo = page[0]
         if tipo == "alternative":
-            if len(page) != 4:
+            if len(page) != 5:
                 raise ValueError(
                     f"pages[{indice - 1}] de alternativas debe tener "
-                    "4 elementos."
+                    "5 elementos, incluida la explicación de la respuesta correcta."
                 )
-            _, pregunta, opciones, respuesta_correcta = page
+            _, pregunta, opciones, respuesta_correcta, explicacion_correcta = page
             if not isinstance(opciones, list) or not 2 <= len(opciones) <= 26:
                 raise ValueError(
                     f"pages[{indice - 1}] debe incluir entre 2 y 26 opciones."
@@ -76,6 +76,10 @@ def crear_quiz(title: str, pages: list[list[Any]]) -> dict[str, Any]:
                     f"pages[{indice - 1}] debe indicar el texto de la "
                     "respuesta correcta."
                 )
+            explicacion_correcta = _validar_texto(
+                explicacion_correcta,
+                f"pages[{indice - 1}].explicacion_correcta",
+            )
             claves = string.ascii_uppercase[: len(opciones)]
             alternativas = dict(zip(claves, opciones))
             coincidencias = [
@@ -96,9 +100,9 @@ def crear_quiz(title: str, pages: list[list[Any]]) -> dict[str, Any]:
                     "alternativas": alternativas,
                     "retroalimentacion": {
                         clave: (
-                            "Correcto. Esta es la respuesta adecuada."
+                            explicacion_correcta
                             if clave == clave_correcta
-                            else "Incorrecto. Revisa la pregunta e inténtalo de nuevo."
+                            else f"Incorrecto. {explicacion_correcta}"
                         )
                         for clave in claves
                     },
@@ -374,6 +378,60 @@ def evaluar_respuesta_alternativa(
     return QuizSession(quiz).responder_alternativa(pregunta_id, respuesta)
 
 
+def seleccionar_respuesta_alternativa(
+    quiz: dict[str, Any],
+    indice: int,
+    respuestas: dict[str, str],
+    pregunta_id: str,
+    respuesta: str,
+    directorio_intentos: Path | str | None = None,
+) -> dict[str, Any]:
+    """Evalúa y persiste una selección, sin permitir cambiar una respuesta."""
+    quiz = validar_quiz(quiz)
+    _validar_respuestas_intento(quiz, respuestas)
+    intento_guardado = cargar_intento(quiz, directorio_intentos)
+    respuestas_actualizadas = dict(respuestas)
+    respuesta_previa = respuestas.get(pregunta_id)
+    if intento_guardado is not None:
+        respuesta_previa = intento_guardado["respuestas"].get(
+            pregunta_id, respuesta_previa
+        )
+    if respuesta_previa is not None and respuesta_previa != respuesta:
+        raise ValueError("La respuesta ya fue seleccionada y no se puede cambiar.")
+
+    respuestas_actualizadas[pregunta_id] = respuesta
+    resultado = evaluar_respuesta_alternativa(quiz, pregunta_id, respuesta)
+    guardar_progreso_quiz(
+        quiz,
+        indice,
+        respuestas_actualizadas,
+        directorio_intentos,
+    )
+    return {
+        **resultado,
+        "respuesta": respuesta,
+        "respuestas": respuestas_actualizadas,
+    }
+
+
+def guardar_progreso_quiz(
+    quiz: dict[str, Any],
+    indice: int,
+    respuestas: dict[str, str],
+    directorio_intentos: Path | str | None = None,
+) -> dict[str, str]:
+    """Persiste el avance enviado por la UI y devuelve las respuestas guardadas."""
+    quiz = validar_quiz(quiz)
+    _validar_respuestas_intento(quiz, respuestas)
+    guardar_intento(
+        quiz,
+        indice,
+        respuestas,
+        directorio_intentos,
+    )
+    return dict(respuestas)
+
+
 def resumir_quiz(quiz: dict[str, Any]) -> dict[str, int]:
     """Devuelve el conteo de preguntas por tipo para presentar un quiz."""
     quiz = validar_quiz(quiz)
@@ -390,25 +448,22 @@ def preparar_respuestas_desarrollo(
     quiz: dict[str, Any],
     respuestas: dict[str, str],
 ) -> list[dict[str, str]]:
-    """Devuelve las respuestas abiertas contestadas que requieren evaluación."""
+    """Devuelve todas las preguntas abiertas junto con su respuesta, si existe."""
     quiz_validado = validar_quiz(quiz)
-    session = QuizSession(quiz_validado)
     desarrollo = []
     for pagina in quiz_validado["paginas"]:
         if pagina["tipo"] != "desarrollo":
             continue
         respuesta = respuestas.get(pagina["id"], "")
-        if respuesta.strip():
-            session.guardar_respuesta_desarrollo(pagina["id"], respuesta)
-            desarrollo.append(
-                {
-                    "pregunta_id": pagina["id"],
-                    "pregunta": pagina["pregunta"],
-                    "respuesta_alumno": respuesta,
-                    "guia_evaluacion": pagina["guia_evaluacion"],
-                    "respuesta_sugerida": pagina["respuesta_sugerida"],
-                }
-            )
+        desarrollo.append(
+            {
+                "pregunta_id": pagina["id"],
+                "pregunta": pagina["pregunta"],
+                "respuesta_alumno": respuesta,
+                "guia_evaluacion": pagina["guia_evaluacion"],
+                "respuesta_sugerida": pagina["respuesta_sugerida"],
+            }
+        )
     return desarrollo
 
 
@@ -416,26 +471,46 @@ def evaluar_quiz(
     motor: Any,
     quiz: dict[str, Any],
     respuestas: dict[str, str],
+    historial_chat: list[dict[str, Any]] | None = None,
+    directorio_intentos: Path | str | None = None,
 ) -> dict[str, Any]:
-    """Orquesta la evaluación del LLM y aplica las reglas de puntuación."""
-    from agent.quiz_evaluation import evaluar_respuestas_desarrollo
+    """Orquesta evaluación, puntuación y feedback final del LLM."""
+    from agent.quiz_evaluation import (
+        evaluar_respuestas_desarrollo,
+        generar_feedback_resultados,
+    )
 
     quiz = validar_quiz(quiz)
+    respuestas = guardar_progreso_quiz(
+        quiz,
+        0,
+        respuestas,
+        directorio_intentos,
+    )
     desarrollo = preparar_respuestas_desarrollo(quiz, respuestas)
     evaluaciones_desarrollo = (
         evaluar_respuestas_desarrollo(
             motor,
             quiz["quiz_titulo"],
             desarrollo,
+            historial_chat,
         )
-        if desarrollo
+        if any(pagina["tipo"] == "desarrollo" for pagina in quiz["paginas"])
         else []
     )
-    return construir_resultado_evaluacion(
+    resultado = construir_resultado_evaluacion(
         quiz,
         respuestas,
         evaluaciones_desarrollo,
     )
+    resultado["feedback_final"] = generar_feedback_resultados(
+        motor,
+        historial_chat,
+        quiz,
+        resultado,
+    )
+    eliminar_intento(quiz["quiz_id"], directorio_intentos)
+    return resultado
 
 
 def cargar_intento(
@@ -446,9 +521,7 @@ def cargar_intento(
     quiz = validar_quiz(quiz)
     quiz_id = quiz["quiz_id"]
     _validar_quiz_id(quiz_id)
-    directorio = Path(directorio_intentos) if directorio_intentos else (
-        DIRECTORIO_QUICES / ".intentos"
-    )
+    directorio = Path(directorio_intentos) if directorio_intentos else DIRECTORIO_QUICES
     intento = leer_intento_quiz(directorio, quiz_id)
     if intento is None:
         return None
@@ -475,6 +548,13 @@ def cargar_intento(
     return {
         "indice": min(max(indice, 0), len(quiz["paginas"]) - 1),
         "respuestas": respuestas,
+        "evaluaciones": {
+            pregunta_id: evaluar_respuesta_alternativa(
+                quiz, pregunta_id, respuesta
+            )
+            for pregunta_id, respuesta in respuestas.items()
+            if paginas[pregunta_id]["tipo"] == "alternativa"
+        },
     }
 
 
@@ -495,9 +575,7 @@ def guardar_intento(
     if not isinstance(respuestas, dict):
         raise ValueError("Las respuestas del intento deben ser un objeto.")
     _validar_respuestas_intento(quiz, respuestas)
-    directorio = Path(directorio_intentos) if directorio_intentos else (
-        DIRECTORIO_QUICES / ".intentos"
-    )
+    directorio = Path(directorio_intentos) if directorio_intentos else DIRECTORIO_QUICES
     return guardar_intento_quiz(
         directorio,
         quiz_id,
@@ -515,9 +593,7 @@ def eliminar_intento(
 ) -> None:
     """Elimina el progreso persistido de un quiz mediante Data."""
     _validar_quiz_id(quiz_id)
-    directorio = Path(directorio_intentos) if directorio_intentos else (
-        DIRECTORIO_QUICES / ".intentos"
-    )
+    directorio = Path(directorio_intentos) if directorio_intentos else DIRECTORIO_QUICES
     eliminar_intento_persistido(directorio, quiz_id)
 
 
@@ -603,20 +679,11 @@ def construir_resultado_evaluacion(
                     "retroalimentacion": feedback,
                 }
             )
-        elif not respuesta.strip():
-            retroalimentacion.append(
-                {
-                    "pregunta_id": pregunta_id,
-                    "porcentaje": 0,
-                    "retroalimentacion": "Pregunta sin responder.",
-                }
-            )
 
-    desarrollo = preparar_respuestas_desarrollo(quiz, respuestas)
     evaluaciones_desarrollo = evaluaciones_desarrollo or []
-    if len(evaluaciones_desarrollo) != len(desarrollo):
-        if desarrollo:
-            raise ValueError("Faltan evaluaciones para las respuestas de desarrollo.")
+    if len(evaluaciones_desarrollo) != total_desarrollo:
+        if total_desarrollo:
+            raise ValueError("Faltan evaluaciones para las preguntas de desarrollo.")
     retroalimentacion.extend(evaluaciones_desarrollo)
 
     feedback_por_id = {
@@ -629,7 +696,15 @@ def construir_resultado_evaluacion(
         for pagina in quiz["paginas"]
         if pagina["tipo"] == "desarrollo"
     ]
+    puntos_totales = 0
+    for pagina in quiz["paginas"]:
+        resultado_pregunta = feedback_por_id[pagina["id"]]
+        if pagina["tipo"] == "alternativa":
+            puntos_totales += 100 if resultado_pregunta["correcta"] else 0
+        else:
+            puntos_totales += resultado_pregunta["porcentaje"]
     return {
+        "porcentaje_total": round(puntos_totales / len(quiz["paginas"])),
         "puntaje": (
             round(correctas_alternativas / total_alternativas * 100)
             if total_alternativas

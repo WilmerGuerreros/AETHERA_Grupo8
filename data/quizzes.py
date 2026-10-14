@@ -48,19 +48,29 @@ def listar_archivos_quiz(directorio: Path) -> list[Path]:
 
 
 def leer_quiz_json(ruta: Path) -> Any:
-    """Lee y decodifica un quiz JSON."""
+    """Lee un quiz y oculta los metadatos de avance locales."""
     with ruta.open("r", encoding="utf-8") as archivo:
-        return json.load(archivo)
+        quiz = json.load(archivo)
+    if isinstance(quiz, dict):
+        quiz.pop("avance", None)
+    return quiz
 
 
 def leer_intento_quiz(carpeta: Path, quiz_id: str) -> Any | None:
-    """Lee el intento persistido para un quiz, si existe."""
-    ruta = Path(carpeta) / f"{quiz_id}.json"
+    """Lee el avance guardado dentro del JSON del quiz."""
+    carpeta = Path(carpeta)
+    ruta = carpeta / f"{quiz_id}.json"
     try:
         with ruta.open("r", encoding="utf-8") as archivo:
-            return json.load(archivo)
+            quiz = json.load(archivo)
     except FileNotFoundError:
-        return None
+        return _leer_intento_heredado(carpeta, quiz_id)
+    if not isinstance(quiz, dict):
+        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+    avance = quiz.get("avance")
+    if avance is not None:
+        return _decodificar_avance(avance, quiz_id)
+    return _leer_intento_heredado(carpeta, quiz_id)
 
 
 def guardar_intento_quiz(
@@ -68,21 +78,122 @@ def guardar_intento_quiz(
     quiz_id: str,
     intento: dict[str, Any],
 ) -> Path:
-    """Persiste el progreso de un intento en JSON UTF-8."""
+    """Persiste el avance en el mismo JSON donde está guardado el quiz."""
     carpeta = Path(carpeta)
-    carpeta.mkdir(parents=True, exist_ok=True)
     ruta = carpeta / f"{quiz_id}.json"
-    ruta.write_text(
-        json.dumps(intento, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    with ruta.open("r", encoding="utf-8") as archivo:
+        quiz = json.load(archivo)
+    if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
+        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+    quiz["avance"] = _codificar_avance(quiz, intento)
+    _reemplazar_json(ruta, quiz)
+    _eliminar_intento_heredado(carpeta, quiz_id)
     return ruta
 
 
 def eliminar_intento_quiz(carpeta: Path, quiz_id: str) -> None:
-    """Elimina un intento guardado si existe."""
-    ruta = Path(carpeta) / f"{quiz_id}.json"
+    """Elimina el avance del JSON del quiz, si existe."""
+    carpeta = Path(carpeta)
+    ruta = carpeta / f"{quiz_id}.json"
+    try:
+        with ruta.open("r", encoding="utf-8") as archivo:
+            quiz = json.load(archivo)
+    except FileNotFoundError:
+        _eliminar_intento_heredado(carpeta, quiz_id)
+        return
+    if not isinstance(quiz, dict):
+        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+    if quiz.pop("avance", None) is not None:
+        _reemplazar_json(ruta, quiz)
+    _eliminar_intento_heredado(carpeta, quiz_id)
+
+
+def _leer_intento_heredado(carpeta: Path, quiz_id: str) -> Any | None:
+    """Lee intentos del formato anterior para conservar progreso existente."""
+    ruta = carpeta / ".intentos" / f"{quiz_id}.json"
+    try:
+        with ruta.open("r", encoding="utf-8") as archivo:
+            return json.load(archivo)
+    except FileNotFoundError:
+        return None
+
+
+def _codificar_avance(
+    quiz: dict[str, Any],
+    intento: dict[str, Any],
+) -> dict[str, Any]:
+    respuestas = intento.get("respuestas", {})
+    paginas = quiz.get("paginas", [])
+    orden_preguntas = {
+        pagina.get("id", f"p{indice}"): indice
+        for indice, pagina in enumerate(paginas)
+        if isinstance(pagina, dict)
+    }
+    respuestas_en_orden = sorted(
+        respuestas.items(),
+        key=lambda item: orden_preguntas.get(item[0], len(orden_preguntas)),
+    )
+    return {
+        "indice": intento.get("indice", 0),
+        "respuestas": [
+            {"pregunta_id": pregunta_id, "respuesta": respuesta}
+            for pregunta_id, respuesta in respuestas_en_orden
+        ],
+    }
+
+
+def _decodificar_avance(avance: Any, quiz_id: str) -> dict[str, Any]:
+    if not isinstance(avance, dict):
+        raise ValueError("El avance guardado no tiene un formato válido.")
+    respuestas = avance.get("respuestas")
+    if not isinstance(respuestas, list):
+        raise ValueError("La lista de respuestas del avance no es válida.")
+    respuestas_por_id = {}
+    for item in respuestas:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("pregunta_id"), str)
+            or not isinstance(item.get("respuesta"), str)
+            or item["pregunta_id"] in respuestas_por_id
+        ):
+            raise ValueError("Una respuesta del avance no tiene un formato válido.")
+        respuestas_por_id[item["pregunta_id"]] = item["respuesta"]
+    return {
+        "quiz_id": quiz_id,
+        "indice": avance.get("indice", 0),
+        "respuestas": respuestas_por_id,
+    }
+
+
+def _eliminar_intento_heredado(carpeta: Path, quiz_id: str) -> None:
+    ruta = carpeta / ".intentos" / f"{quiz_id}.json"
     try:
         ruta.unlink()
     except FileNotFoundError:
         pass
+
+
+def _reemplazar_json(ruta: Path, datos: dict[str, Any]) -> None:
+    temporal = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=ruta.parent,
+            prefix=f".{ruta.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as archivo:
+            temporal = archivo.name
+            json.dump(datos, archivo, ensure_ascii=False, indent=2)
+            archivo.write("\n")
+            archivo.flush()
+            os.fsync(archivo.fileno())
+        os.replace(temporal, ruta)
+    finally:
+        if temporal and os.path.exists(temporal):
+            try:
+                os.unlink(temporal)
+            except OSError:
+                logging.exception("No se pudo limpiar el archivo temporal del quiz.")

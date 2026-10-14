@@ -6,13 +6,15 @@ from core.quizzes import crear_y_guardar_quiz
 
 
 def crear_quiz(title: str, pages: list[list[Any]]) -> str:
-    """
-    Crea y guarda un quiz.
+    """Crea un quiz; incluye una explicación para la respuesta correcta.
 
     Args:
         title: Título del quiz.
         pages: Lista ordenada de preguntas. Cada pregunta usa uno de estos formatos:
-            - Alternativas: ['alternative', pregunta, [opciones...], texto_respuesta_correcta]
+            - Alternativas: ['alternative', pregunta, [opciones...],
+              texto_respuesta_correcta, explicación_de_por_qué_es_correcta].
+              La explicación debe ser clara y específica; se mostrará como
+              retroalimentación cuando el estudiante responda.
             - Desarrollo: ['develope', pregunta, guia_orientativa, palabras_clave_rubrica]
     """
     try:

@@ -10,11 +10,9 @@ from ..widgets import RoundedButton, RoundedFrame
 from .components import QuizCard
 from core.quizzes import (
     cargar_intento,
-    eliminar_intento,
-    evaluar_quiz,
-    evaluar_respuesta_alternativa,
-    guardar_intento,
+    guardar_progreso_quiz,
     listar_quices,
+    seleccionar_respuesta_alternativa,
 )
 
 
@@ -23,10 +21,12 @@ class _QuizDesktopHost(Protocol):
     content: Any
     chat: Any
     event_queue: Any
+    current_page: str
     _label: Callable[..., tk.Label]
     _card: Callable[..., RoundedFrame]
     _button: Callable[..., RoundedButton]
     _bind_smooth_scroll: Callable[..., None]
+    show_page: Callable[[str], None]
 
 
 class QuizSection(_QuizDesktopHost):
@@ -128,8 +128,13 @@ class QuizSection(_QuizDesktopHost):
         state = {
             "indice": attempt["indice"] if attempt else 0,
             "respuestas": attempt["respuestas"] if attempt else {},
-            "evaluations": {},
+            "evaluations": attempt.get("evaluaciones", {}) if attempt else {},
             "busy": False,
+            "answer_pending": False,
+            "answer_error": "",
+            "progress_pending": False,
+            "progress_target": None,
+            "progress_after_id": None,
         }
         window.protocol(
             "WM_DELETE_WINDOW",
@@ -138,6 +143,7 @@ class QuizSection(_QuizDesktopHost):
         self._render_quiz_page(window, quiz, state)
 
     def _render_quiz_page(self, window, quiz, state):
+        state.pop("response_widget", None)
         for child in window.winfo_children():
             child.destroy()
         indice = state["indice"]
@@ -160,8 +166,17 @@ class QuizSection(_QuizDesktopHost):
         )
         feedback = None
         if pagina["tipo"] == "alternativa":
+            respuesta_seleccionada = state["respuestas"].get(pagina["id"])
+            evaluacion = state["evaluations"].get(pagina["id"])
             for letra, texto in pagina["alternativas"].items():
-                selected = state["respuestas"].get(pagina["id"]) == letra
+                selected = respuesta_seleccionada == letra
+                button_color = COLORS["surface_light"]
+                if selected and evaluacion:
+                    button_color = COLORS[
+                        "green" if evaluacion["correcta"] else "red"
+                    ]
+                elif selected or state["answer_pending"]:
+                    button_color = COLORS["accent"]
                 button = tk.Button(
                     content,
                     text=f"{letra}    {texto}",
@@ -169,7 +184,7 @@ class QuizSection(_QuizDesktopHost):
                     command=lambda key=letra: self._select_quiz_answer(
                         window, quiz, state, key
                     ),
-                    bg=COLORS["accent"] if selected else COLORS["surface_light"],
+                    bg=button_color,
                     fg=COLORS["text"],
                     activebackground=COLORS["accent_light"],
                     activeforeground="white",
@@ -178,11 +193,19 @@ class QuizSection(_QuizDesktopHost):
                     pady=12,
                     font=(FONT, 10),
                     cursor="hand2",
+                    state=(
+                        "disabled"
+                        if (
+                            respuesta_seleccionada
+                            or state["answer_pending"]
+                            or state["progress_pending"]
+                        )
+                        else "normal"
+                    ),
                 )
                 button.pack(fill="x", padx=22, pady=5)
-            if state["respuestas"].get(pagina["id"]):
-                key = state["respuestas"][pagina["id"]]
-                feedback = state["evaluations"].get(pagina["id"])
+            if respuesta_seleccionada:
+                feedback = evaluacion
         else:
             response = tk.Text(
                 content,
@@ -198,56 +221,227 @@ class QuizSection(_QuizDesktopHost):
             )
             response.pack(fill="x", padx=22, pady=(0, 12))
             response.insert("1.0", state["respuestas"].get(pagina["id"], ""))
+            if state["progress_pending"]:
+                response.configure(state="disabled")
+            response.bind(
+                "<KeyRelease>",
+                lambda _event: self._schedule_quiz_progress_save(
+                    window, quiz, state
+                ),
+            )
             state["response_widget"] = response
         if feedback:
             self._label(
                 content,
                 feedback["retroalimentacion"],
-                color=COLORS["green"] if feedback["correcta"] else COLORS["yellow"],
+                color=COLORS["green"] if feedback["correcta"] else COLORS["red"],
                 wraplength=660,
                 justify="left",
             ).pack(anchor="w", padx=22, pady=12)
+        if state["answer_error"]:
+            self._label(content, state["answer_error"], color=COLORS["red"]).pack(
+                anchor="w", padx=22, pady=8
+            )
+        if state["progress_pending"]:
+            self._label(content, "Guardando avance…", color=COLORS["accent_light"]).pack(
+                anchor="w", padx=22, pady=8
+            )
         footer = tk.Frame(window, bg=COLORS["background"])
         footer.pack(fill="x", padx=20, pady=(8, 20))
+        progress_locked = state["answer_pending"] or state["progress_pending"]
         previous_button = self._button(
             footer,
             "Anterior",
             lambda: self._move_quiz(window, quiz, state, -1),
         )
         previous_button.pack(side="left")
+        if indice == 0 or progress_locked:
+            previous_button.disabled = True
+            previous_button._draw()
         final = indice == len(quiz["paginas"]) - 1
-        self._button(
+        next_button = self._button(
             footer,
             "Finalizar" if final else "Siguiente",
             lambda: self._finish_quiz(window, quiz, state)
             if final
             else self._move_quiz(window, quiz, state, 1),
             primary=True,
-        ).pack(side="right")
-        if indice == 0:
-            previous_button.disabled = True
-            previous_button._draw()
+        )
+        next_button.pack(side="right")
+        if progress_locked:
+            next_button.disabled = True
+            next_button._draw()
 
     def _select_quiz_answer(self, window, quiz, state, key):
+        if state["answer_pending"] or state["progress_pending"]:
+            return
         pagina = quiz["paginas"][state["indice"]]
-        state["respuestas"][pagina["id"]] = key
-        state["evaluations"][pagina["id"]] = evaluar_respuesta_alternativa(
-            quiz,
-            pagina["id"],
-            key,
+        if pagina["id"] in state["respuestas"]:
+            return
+        indice = state["indice"]
+        pregunta_id = pagina["id"]
+        state["answer_pending"] = True
+        state["answer_error"] = ""
+        self._render_quiz_page(window, quiz, state)
+        worker = threading.Thread(
+            target=self._evaluate_quiz_answer_worker,
+            args=(window, quiz, state, indice, pregunta_id, key),
+            daemon=True,
         )
-        self._save_quiz_progress(quiz, state)
+        worker.start()
+
+    def _evaluate_quiz_answer_worker(
+        self, window, quiz, state, indice, pregunta_id, key
+    ):
+        try:
+            resultado = seleccionar_respuesta_alternativa(
+                quiz,
+                indice,
+                dict(state["respuestas"]),
+                pregunta_id,
+                key,
+            )
+            self.event_queue.put(
+                ("quiz_answer_evaluated", (window, quiz, state, resultado))
+            )
+        except Exception as error:
+            self.event_queue.put(
+                ("quiz_answer_error", (window, quiz, state, str(error)))
+            )
+
+    def _handle_quiz_answer_result(self, window, quiz, state, result):
+        if not window.winfo_exists():
+            return
+        state["respuestas"] = result["respuestas"]
+        state["evaluations"][quiz["paginas"][state["indice"]]["id"]] = result
+        state["answer_pending"] = False
+        self._render_quiz_page(window, quiz, state)
+
+    def _handle_quiz_answer_error(self, window, quiz, state, message):
+        if not window.winfo_exists():
+            return
+        state["answer_pending"] = False
+        state["answer_error"] = f"No se pudo guardar la respuesta: {message}"
         self._render_quiz_page(window, quiz, state)
 
     def _move_quiz(self, window, quiz, state, step):
+        if state["answer_pending"] or state["progress_pending"]:
+            return
         self._capture_development_answer(quiz, state)
-        state["indice"] += step
-        self._save_quiz_progress(quiz, state)
+        target_index = state["indice"] + step
+        self._persist_quiz_progress(window, quiz, state, target_index, "move")
+
+    def _persist_quiz_progress(self, window, quiz, state, target_index, action):
+        state["progress_pending"] = True
+        state["progress_target"] = target_index
+        self._render_quiz_page(window, quiz, state)
+        worker = threading.Thread(
+            target=self._save_quiz_progress_worker,
+            args=(
+                window,
+                quiz,
+                state,
+                target_index,
+                dict(state["respuestas"]),
+                action,
+            ),
+            daemon=True,
+        )
+        worker.start()
+
+    def _schedule_quiz_progress_save(self, window, quiz, state):
+        if state["progress_pending"]:
+            return
+        previous_id = state.get("progress_after_id")
+        if previous_id:
+            window.after_cancel(previous_id)
+        state["progress_after_id"] = window.after(
+            600,
+            lambda: self._autosave_quiz_progress(window, quiz, state),
+        )
+
+    def _autosave_quiz_progress(self, window, quiz, state):
+        state["progress_after_id"] = None
+        if state["progress_pending"] or not window.winfo_exists():
+            return
+        self._capture_development_answer(quiz, state)
+        response_widget = state.get("response_widget")
+        if response_widget and response_widget.winfo_exists():
+            response_widget.configure(state="disabled")
+        state["progress_pending"] = True
+        worker = threading.Thread(
+            target=self._save_quiz_progress_worker,
+            args=(
+                window,
+                quiz,
+                state,
+                state["indice"],
+                dict(state["respuestas"]),
+                "autosave",
+            ),
+            daemon=True,
+        )
+        worker.start()
+
+    def _save_quiz_progress_worker(
+        self, window, quiz, state, target_index, respuestas, action
+    ):
+        try:
+            respuestas_guardadas = guardar_progreso_quiz(
+                quiz,
+                target_index,
+                respuestas,
+            )
+            self.event_queue.put(
+                (
+                    "quiz_progress_saved",
+                    (
+                        window,
+                        quiz,
+                        state,
+                        target_index,
+                        respuestas_guardadas,
+                        action,
+                    ),
+                )
+            )
+        except Exception as error:
+            self.event_queue.put(
+                ("quiz_progress_error", (window, quiz, state, str(error)))
+            )
+
+    def _handle_quiz_progress_saved(
+        self, window, quiz, state, target_index, respuestas, action
+    ):
+        if not window.winfo_exists():
+            return
+        state["progress_pending"] = False
+        state["respuestas"] = respuestas
+        if action == "autosave":
+            response_widget = state.get("response_widget")
+            if response_widget and response_widget.winfo_exists():
+                response_widget.configure(state="normal")
+            state["answer_error"] = ""
+            return
+        if action == "close":
+            window.destroy()
+            return
+        state["indice"] = target_index
+        self._render_quiz_page(window, quiz, state)
+
+    def _handle_quiz_progress_error(self, window, quiz, state, message):
+        if not window.winfo_exists():
+            return
+        state["progress_pending"] = False
+        state["answer_error"] = f"No se pudo guardar el avance: {message}"
+        response_widget = state.get("response_widget")
+        if response_widget and response_widget.winfo_exists():
+            response_widget.configure(state="normal")
         self._render_quiz_page(window, quiz, state)
 
     def _capture_development_answer(self, quiz, state):
         pagina = quiz["paginas"][state["indice"]]
-        widget = state.pop("response_widget", None)
+        widget = state.get("response_widget")
         if pagina["tipo"] == "desarrollo" and widget and widget.winfo_exists():
             answer = widget.get("1.0", "end").strip()
             if answer:
@@ -255,24 +449,18 @@ class QuizSection(_QuizDesktopHost):
             else:
                 state["respuestas"].pop(pagina["id"], None)
 
-    def _save_quiz_progress(self, quiz, state):
-        if not state["respuestas"]:
-            eliminar_intento(quiz["quiz_id"])
-            return
-        guardar_intento(
-            quiz,
-            state["indice"],
-            state["respuestas"],
-        )
-
     def _close_quiz_window(self, window, quiz, state):
+        if state["answer_pending"] or state["progress_pending"]:
+            return
+        self._cancel_quiz_progress_save(window, state)
         self._capture_development_answer(quiz, state)
-        self._save_quiz_progress(quiz, state)
-        window.destroy()
+        self._persist_quiz_progress(window, quiz, state, state["indice"], "close")
 
     def _finish_quiz(self, window, quiz, state):
+        if state["answer_pending"] or state["progress_pending"]:
+            return
+        self._cancel_quiz_progress_save(window, state)
         self._capture_development_answer(quiz, state)
-        self._save_quiz_progress(quiz, state)
         for child in window.winfo_children():
             child.destroy()
         tk.Label(
@@ -289,9 +477,14 @@ class QuizSection(_QuizDesktopHost):
         )
         worker.start()
 
+    def _cancel_quiz_progress_save(self, window, state):
+        after_id = state.pop("progress_after_id", None)
+        if after_id:
+            window.after_cancel(after_id)
+
     def _evaluate_quiz_worker(self, quiz, respuestas, window):
         try:
-            resultado = evaluar_quiz(self.chat.motor, quiz, respuestas)
+            resultado = self.chat.evaluar_quiz(quiz, respuestas)
             self.event_queue.put(("quiz_evaluated", (window, quiz, resultado)))
         except Exception as error:
             self.event_queue.put(("quiz_evaluation_error", (window, str(error))))
@@ -304,14 +497,21 @@ class QuizSection(_QuizDesktopHost):
         tk.Label(
             window,
             text=(
-                f"Puntaje alternativas: {resultado['puntaje']}%"
-                if resultado["puntaje"] is not None
-                else "Quiz sin preguntas de alternativa"
+                f"Resultado general: {resultado['porcentaje_total']}%"
             ),
             bg=COLORS["background"],
             fg=COLORS["green"],
             font=(FONT, 20, "bold"),
         ).pack(anchor="w", padx=24, pady=(22, 12))
+        tk.Label(
+            window,
+            text=resultado["feedback_final"],
+            bg=COLORS["background"],
+            fg=COLORS["text"],
+            font=(FONT, 10),
+            justify="left",
+            wraplength=680,
+        ).pack(anchor="w", padx=24, pady=(0, 12))
         if resultado["porcentaje_desarrollo"] is not None:
             tk.Label(
                 window,
@@ -350,7 +550,6 @@ class QuizSection(_QuizDesktopHost):
                 padx=14,
                 pady=10,
             ).pack(fill="x", pady=5)
-        eliminar_intento(quiz["quiz_id"])
         tk.Button(
             window,
             text="Cerrar",

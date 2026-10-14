@@ -23,6 +23,21 @@ class Conversacion:
         self._guardar_interaccion = guardar_interaccion
         self._sesion = AgentSession(motor, historial, registro_herramientas)
 
+    def evaluar_quiz(
+        self,
+        quiz: dict[str, Any],
+        respuestas: dict[str, str],
+    ) -> dict[str, Any]:
+        """Evalúa un quiz usando el historial actual como contexto del agente."""
+        from core.quizzes import evaluar_quiz
+
+        return evaluar_quiz(
+            self.motor,
+            quiz,
+            respuestas,
+            list(self.historial),
+        )
+
     def procesar_turno(
         self, usuario: str
     ) -> Iterator[tuple[str, Any]]:

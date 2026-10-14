@@ -234,6 +234,22 @@ class ChatLogic:
                     self._show_chat_quiz_error(*value)
                 elif event == "quiz_generated":
                     self._pending_chat_quizzes.append(value)
+                elif event == "chat_quiz_answer_evaluated":
+                    self._handle_chat_quiz_answer_result(*value)
+                elif event == "chat_quiz_answer_error":
+                    self._handle_chat_quiz_answer_error(*value)
+                elif event == "quiz_answer_evaluated":
+                    self._handle_quiz_answer_result(*value)
+                elif event == "quiz_answer_error":
+                    self._handle_quiz_answer_error(*value)
+                elif event == "quiz_progress_saved":
+                    self._handle_quiz_progress_saved(*value)
+                elif event == "quiz_progress_error":
+                    self._handle_quiz_progress_error(*value)
+                elif event == "chat_quiz_progress_saved":
+                    self._handle_chat_quiz_progress_saved(*value)
+                elif event == "chat_quiz_progress_error":
+                    self._handle_chat_quiz_progress_error(*value)
                 elif event == "quiz_evaluated":
                     self._show_quiz_results(*value)
                 elif event == "quiz_evaluation_error":

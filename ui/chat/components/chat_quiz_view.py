@@ -2,21 +2,49 @@
 
 import threading
 import tkinter as tk
+from typing import Any, Protocol
 
 from ...tema import COLORS, FONT
 from core.quizzes import (
-    QuizSession,
-    evaluar_quiz,
-    evaluar_respuesta_alternativa,
+    cargar_intento,
+    guardar_progreso_quiz,
+    seleccionar_respuesta_alternativa,
     validar_quiz,
 )
 
 
-class ChatQuizView:
+class _ChatQuizHost(Protocol):
+    chat: Any
+    event_queue: Any
+
+
+class ChatQuizView(_ChatQuizHost):
     def _render_chat_quiz(self, parent, quiz):
         quiz = validar_quiz(quiz)
-        session = QuizSession(quiz)
-        state = {"index": 0, "answers": {}, "evaluations": {}, "text": None}
+        try:
+            attempt = cargar_intento(quiz)
+        except (OSError, ValueError) as error:
+            tk.Label(
+                parent,
+                text=f"No se pudo cargar el avance del quiz: {error}",
+                bg=COLORS["surface_light"],
+                fg=COLORS["red"],
+                font=(FONT, 9),
+                wraplength=520,
+                justify="left",
+            ).pack(fill="x", padx=16, pady=(0, 16))
+            return None
+        state = {
+            "index": attempt["indice"] if attempt else 0,
+            "answers": attempt["respuestas"] if attempt else {},
+            "evaluations": attempt.get("evaluaciones", {}) if attempt else {},
+            "text": None,
+            "answer_pending": False,
+            "answer_error": "",
+            "progress_pending": False,
+            "progress_target": None,
+            "progress_after_id": None,
+        }
         shell = tk.Frame(
             parent,
             bg=COLORS["surface_light"],
@@ -50,16 +78,16 @@ class ChatQuizView:
 
         def save_development():
             page = quiz["paginas"][state["index"]]
-            text_widget = state.pop("text", None)
+            text_widget = state.get("text")
             if page["tipo"] == "desarrollo" and text_widget:
                 answer = text_widget.get("1.0", "end").strip()
                 if answer:
                     state["answers"][page["id"]] = answer
-                    session.guardar_respuesta_desarrollo(page["id"], answer)
                 else:
                     state["answers"].pop(page["id"], None)
 
         def draw_page():
+            state.pop("text", None)
             for child in content.winfo_children():
                 child.destroy()
             for child in footer.winfo_children():
@@ -77,14 +105,23 @@ class ChatQuizView:
                 justify="left",
             ).pack(anchor="w", pady=(8, 12))
             if page["tipo"] == "alternativa":
+                selected_letter = state["answers"].get(page["id"])
+                evaluation = state["evaluations"].get(page["id"])
                 for letter, option in page["alternativas"].items():
-                    selected = state["answers"].get(page["id"]) == letter
+                    selected = selected_letter == letter
+                    button_color = COLORS["background"]
+                    if selected and evaluation:
+                        button_color = COLORS[
+                            "green" if evaluation["correcta"] else "red"
+                        ]
+                    elif selected or state["answer_pending"]:
+                        button_color = COLORS["accent"]
                     button = tk.Button(
                         content,
                         text=f"{letter}    {option}",
                         anchor="w",
                         command=lambda key=letter: select_answer(key),
-                        bg=COLORS["accent"] if selected else COLORS["background"],
+                        bg=button_color,
                         fg=COLORS["text"],
                         activebackground=COLORS["accent_light"],
                         activeforeground="white",
@@ -93,16 +130,23 @@ class ChatQuizView:
                         pady=8,
                         font=(FONT, 9),
                         cursor="hand2",
+                        state=(
+                            "disabled"
+                            if (
+                                selected_letter
+                                or state["answer_pending"]
+                                or state["progress_pending"]
+                            )
+                            else "normal"
+                        ),
                     )
                     button.pack(fill="x", pady=3)
-                selected = state["answers"].get(page["id"])
-                if selected:
-                    evaluation = state["evaluations"].get(page["id"])
+                if selected_letter:
                     feedback_text = (
                         evaluation["retroalimentacion"] if evaluation else ""
                     )
                     feedback_color = COLORS[
-                        "green" if evaluation and evaluation["correcta"] else "yellow"
+                        "green" if evaluation and evaluation["correcta"] else "red"
                     ]
                     if feedback_text:
                         tk.Label(
@@ -129,12 +173,45 @@ class ChatQuizView:
                 )
                 text_widget.pack(fill="x")
                 text_widget.insert("1.0", state["answers"].get(page["id"], ""))
+                if state["progress_pending"]:
+                    text_widget.configure(state="disabled")
+                text_widget.bind(
+                    "<KeyRelease>",
+                    lambda _event: self._schedule_chat_quiz_progress_save(
+                        shell, quiz, state
+                    ),
+                )
                 state["text"] = text_widget
+            if state["answer_error"]:
+                tk.Label(
+                    content,
+                    text=state["answer_error"],
+                    bg=COLORS["surface_light"],
+                    fg=COLORS["red"],
+                    font=(FONT, 9),
+                    wraplength=520,
+                    justify="left",
+                ).pack(anchor="w", pady=(8, 2))
+            if state["progress_pending"]:
+                tk.Label(
+                    content,
+                    text="Guardando avance…",
+                    bg=COLORS["surface_light"],
+                    fg=COLORS["accent_light"],
+                    font=(FONT, 9),
+                ).pack(anchor="w", pady=(8, 2))
+            progress_locked = (
+                state["answer_pending"] or state["progress_pending"]
+            )
             previous = tk.Button(
                 footer,
                 text="Anterior",
                 command=lambda: move(-1),
-                state="normal" if index else "disabled",
+                state=(
+                    "normal"
+                    if index and not progress_locked
+                    else "disabled"
+                ),
                 bg=COLORS["background"],
                 fg=COLORS["text"],
                 relief="flat",
@@ -148,6 +225,7 @@ class ChatQuizView:
                 footer,
                 text="Finalizar" if last else "Siguiente",
                 command=finish if last else lambda: move(1),
+                state="disabled" if progress_locked else "normal",
                 bg=COLORS["accent"],
                 fg="white",
                 activebackground=COLORS["accent_light"],
@@ -158,18 +236,49 @@ class ChatQuizView:
             ).pack(side="right")
 
         def select_answer(letter):
+            if state["answer_pending"] or state["progress_pending"]:
+                return
             page = quiz["paginas"][state["index"]]
-            state["answers"][page["id"]] = letter
-            evaluation = evaluar_respuesta_alternativa(quiz, page["id"], letter)
-            state["evaluations"][page["id"]] = evaluation
+            if page["id"] in state["answers"]:
+                return
+            state["answer_pending"] = True
+            state["answer_error"] = ""
+            index = state["index"]
             draw_page()
+            worker = threading.Thread(
+                target=self._evaluate_chat_quiz_answer,
+                args=(shell, quiz, state, index, page["id"], letter),
+                daemon=True,
+            )
+            worker.start()
 
         def move(offset):
+            if state["answer_pending"] or state["progress_pending"]:
+                return
+            self._cancel_chat_quiz_progress_save(shell, state)
             save_development()
-            state["index"] += offset
+            target_index = state["index"] + offset
+            state["progress_pending"] = True
+            state["progress_target"] = target_index
             draw_page()
+            worker = threading.Thread(
+                target=self._save_chat_quiz_progress,
+                args=(
+                    shell,
+                    quiz,
+                    state,
+                    target_index,
+                    dict(state["answers"]),
+                    "move",
+                ),
+                daemon=True,
+            )
+            worker.start()
 
         def finish():
+            if state["answer_pending"] or state["progress_pending"]:
+                return
+            self._cancel_chat_quiz_progress_save(shell, state)
             save_development()
             for child in shell.winfo_children():
                 child.destroy()
@@ -191,13 +300,140 @@ class ChatQuizView:
 
         def evaluate():
             try:
-                result = evaluar_quiz(self.chat.motor, quiz, state["answers"])
+                result = self.chat.evaluar_quiz(quiz, state["answers"])
                 self.event_queue.put(("chat_quiz_evaluated", (shell, quiz, result)))
             except Exception as error:
                 self.event_queue.put(("chat_quiz_evaluation_error", (shell, str(error))))
 
+        state["draw_page"] = draw_page
         draw_page()
         return shell
+
+    def _save_chat_quiz_progress(
+        self, shell, quiz, state, target_index, answers, action
+    ):
+        try:
+            saved_answers = guardar_progreso_quiz(
+                quiz,
+                target_index,
+                answers,
+            )
+            self.event_queue.put(
+                (
+                    "chat_quiz_progress_saved",
+                    (shell, state, target_index, saved_answers, action),
+                )
+            )
+        except Exception as error:
+            self.event_queue.put(
+                ("chat_quiz_progress_error", (shell, state, str(error)))
+            )
+
+    def _handle_chat_quiz_progress_saved(
+        self, shell, state, target_index, answers, action
+    ):
+        if not shell.winfo_exists():
+            return
+        state["progress_pending"] = False
+        state["answers"] = answers
+        if action == "autosave":
+            text_widget = state.get("text")
+            if text_widget and text_widget.winfo_exists():
+                text_widget.configure(state="normal")
+            state["answer_error"] = ""
+            return
+        state["index"] = target_index
+        state["draw_page"]()
+
+    def _handle_chat_quiz_progress_error(self, shell, state, message):
+        if not shell.winfo_exists():
+            return
+        state["progress_pending"] = False
+        state["answer_error"] = f"No se pudo guardar el avance: {message}"
+        text_widget = state.get("text")
+        if text_widget and text_widget.winfo_exists():
+            text_widget.configure(state="normal")
+        state["draw_page"]()
+
+    def _schedule_chat_quiz_progress_save(self, shell, quiz, state):
+        if state["progress_pending"]:
+            return
+        previous_id = state.get("progress_after_id")
+        if previous_id:
+            shell.after_cancel(previous_id)
+        state["progress_after_id"] = shell.after(
+            600,
+            lambda: self._autosave_chat_quiz_progress(shell, quiz, state),
+        )
+
+    def _autosave_chat_quiz_progress(self, shell, quiz, state):
+        state["progress_after_id"] = None
+        if state["progress_pending"] or not shell.winfo_exists():
+            return
+        page = quiz["paginas"][state["index"]]
+        text_widget = state.get("text")
+        if page["tipo"] != "desarrollo" or not text_widget:
+            return
+        answer = text_widget.get("1.0", "end").strip()
+        if answer:
+            state["answers"][page["id"]] = answer
+        else:
+            state["answers"].pop(page["id"], None)
+        text_widget.configure(state="disabled")
+        state["progress_pending"] = True
+        worker = threading.Thread(
+            target=self._save_chat_quiz_progress,
+            args=(
+                shell,
+                quiz,
+                state,
+                state["index"],
+                dict(state["answers"]),
+                "autosave",
+            ),
+            daemon=True,
+        )
+        worker.start()
+
+    def _cancel_chat_quiz_progress_save(self, shell, state):
+        after_id = state.pop("progress_after_id", None)
+        if after_id:
+            shell.after_cancel(after_id)
+
+    def _evaluate_chat_quiz_answer(
+        self, shell, quiz, state, index, question_id, answer
+    ):
+        try:
+            result = seleccionar_respuesta_alternativa(
+                quiz,
+                index,
+                dict(state["answers"]),
+                question_id,
+                answer,
+            )
+            self.event_queue.put(
+                ("chat_quiz_answer_evaluated", (shell, quiz, state, result))
+            )
+        except Exception as error:
+            self.event_queue.put(
+                ("chat_quiz_answer_error", (shell, state, str(error)))
+            )
+
+    def _handle_chat_quiz_answer_result(self, shell, quiz, state, result):
+        if not shell.winfo_exists():
+            return
+        question_id = quiz["paginas"][state["index"]]["id"]
+        state["answers"] = result["respuestas"]
+        state["evaluations"][question_id] = result
+        state["answer_pending"] = False
+        state["draw_page"]()
+
+    def _handle_chat_quiz_answer_error(self, shell, state, message):
+        if not shell.winfo_exists():
+            return
+        state["answer_pending"] = False
+        state["answer_error"] = f"No se pudo guardar la respuesta: {message}"
+        state["draw_page"]()
 
     def _show_chat_quiz_results(self, shell, quiz, result):
         if not shell.winfo_exists():
@@ -206,15 +442,20 @@ class ChatQuizView:
             child.destroy()
         tk.Label(
             shell,
-            text=(
-                f"Puntaje alternativas: {result['puntaje']}%"
-                if result["puntaje"] is not None
-                else "Quiz sin preguntas de alternativa"
-            ),
+            text=f"Resultado general: {result['porcentaje_total']}%",
             bg=COLORS["surface_light"],
             fg=COLORS["green"],
             font=(FONT, 11, "bold"),
         ).pack(anchor="w", padx=14, pady=(12, 8))
+        tk.Label(
+            shell,
+            text=result["feedback_final"],
+            bg=COLORS["surface_light"],
+            fg=COLORS["text"],
+            font=(FONT, 9),
+            wraplength=520,
+            justify="left",
+        ).pack(fill="x", anchor="w", padx=14, pady=(0, 8))
         if result["porcentaje_desarrollo"] is not None:
             tk.Label(
                 shell,

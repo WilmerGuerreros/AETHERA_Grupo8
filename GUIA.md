@@ -19,9 +19,10 @@
 
 ## Paquete `core/`
 
+- `core/conversation.py`: coordina los turnos conversacionales y ofrece el historial actual a Core al solicitar la evaluación final de un quiz.
 - `core/workload.py`: agrupación semanal y cálculo del riesgo de sobrecarga.
 - `core/calendar.py`: validación, filtrado, creación y eliminación de eventos.
-- `core/quizzes.py`: construcción, validación y corrección de quizzes e intentos; usa Data para persistirlos.
+- `core/quizzes.py`: construcción, validación y corrección de quizzes e intentos; procesa y persiste las selecciones de alternativas, y coordina la evaluación final con Agent.
 - `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
 - `core/documents.py`: delega en Data la lectura de documentos adjuntos.
 - `core/services.py`: selección de servicios por categoría y distrito.
@@ -32,7 +33,7 @@
 - `agent/llm.py`: acceso al cliente Ollama.
 - `agent/prompts.py`: prompts estáticos separados de la lógica de ejecución.
 - `agent/session.py`: ciclo conversacional y llamadas a herramientas, sin dependencias de UI.
-- `agent/quiz_evaluation.py`: petición al LLM y validación de evaluaciones de respuestas abiertas.
+- `agent/quiz_evaluation.py`: envía las preguntas de desarrollo y el historial al LLM, valida los porcentajes asignados y genera la retroalimentación final.
 - `agent/memory_summary.py`: generación de texto de resumen con el LLM; el almacenamiento permanece en Data.
 
 ### `agent/tools/` (adaptadores finos hacia `core/`)
@@ -41,7 +42,7 @@
 - `agent/tools/__init__.py`: registro único de herramientas invocables.
 - `agent/tools/buscar_eventos.py`: adaptador a la consulta de calendario.
 - `agent/tools/crear_evento.py`: adaptador a creación de eventos personales.
-- `agent/tools/crear_quiz.py`: adaptador a construcción y almacenamiento de quices.
+- `agent/tools/crear_quiz.py`: adaptador a construcción y almacenamiento de quices; las preguntas de alternativas incluyen una explicación de la respuesta correcta para la retroalimentación.
 - `agent/tools/evaluar_carga_academica.py`: adaptador a `core/workload`.
 - `agent/tools/servicios_ayuda.py`: adaptador a `core/services`.
 - `agent/tools/web.py`: adaptador a `core/web_search`.
@@ -57,7 +58,7 @@
 - `ui/utilidades.py`: análisis de Markdown para presentar mensajes del chat.
 - `ui/calendario/`: orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos); las reglas están en `core/calendar.py`.
 - `ui/chat/`: coordinación de la vista (`chat_view.py`), lógica (`logica.py`) y componentes (`components/`: encabezado, historial, entrada y quiz).
-- `ui/quiz/`: presentación de quizzes e intentos; las reglas y la evaluación se delegan a Core.
+- `ui/quiz/`: presentación de quizzes e intentos; las selecciones y evaluaciones se delegan a Core mediante eventos.
 
 ## Datos persistentes
 
@@ -65,7 +66,7 @@ Todos los datos escribibles viven bajo la raíz única que devuelve `app_paths.a
 
 - `data/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
 - `data/calendario.ics` — calendario personal editable.
-- `data/quices/` — quices generados en JSON (UTF-8).
+- `data/quices/` — quices generados en JSON (UTF-8); el campo `avance` del mismo archivo guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`.
 
 En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo. `data.paths.migrar_datos_heredados()` mueve automáticamente los datos de versiones anteriores.
 

@@ -32,11 +32,26 @@ QUIZ_EVALUATION_SYSTEM_PROMPT = (
 )
 
 QUIZ_EVALUATION_USER_PROMPT = (
-    "Evalúa las respuestas de desarrollo de un quiz educativo. Para cada "
+    "Evalúa todas las preguntas de desarrollo de un quiz educativo, incluso "
+    "si la respuesta del estudiante está vacía; en ese caso asigna 0. Para cada "
     "respuesta asigna porcentaje de acierto de 0 a 100 según la guía y "
     "respuesta sugerida. Considera respuestas equivalentes aunque tengan "
     "otra redacción. Devuelve exclusivamente JSON válido con la forma "
     '{"evaluaciones":[{"pregunta_id":"...","porcentaje":0,'
     '"retroalimentacion":"..."}]}. Incluye cada pregunta exactamente una vez.\n\n'
     "{quiz_payload}"
+)
+
+QUIZ_RESULTS_FEEDBACK_SYSTEM_PROMPT = (
+    "Eres un tutor académico. Da una retroalimentación breve, constructiva y "
+    "personalizada sobre los resultados del quiz. No inventes respuestas ni "
+    "resultados; reconoce los aciertos y ofrece una sugerencia concreta para "
+    "mejorar."
+)
+
+QUIZ_RESULTS_FEEDBACK_USER_PROMPT = (
+    "Usa el historial de conversación como contexto y comenta los resultados "
+    "de este quiz en un mensaje directo para el estudiante. Incluye sus "
+    "fortalezas y un siguiente paso útil, sin repetir el JSON ni limitarte a "
+    "enumerar porcentajes.\n\n{results_payload}"
 )
