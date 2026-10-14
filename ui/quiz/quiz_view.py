@@ -484,7 +484,13 @@ class QuizSection(_QuizDesktopHost):
 
     def _evaluate_quiz_worker(self, quiz, respuestas, window):
         try:
-            resultado = self.chat.evaluar_quiz(quiz, respuestas)
+            # Determinar origen: barra_lateral es el flujo actual
+            resultado = self.chat.finalizar_quiz(
+                quiz,
+                respuestas,
+                origen="barra_lateral",
+            )
+            # Adaptar a estructura esperada por UI
             self.event_queue.put(("quiz_evaluated", (window, quiz, resultado)))
         except Exception as error:
             self.event_queue.put(("quiz_evaluation_error", (window, str(error))))
@@ -494,25 +500,37 @@ class QuizSection(_QuizDesktopHost):
             return
         for child in window.winfo_children():
             child.destroy()
+        # Adaptar resultado a diferentes formatos
+        if "puntaje_total" in resultado and "porcentaje_total" not in resultado:
+            try:
+                total_preguntas = len(quiz["paginas"])
+                resultado["porcentaje_total"] = round((float(resultado["puntaje_total"]) / total_preguntas) * 100) if total_preguntas else 0
+            except Exception:
+                resultado["porcentaje_total"] = 0
+        if "detalle_evaluaciones" in resultado and "retroalimentacion" not in resultado:
+            resultado["retroalimentacion"] = resultado["detalle_evaluaciones"]
         tk.Label(
             window,
             text=(
-                f"Resultado general: {resultado['porcentaje_total']}%"
+                f"Resultado general: {resultado.get('porcentaje_total', round(resultado.get('puntaje_total', 0)*100) if isinstance(resultado.get('puntaje_total'), (int,float)) and resultado.get('puntaje_total') <= 1 else resultado.get('puntaje_total', 0))}%"
+                if "porcentaje_total" in resultado
+                else f"Puntaje total: {resultado.get('puntaje_total', 0)}"
             ),
             bg=COLORS["background"],
             fg=COLORS["green"],
             font=(FONT, 20, "bold"),
         ).pack(anchor="w", padx=24, pady=(22, 12))
-        tk.Label(
-            window,
-            text=resultado["feedback_final"],
-            bg=COLORS["background"],
-            fg=COLORS["text"],
-            font=(FONT, 10),
-            justify="left",
-            wraplength=680,
-        ).pack(anchor="w", padx=24, pady=(0, 12))
-        if resultado["porcentaje_desarrollo"] is not None:
+        if resultado.get("feedback_final") or resultado.get("feedback_general"):
+            tk.Label(
+                window,
+                text=resultado.get("feedback_final") or resultado.get("feedback_general", ""),
+                bg=COLORS["background"],
+                fg=COLORS["text"],
+                font=(FONT, 10),
+                justify="left",
+                wraplength=680,
+            ).pack(anchor="w", padx=24, pady=(0, 12))
+        if resultado.get("porcentaje_desarrollo") is not None:
             tk.Label(
                 window,
                 text=(
@@ -525,20 +543,27 @@ class QuizSection(_QuizDesktopHost):
             ).pack(anchor="w", padx=24, pady=(0, 10))
         frame = tk.Frame(window, bg=COLORS["background"])
         frame.pack(fill="both", expand=True, padx=24)
-        for feedback in resultado["retroalimentacion"]:
+        for feedback in resultado.get("retroalimentacion", []):
             page = next(
-                page for page in quiz["paginas"]
-                if page["id"] == feedback["pregunta_id"]
+                (p for p in quiz["paginas"] if p["id"] == feedback["pregunta_id"]),
+                None,
             )
-            line = (
-                f"{page['pregunta']}\n"
-                + (
+            if page is None:
+                continue
+            line_parts = [page["pregunta"]]
+            if "correcta" in feedback:
+                line_parts.append(
                     f"{'Correcta' if feedback['correcta'] else 'Incorrecta'} · "
-                    if "correcta" in feedback
-                    else f"{feedback['porcentaje']}% de acierto · "
                 )
-                + feedback["retroalimentacion"]
-            )
+            elif "porcentaje" in feedback:
+                line_parts.append(f"{feedback['porcentaje']}% de acierto · ")
+            elif "puntaje_normalizado" in feedback:
+                line_parts.append(f"{round(float(feedback['puntaje_normalizado'])*100)}% de acierto · ")
+            if "retroalimentacion" in feedback:
+                line_parts.append(feedback["retroalimentacion"])
+            if "feedback_especifico" in feedback:
+                line_parts.append(feedback["feedback_especifico"])
+            line = " ".join(p for p in line_parts if p)
             tk.Label(
                 frame,
                 text=line,

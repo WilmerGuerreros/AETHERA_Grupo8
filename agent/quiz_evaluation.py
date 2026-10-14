@@ -42,22 +42,30 @@ def evaluar_respuestas_desarrollo(
         if not isinstance(evaluacion, dict):
             raise ValueError("El modelo devolvió una evaluación con formato inválido.")
         pregunta_id = evaluacion.get("pregunta_id")
-        porcentaje = evaluacion.get("porcentaje")
-        feedback = evaluacion.get("retroalimentacion")
+        puntaje_normalizado = evaluacion.get("puntaje_normalizado")
+        if puntaje_normalizado is None and "porcentaje" in evaluacion:
+            porcentaje = evaluacion.get("porcentaje")
+            if isinstance(porcentaje, (int, float)) and not isinstance(porcentaje, bool):
+                puntaje_normalizado = float(porcentaje) / 100.0
+        feedback_especifico = evaluacion.get("feedback_especifico") or evaluacion.get(
+            "retroalimentacion"
+        )
         if (
             pregunta_id not in expected_ids
-            or not isinstance(porcentaje, (int, float))
-            or isinstance(porcentaje, bool)
-            or not 0 <= porcentaje <= 100
-            or not isinstance(feedback, str)
-            or not feedback.strip()
+            or not isinstance(puntaje_normalizado, (int, float))
+            or isinstance(puntaje_normalizado, bool)
+            or not 0.0 <= float(puntaje_normalizado) <= 1.0
+            or not isinstance(feedback_especifico, str)
+            or not feedback_especifico.strip()
             or pregunta_id in evaluaciones_por_id
         ):
             raise ValueError("El modelo devolvió una evaluación inválida.")
         evaluaciones_por_id[pregunta_id] = {
             "pregunta_id": pregunta_id,
-            "porcentaje": round(porcentaje),
-            "retroalimentacion": feedback.strip(),
+            "puntaje_normalizado": float(puntaje_normalizado),
+            "feedback_especifico": feedback_especifico.strip(),
+            "porcentaje": int(round(float(puntaje_normalizado) * 100)),
+            "retroalimentacion": feedback_especifico.strip(),
         }
     if set(evaluaciones_por_id) != expected_ids:
         raise ValueError("El modelo no evaluó todas las respuestas de desarrollo.")

@@ -328,6 +328,11 @@ class ChatHistory:
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
     def _render_chat_history(self):
+        self._active_chat_quiz_sessions = [
+            session
+            for session in getattr(self, "_active_chat_quiz_sessions", [])
+            if session[0].winfo_exists()
+        ]
         transcript = self._card(self.content)
         transcript.pack(fill="both", expand=True)
         canvas = tk.Canvas(transcript, bg=COLORS["background"], highlightthickness=0)

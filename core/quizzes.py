@@ -14,6 +14,7 @@ from data.quizzes import (
     eliminar_intento_quiz as eliminar_intento_persistido,
     guardar_intento_quiz,
     guardar_quiz_json,
+    guardar_resultado_quiz,
     leer_intento_quiz,
     leer_quiz_json,
     listar_archivos_quiz,
@@ -510,6 +511,76 @@ def evaluar_quiz(
         resultado,
     )
     eliminar_intento(quiz["quiz_id"], directorio_intentos)
+    return resultado
+
+
+def finalizar_quiz(
+    quiz_id: str | dict[str, Any],
+    respuestas_usuario: dict[str, str] | None = None,
+    origen: str = "barra_lateral",
+    quiz: dict[str, Any] | None = None,
+    motor: Any | None = None,
+    historial_chat: list[dict[str, Any]] | None = None,
+    directorio_intentos: Path | str | None = None,
+    agent_session: Any | None = None,
+) -> dict[str, Any]:
+    """Finaliza un quiz y devuelve el resultado listo para la UI.
+
+    Corrige las alternativas, envía en segundo plano las respuestas de
+    desarrollo al modelo para que sean evaluadas, persiste el resultado final
+    en Data e inyecta el resultado como contexto silencioso del agente cuando
+    el quiz proviene del chat.
+    """
+    if quiz is not None:
+        quiz_obj = validar_quiz(quiz)
+    elif isinstance(quiz_id, dict):
+        quiz_obj = validar_quiz(quiz_id)
+    else:
+        manager = QuizManager(
+            Path(directorio_intentos) if directorio_intentos else DIRECTORIO_QUICES
+        )
+        quiz_obj = manager.cargar(quiz_id)
+
+    if motor is None:
+        raise ValueError("Se requiere un motor para evaluar el quiz.")
+
+    resultado = evaluar_quiz(
+        motor,
+        quiz_obj,
+        dict(respuestas_usuario or {}),
+        historial_chat,
+        directorio_intentos,
+    )
+
+    # Persistir el resultado final como metadato interno del quiz. Si el
+    # guardado falla, igual se devuelve el resultado a la UI.
+    try:
+        guardar_resultado_quiz(
+            quiz_obj["quiz_id"],
+            resultado.get("porcentaje_total", 0),
+            resultado.get("retroalimentacion", []),
+            directorio_intentos,
+        )
+    except (OSError, ValueError):
+        logging.exception("No se pudo guardar el resultado final del quiz.")
+
+    # Compatibilidad con la estructura que consume la UI.
+    resultado.setdefault("feedback_general", resultado.get("feedback_final", ""))
+    resultado["puntaje_total"] = resultado.get("porcentaje_total", 0)
+    resultado["detalle_evaluaciones"] = resultado.get("retroalimentacion", [])
+
+    # Solo el chat inyecta el resultado como contexto silencioso del agente.
+    if origen == "chat" and agent_session is not None:
+        try:
+            mensaje = (
+                f"[QUIZ] {quiz_obj['quiz_titulo']} - Resultado: "
+                f"{resultado.get('porcentaje_total', 0)}%"
+            )
+            if hasattr(agent_session, "agregar_contexto"):
+                agent_session.agregar_contexto(mensaje)
+        except Exception:
+            logging.exception("No se pudo inyectar el resultado del quiz al agente.")
+
     return resultado
 
 

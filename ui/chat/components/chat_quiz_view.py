@@ -44,6 +44,7 @@ class ChatQuizView(_ChatQuizHost):
             "progress_pending": False,
             "progress_target": None,
             "progress_after_id": None,
+            "progress_dirty": False,
         }
         shell = tk.Frame(
             parent,
@@ -51,6 +52,9 @@ class ChatQuizView(_ChatQuizHost):
             highlightbackground=COLORS["border"],
             highlightthickness=1,
         )
+        sessions = getattr(self, "_active_chat_quiz_sessions", [])
+        sessions.append((shell, quiz, state))
+        self._active_chat_quiz_sessions = sessions
         shell.pack(fill="x", padx=16, pady=(0, 16))
         header = tk.Frame(shell, bg=COLORS["surface_light"])
         header.pack(fill="x", padx=14, pady=(12, 8))
@@ -79,12 +83,17 @@ class ChatQuizView(_ChatQuizHost):
         def save_development():
             page = quiz["paginas"][state["index"]]
             text_widget = state.get("text")
-            if page["tipo"] == "desarrollo" and text_widget:
+            if (
+                page["tipo"] == "desarrollo"
+                and text_widget
+                and text_widget.winfo_exists()
+            ):
                 answer = text_widget.get("1.0", "end").strip()
                 if answer:
                     state["answers"][page["id"]] = answer
                 else:
                     state["answers"].pop(page["id"], None)
+                state["progress_dirty"] = True
 
         def draw_page():
             state.pop("text", None)
@@ -300,7 +309,11 @@ class ChatQuizView(_ChatQuizHost):
 
         def evaluate():
             try:
-                result = self.chat.evaluar_quiz(quiz, state["answers"])
+                result = self.chat.finalizar_quiz(
+                    quiz,
+                    state["answers"],
+                    origen="chat",
+                )
                 self.event_queue.put(("chat_quiz_evaluated", (shell, quiz, result)))
             except Exception as error:
                 self.event_queue.put(("chat_quiz_evaluation_error", (shell, str(error))))
@@ -335,6 +348,8 @@ class ChatQuizView(_ChatQuizHost):
         if not shell.winfo_exists():
             return
         state["progress_pending"] = False
+        state["progress_target"] = None
+        state["progress_dirty"] = False
         state["answers"] = answers
         if action == "autosave":
             text_widget = state.get("text")
@@ -358,6 +373,7 @@ class ChatQuizView(_ChatQuizHost):
     def _schedule_chat_quiz_progress_save(self, shell, quiz, state):
         if state["progress_pending"]:
             return
+        state["progress_dirty"] = True
         previous_id = state.get("progress_after_id")
         if previous_id:
             shell.after_cancel(previous_id)
@@ -400,6 +416,57 @@ class ChatQuizView(_ChatQuizHost):
         if after_id:
             shell.after_cancel(after_id)
 
+    def _flush_chat_quiz_progress_before_navigation(self):
+        """Persists dirty chat quiz drafts before their widgets are destroyed."""
+        sessions = getattr(self, "_active_chat_quiz_sessions", [])
+        active_sessions = []
+        for shell, quiz, state in sessions:
+            if not shell.winfo_exists():
+                continue
+            active_sessions.append((shell, quiz, state))
+            self._cancel_chat_quiz_progress_save(shell, state)
+            if state["answer_pending"]:
+                continue
+            if not state["progress_dirty"] and not state["progress_pending"]:
+                continue
+
+            page = quiz["paginas"][state["index"]]
+            text_widget = state.get("text")
+            if (
+                page["tipo"] == "desarrollo"
+                and text_widget
+                and text_widget.winfo_exists()
+            ):
+                answer = text_widget.get("1.0", "end").strip()
+                if answer:
+                    state["answers"][page["id"]] = answer
+                else:
+                    state["answers"].pop(page["id"], None)
+
+            target_index = state["index"]
+            if state["progress_pending"] and state["progress_target"] is not None:
+                target_index = state["progress_target"]
+            try:
+                state["answers"] = guardar_progreso_quiz(
+                    quiz,
+                    target_index,
+                    state["answers"],
+                )
+            except Exception as error:
+                state["progress_pending"] = False
+                state["progress_target"] = None
+                state["answer_error"] = f"No se pudo guardar el avance: {error}"
+                state["draw_page"]()
+                self._active_chat_quiz_sessions = active_sessions
+                return False
+
+            state["progress_pending"] = False
+            state["progress_target"] = None
+            state["progress_dirty"] = False
+
+        self._active_chat_quiz_sessions = active_sessions
+        return True
+
     def _evaluate_chat_quiz_answer(
         self, shell, quiz, state, index, question_id, answer
     ):
@@ -440,23 +507,33 @@ class ChatQuizView(_ChatQuizHost):
             return
         for child in shell.winfo_children():
             child.destroy()
+        if "detalle_evaluaciones" in result and "retroalimentacion" not in result:
+            result["retroalimentacion"] = result["detalle_evaluaciones"]
+        if "puntaje_total" in result:
+            total_preguntas = len(quiz["paginas"])
+            if "porcentaje_total" not in result:
+                try:
+                    result["porcentaje_total"] = round((float(result["puntaje_total"]) / total_preguntas) * 100) if total_preguntas else 0
+                except Exception:
+                    result["porcentaje_total"] = result["puntaje_total"]
         tk.Label(
             shell,
-            text=f"Resultado general: {result['porcentaje_total']}%",
+            text=f"Resultado general: {result.get('porcentaje_total', result.get('puntaje_total', 0))}%",
             bg=COLORS["surface_light"],
             fg=COLORS["green"],
             font=(FONT, 11, "bold"),
         ).pack(anchor="w", padx=14, pady=(12, 8))
-        tk.Label(
-            shell,
-            text=result["feedback_final"],
-            bg=COLORS["surface_light"],
-            fg=COLORS["text"],
-            font=(FONT, 9),
-            wraplength=520,
-            justify="left",
-        ).pack(fill="x", anchor="w", padx=14, pady=(0, 8))
-        if result["porcentaje_desarrollo"] is not None:
+        if result.get("feedback_final") or result.get("feedback_general"):
+            tk.Label(
+                shell,
+                text=result.get("feedback_final") or result.get("feedback_general", ""),
+                bg=COLORS["surface_light"],
+                fg=COLORS["text"],
+                font=(FONT, 9),
+                wraplength=520,
+                justify="left",
+            ).pack(fill="x", anchor="w", padx=14, pady=(0, 8))
+        if result.get("porcentaje_desarrollo") is not None:
             tk.Label(
                 shell,
                 text=(
@@ -468,14 +545,22 @@ class ChatQuizView(_ChatQuizHost):
                 font=(FONT, 9, "bold"),
             ).pack(anchor="w", padx=14, pady=(0, 8))
         pages = {page["id"]: page for page in quiz["paginas"]}
-        for item in result["retroalimentacion"]:
-            label = (
-                "Correcta" if item.get("correcta") else "Incorrecta"
-            ) if "correcta" in item else f"{item['porcentaje']}% de acierto"
+        for item in result.get("retroalimentacion", []):
+            page = pages.get(item["pregunta_id"])
+            if page is None:
+                continue
+            if "correcta" in item:
+                label = "Correcta" if item.get("correcta") else "Incorrecta"
+            elif "porcentaje" in item:
+                label = f"{item['porcentaje']}% de acierto"
+            elif "puntaje_normalizado" in item:
+                label = f"{round(float(item['puntaje_normalizado'])*100)}% de acierto"
+            else:
+                label = ""
+            feedback_text = item.get("retroalimentacion") or item.get("feedback_especifico") or ""
             tk.Label(
                 shell,
-                text=f"{pages[item['pregunta_id']]['pregunta']}\n{label} · "
-                f"{item['retroalimentacion']}",
+                text=f"{page['pregunta']}\n{label} · {feedback_text}",
                 bg=COLORS["surface_light"],
                 fg=COLORS["text"],
                 font=(FONT, 9),

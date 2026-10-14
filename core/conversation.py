@@ -38,6 +38,30 @@ class Conversacion:
             list(self.historial),
         )
 
+    def finalizar_quiz(
+        self,
+        quiz: dict[str, Any],
+        respuestas: dict[str, str],
+        origen: str = "chat",
+    ) -> dict[str, Any]:
+        """Corrige un quiz y guarda su resultado usando el motor de la sesión.
+
+        Las respuestas de desarrollo se envían al modelo para su evaluación y,
+        cuando el quiz viene del chat, el resultado se agrega al historial como
+        contexto silencioso.
+        """
+        from core.quizzes import finalizar_quiz as finalizar_quiz_core
+
+        return finalizar_quiz_core(
+            quiz_id=quiz,
+            respuestas_usuario=respuestas,
+            origen=origen,
+            quiz=quiz,
+            motor=self.motor,
+            historial_chat=self.historial,
+            agent_session=self._sesion,
+        )
+
     def procesar_turno(
         self, usuario: str
     ) -> Iterator[tuple[str, Any]]:

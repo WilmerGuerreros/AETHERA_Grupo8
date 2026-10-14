@@ -22,6 +22,12 @@ class AgentSession:
         self.historial.append({"role": "user", "content": usuario})
         yield from self._procesar_respuesta(usuario)
 
+    def agregar_contexto(self, mensaje: str) -> None:
+        """Agrega un mensaje silencioso al historial del agente."""
+        self.historial.append(
+            {"role": "system", "content": mensaje, "silent": True}
+        )
+
     def _procesar_respuesta(
         self,
         usuario: str,

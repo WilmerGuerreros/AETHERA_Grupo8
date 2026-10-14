@@ -424,6 +424,12 @@ class AetheraDesktopApp(
                 current = getattr(current, "master", None)
 
     def show_page(self, page):
+        if (
+            self.current_page == "Asistente IA"
+            and page != "Asistente IA"
+            and not self._flush_chat_quiz_progress_before_navigation()
+        ):
+            return
         if self.current_page == "Asistente IA" and page != "Asistente IA":
             for attribute in ("stream_bubble", "stream_text", "stream_content"):
                 if hasattr(self, attribute):

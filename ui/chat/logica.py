@@ -3,6 +3,7 @@
 import queue
 import os
 import re
+import logging
 import threading
 from datetime import datetime
 
@@ -183,27 +184,38 @@ class ChatLogic:
     def _run_chat_turn(self, text):
         try:
             history_start = len(self.chat.historial)
-            quizzes_before = {
-                quiz["quiz_id"] for quiz in listar_quices()
-            }
+            quizzes_before = {quiz["quiz_id"] for quiz in self._listar_quices_seguro()}
             for event_type, value in self.chat.procesar_turno(text):
                 if event_type == "token":
                     self.event_queue.put(("token", value))
                 elif event_type == "status":
                     self.event_queue.put(("status", value))
-            quizzes_after = listar_quices()
-            for quiz in quizzes_after:
+            # Un mismo quiz puede detectarse por el archivo persistido y por el
+            # resultado de la herramienta; se deduplica por id para no
+            # mostrarlo dos veces en el chat.
+            quizzes_generados = {}
+            for quiz in self._listar_quices_seguro():
                 if quiz["quiz_id"] not in quizzes_before:
-                    self.event_queue.put(("quiz_generated", quiz))
+                    quizzes_generados[quiz["quiz_id"]] = quiz
             for message in self.chat.historial[history_start:]:
                 if message.get("role") != "tool" or message.get("name") != "crear_quiz":
                     continue
                 quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
                 if quiz is not None:
-                    self.event_queue.put(("quiz_generated", quiz))
+                    quizzes_generados.setdefault(quiz["quiz_id"], quiz)
+            for quiz in quizzes_generados.values():
+                self.event_queue.put(("quiz_generated", quiz))
             self.event_queue.put(("complete", None))
         except Exception as error:
             self.event_queue.put(("error", str(error)))
+
+    def _listar_quices_seguro(self):
+        """Lista los quizzes sin que un archivo dañado rompa el chat."""
+        try:
+            return listar_quices()
+        except (OSError, ValueError):
+            logging.exception("No se pudieron listar los quizzes guardados.")
+            return []
 
     def _process_queue(self):
         try:

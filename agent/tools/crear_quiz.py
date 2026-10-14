@@ -2,23 +2,25 @@
 
 from typing import Any
 
-from core.quizzes import crear_y_guardar_quiz
+from core.quizzes import crear_quiz as construir_quiz
+from core.quizzes import guardar_quiz
 
 
 def crear_quiz(title: str, pages: list[list[Any]]) -> str:
-    """Crea un quiz; incluye una explicación para la respuesta correcta.
+    """Create a quiz and return its data to enable restoring it from the history.
 
-    Args:
-        title: Título del quiz.
-        pages: Lista ordenada de preguntas. Cada pregunta usa uno de estos formatos:
-            - Alternativas: ['alternative', pregunta, [opciones...],
-              texto_respuesta_correcta, explicación_de_por_qué_es_correcta].
-              La explicación debe ser clara y específica; se mostrará como
-              retroalimentación cuando el estudiante responda.
-            - Desarrollo: ['develope', pregunta, guia_orientativa, palabras_clave_rubrica]
-    """
+Args:
+    title: Quiz title.
+    pages: Ordered list of questions. Each question uses one of these formats:
+        - Multiple Choice: ['alternative', question, [options...],
+          correct_answer_text, explanation_of_why_it_is_correct].
+          The explanation must be clear and specific; it will be shown as
+          feedback when the student answers.
+        - Open-ended / Development: ['develope', question, guiding_guidelines, rubric_keywords]
+"""
     try:
-        crear_y_guardar_quiz(title, pages)
-        return "Quiz creado y guardado correctamente."
+        quiz = construir_quiz(title, pages)
+        guardar_quiz(quiz)
+        return repr({"quiz_data": quiz})
     except (ValueError, OSError) as error:
         return f"No se pudo crear el quiz: {error}"

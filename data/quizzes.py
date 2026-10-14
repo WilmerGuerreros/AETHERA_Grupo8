@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 
 
+# Metadatos internos que la aplicación agrega al archivo del quiz. No forman
+# parte del esquema validable, así que se ocultan al leerlos para no romper la
+# validación de ``core.quizzes.validar_quiz``.
+_METADATOS_INTERNOS = ("avance", "resultado_final")
+
+
 def guardar_quiz_json(
     directorio: Path, quiz: dict[str, Any]
 ) -> Path:
@@ -48,11 +54,12 @@ def listar_archivos_quiz(directorio: Path) -> list[Path]:
 
 
 def leer_quiz_json(ruta: Path) -> Any:
-    """Lee un quiz y oculta los metadatos de avance locales."""
+    """Lee un quiz y oculta los metadatos de avance y resultado locales."""
     with ruta.open("r", encoding="utf-8") as archivo:
         quiz = json.load(archivo)
     if isinstance(quiz, dict):
-        quiz.pop("avance", None)
+        for clave in _METADATOS_INTERNOS:
+            quiz.pop(clave, None)
     return quiz
 
 
@@ -173,7 +180,35 @@ def _eliminar_intento_heredado(carpeta: Path, quiz_id: str) -> None:
         pass
 
 
-def _reemplazar_json(ruta: Path, datos: dict[str, Any]) -> None:
+def guardar_resultado_quiz(
+    quiz_id: str,
+    puntaje_total: float | int,
+    detalle_evaluaciones: list[dict[str, Any]] | dict[str, Any],
+    carpeta: Path | None = None,
+) -> Path:
+    """Guarda el resultado final de un quiz en el JSON del usuario."""
+    from data.paths import quizzes_directory
+
+    carpeta = Path(carpeta) if carpeta else quizzes_directory()
+    ruta = carpeta / f"{quiz_id}.json"
+    try:
+        with ruta.open("r", encoding="utf-8") as archivo:
+            quiz = json.load(archivo)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"No existe el quiz '{quiz_id}'.")
+    if not isinstance(quiz, dict) or quiz.get("quiz_id") != quiz_id:
+        raise ValueError(f"El archivo del quiz '{quiz_id}' no es válido.")
+
+    resultado = {
+        "puntaje_total": puntaje_total,
+        "detalle_evaluaciones": detalle_evaluaciones,
+    }
+    quiz["resultado_final"] = resultado
+
+    return _reemplazar_json(ruta, quiz)
+
+
+def _reemplazar_json(ruta: Path, datos: dict[str, Any]) -> Path:
     temporal = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -191,9 +226,11 @@ def _reemplazar_json(ruta: Path, datos: dict[str, Any]) -> None:
             archivo.flush()
             os.fsync(archivo.fileno())
         os.replace(temporal, ruta)
-    finally:
+    except Exception:
         if temporal and os.path.exists(temporal):
             try:
                 os.unlink(temporal)
             except OSError:
                 logging.exception("No se pudo limpiar el archivo temporal del quiz.")
+        raise
+    return ruta
