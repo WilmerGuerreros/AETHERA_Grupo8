@@ -8,6 +8,8 @@ from datetime import date, timedelta
 from tkinter import ttk
 
 from core.conversation import Conversacion
+from .estado.chat import ChatStore
+from .estado.tareas import CORRIENDO, PENDIENTE, TaskManager
 from .tema import COLORS, FONT
 from .tk_env import configure_tk_environment
 from .widgets import RoundedButton, RoundedFrame, mezclar_color
@@ -47,6 +49,11 @@ class AetheraDesktopApp(
         self.root.bind("<F11>", self._toggle_fullscreen)
         self.root.bind("<Escape>", self._exit_fullscreen)
         self.event_queue = queue.Queue()
+        self._process_after_id = None
+        self.tasks = TaskManager(
+            emit=lambda evento, valor=None: self.event_queue.put((evento, valor))
+        )
+        self._tareas_estado = {}
         self._emoji_images = {}
         self._emoji_font = None
         self._scroll_animations = {}
@@ -71,7 +78,6 @@ class AetheraDesktopApp(
         self._nav_indicator_progress = {}
         self.root.bind_all("<MouseWheel>", self._handle_mousewheel)
         self.current_page = "Inicio"
-        self.busy = False
 
         self.chat = Conversacion(
             motor,
@@ -79,11 +85,13 @@ class AetheraDesktopApp(
             herramientas,
             guardar_interaccion=guardar_interaccion,
         )
+        # Estado de presentación que sobrevive a la navegación entre secciones.
+        self.chat_store = ChatStore(self.chat.historial)
 
         self._configure_styles()
         self._build_shell()
         self.show_page("Inicio")
-        self.root.after(80, self._process_queue)
+        self._process_after_id = self.root.after(80, self._process_queue)
 
     def _configure_styles(self):
         style = ttk.Style(self.root)
@@ -234,6 +242,14 @@ class AetheraDesktopApp(
         )
         self._bind_native_widget_animations(fullscreen_button)
         fullscreen_button.pack(side="right", padx=(8, 18), pady=12)
+        self.task_indicator = tk.Label(
+            self.header,
+            text="",
+            bg=COLORS["background"],
+            fg=COLORS["accent_light"],
+            font=(FONT, 9, "bold"),
+        )
+        self.task_indicator.pack(side="right", padx=(0, 6))
         tk.Label(
             self.header,
             text="●  GuIA",
@@ -369,6 +385,8 @@ class AetheraDesktopApp(
         self._animate_scroll(canvas, 1.0, duration=270)
 
     def _animate_scroll(self, canvas, target, duration=280):
+        if not canvas.winfo_exists():
+            return
         key = str(canvas)
         animation = self._scroll_animations.get(key)
         if animation and abs(animation["target"] - target) < 0.001:
@@ -431,7 +449,7 @@ class AetheraDesktopApp(
         ):
             return
         if self.current_page == "Asistente IA" and page != "Asistente IA":
-            for attribute in ("stream_bubble", "stream_text", "stream_content"):
+            for attribute in ("stream_bubble", "stream_text"):
                 if hasattr(self, attribute):
                     delattr(self, attribute)
         if self.current_page == "Servicios de apoyo" and page != "Servicios de apoyo":
@@ -563,6 +581,31 @@ class AetheraDesktopApp(
 
         self.root.after(0, lambda: step(1))
 
+    def _handle_tarea_actualizada(self, snapshot):
+        """Refleja el estado de las tareas de fondo en el encabezado."""
+        self._tareas_estado[snapshot["id"]] = snapshot
+        self._sync_task_indicator()
+
+    def _sync_task_indicator(self):
+        if (
+            not hasattr(self, "task_indicator")
+            or not self.task_indicator.winfo_exists()
+        ):
+            return
+        activas = [
+            tarea
+            for tarea in self._tareas_estado.values()
+            if tarea["estado"] in (PENDIENTE, CORRIENDO)
+        ]
+        if not activas:
+            self.task_indicator.configure(text="")
+            return
+        texto = activas[0]["mensaje"] or f"{len(activas)} en curso"
+        self.task_indicator.configure(
+            text=f"⋯  {texto}",
+            fg=COLORS["accent_light"],
+        )
+
     def _notice(self, parent, text, color):
         tk.Label(
             parent,
@@ -573,6 +616,46 @@ class AetheraDesktopApp(
             wraplength=900,
             justify="left",
         ).pack(anchor="w", padx=18, pady=16)
+
+    def _cancelar_pendientes(self):
+        """Cancela callbacks recurrentes para cerrar sin errores de Tk."""
+        for nombre in (
+            "_process_after_id",
+            "_typing_after_id",
+            "_search_after_id",
+            "_service_render_after_id",
+            "_calendar_pulse_after_id",
+        ):
+            after_id = getattr(self, nombre, None)
+            if after_id:
+                try:
+                    self.root.after_cancel(after_id)
+                except tk.TclError:
+                    pass
+                setattr(self, nombre, None)
+        for after_id in list(getattr(self, "_nav_animation_ids", {}).values()):
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        for animation in self._scroll_animations.values():
+            after_id = animation.get("after_id")
+            if after_id:
+                try:
+                    self.root.after_cancel(after_id)
+                except tk.TclError:
+                    pass
+        self._scroll_animations.clear()
+
+    def cerrar(self):
+        self._cancelar_pendientes()
+        try:
+            # Evita que Tcl reporte callbacks pendientes contra una ventana
+            # que ya se está destruyendo.
+            self.root.tk.eval("proc bgerror {msg} {}")
+        except tk.TclError:
+            pass
+        self.root.destroy()
 
     def run(self):
         self.root.mainloop()

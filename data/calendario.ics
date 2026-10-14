@@ -1,0 +1,99 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Aethera//Calendario Personal//ES
+CALSCALE:GREGORIAN
+X-WR-CALNAME:Personal
+BEGIN:VEVENT
+UID:f6c94be2-0c6e-4a70-b78b-27b857876beb@aethera
+DTSTAMP:20261014T154022Z
+DTSTART:20261014T120000
+DTEND:20261014T140000
+SUMMARY:📅 Planificación semanal + Matemáticas: Repaso inicial
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-13:00 Planificación: revisar sílabos\, fechas de exáme
+ nes y objetivos de la semana.\n13:00-14:00 Matemáticas: Repaso de concept
+ os clave / teoría de la unidad actual.
+END:VEVENT
+BEGIN:VEVENT
+UID:626bb7c0-6f21-4b03-ab0c-046a51bc6f4a@aethera
+DTSTAMP:20261014T154035Z
+DTSTART:20261015T120000
+DTEND:20261015T140000
+SUMMARY:📖 Lenguaje: Lectura comprensiva + Análisis textual
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-12:50 Lectura activa de texto obligatorio (subrayado\, gl
+ osario\, esquema).\n12:50-13:00 Pausa activa (estirar\, agua\, respiració
+ n).\n13:00-13:50 Análisis: estructura\, tesis\, argumentos\, recursos ret
+ óricos.\n13:50-14:00 Resumen en 3 frases + dudas para tutoría.
+END:VEVENT
+BEGIN:VEVENT
+UID:359c95d0-2388-4268-a177-79b093da7256@aethera
+DTSTAMP:20261014T154046Z
+DTSTART:20261016T120000
+DTEND:20261016T140000
+SUMMARY:🧮 Matemáticas: Resolución de problemas tipo
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-12:10 Repaso rápido de fórmulas/teoremas clave (ficha r
+ esumen).\n12:10-13:10 Resolución de 3-4 problemas tipo examen (cronometra
+ do\, sin apuntes).\n13:10-13:20 Pausa activa.\n13:20-14:00 Corrección hon
+ esta: identifica errores\, anota patrones\, rehaz el peor.
+END:VEVENT
+BEGIN:VEVENT
+UID:f055f30a-e5cb-4d5c-bd90-6fb0b2724af4@aethera
+DTSTAMP:20261014T154100Z
+DTSTART:20261017T120000
+DTEND:20261017T140000
+SUMMARY:🧪 Simulacro Mixto: Lenguaje + Matemáticas
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-13:00 Lenguaje: Mini-simulacro (análisis de texto corto 
+ + pregunta de desarrollo\, 50') + autoevaluación (10').\n13:00-13:10 Paus
+ a activa.\n13:10-14:00 Matemáticas: Mini-simulacro (2-3 problemas variado
+ s\, 40') + corrección rápida (10').\nObjetivo: medir tiempo real y detec
+ tar puntos débiles.
+END:VEVENT
+BEGIN:VEVENT
+UID:95bfd8b6-dae1-4172-b963-864f104b6a0b@aethera
+DTSTAMP:20261014T154107Z
+DTSTART:20261018T120000
+DTEND:20261018T140000
+SUMMARY:🌿 Domingo: Descanso real / Recarga (Sin estudio)
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:Protege este tiempo para ti: deporte suave\, paseo\, cocina\, a
+ migos\, lectura de ocio\, siesta\, naturaleza. Cero pantallas académicas.
+  La consolidación de memoria ocurre en el descanso.
+END:VEVENT
+BEGIN:VEVENT
+UID:a250406f-01c6-4592-a3f9-32a745611319@aethera
+DTSTAMP:20261014T154119Z
+DTSTART:20261019T120000
+DTEND:20261019T140000
+SUMMARY:🛠 Lunes: Gestión + Lenguaje: Redacción / Síntesis
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-12:30 Gestión: revisar calendario oficial\, consultar du
+ das a profesores\, confirmar fechas\, organizar materiales.\n12:30-12:40 P
+ ausa.\n12:40-13:40 Lenguaje: Práctica de redacción (ensayo\, comentario 
+ de texto o síntesis según formato de examen) – cronometrado.\n13:40-14
+ :00 Autoevaluación con rúbrica / lista de cotejo.
+END:VEVENT
+BEGIN:VEVENT
+UID:6a9df1f2-43c5-49d3-aa94-df45cd918be2@aethera
+DTSTAMP:20261014T154129Z
+DTSTART:20261020T120000
+DTEND:20261020T140000
+SUMMARY:🔁 Martes: Repaso integrado Matemáticas + Cierre semanal
+CATEGORIES:personal
+X-AETHERA-SOURCE:PERSONAL
+DESCRIPTION:12:00-12:50 Matemáticas: Repaso de errores del simulacro (sáb
+ ado) + rehacer los 2 peores + ficha de "errores típicos míos".\n12:50-13
+ :00 Pausa activa.\n13:00-13:40 Síntesis semanal: mapa mental / resumen 1 
+ página por asignatura (qué sé\, qué falla\, qué pregunto en tutoría)
+ .\n13:40-14:00 Planificación rápida semana siguiente (3 objetivos claros
+ ).
+END:VEVENT
+END:VCALENDAR

@@ -4,7 +4,6 @@ import queue
 import os
 import re
 import logging
-import threading
 from datetime import datetime
 
 from core.documents import extraer_texto_pdf
@@ -16,6 +15,11 @@ from ..tema import COLORS
 
 
 class ChatLogic:
+    @property
+    def busy(self):
+        """El turno vive en el modelo, no en los widgets de la sección."""
+        return self.chat_store.ocupado
+
     def _attach_pdfs(self, rutas):
         existing_paths = {
             os.path.normcase(os.path.abspath(document["path"]))
@@ -42,12 +46,13 @@ class ChatLogic:
             return
         self._sync_pdf_controls()
         for document in selected:
-            worker = threading.Thread(
-                target=self._extract_pdf_in_background,
-                args=(document["id"], document["path"]),
-                daemon=True,
+            self.tasks.lanzar(
+                "extraer_pdf",
+                lambda _tarea, doc=document: self._extract_pdf_in_background(
+                    doc["id"], doc["path"]
+                ),
+                contexto={"pdf_id": document["id"], "nombre": document["name"]},
             )
-            worker.start()
 
     def _extract_pdf_in_background(self, request_id, ruta):
         try:
@@ -163,23 +168,21 @@ class ChatLogic:
         self.message_input.delete("1.0", "end")
         self._append_message("user", text)
         self._remove_pdf()
-        self.busy = True
-        self._pending_chat_quizzes = []
+        self.chat_store.iniciar_turno()
         self.send_button.configure(state="disabled")
         self.status_label = self.chat_status_label
-        self.status_base = "✦  GuIA está pensando"
+        self.status_base = f"✦  {self.chat_store.estado}"
         self.status_label.configure(
             text=self.status_base,
             fg=COLORS["accent_light"],
         )
         self._typing_phase = 0
         self._pulse_typing_indicator()
-        worker = threading.Thread(
-            target=self._run_chat_turn,
-            args=(text,),
-            daemon=True,
+        self.tasks.lanzar(
+            "turno_chat",
+            lambda _tarea: self._run_chat_turn(text),
+            contexto={"texto": text},
         )
-        worker.start()
 
     def _run_chat_turn(self, text):
         try:
@@ -222,17 +225,28 @@ class ChatLogic:
             while True:
                 event, value = self.event_queue.get_nowait()
                 if event == "token":
+                    self.chat_store.agregar_token(value)
                     if self.current_page == "Asistente IA":
-                        self._append_stream_chunk(value)
+                        self._refresh_stream_bubble()
                 elif event == "status":
+                    self.chat_store.actualizar_estado(value)
                     self._set_status(value)
                 elif event == "complete":
+                    # Los quizzes se incrustan antes de cerrar el stream: su
+                    # texto (con un quiz embebido) solo vive mientras el turno
+                    # sigue abierto.
+                    if self.current_page == "Asistente IA":
+                        self._attach_stream_quizzes()
+                    self.chat_store.finalizar_turno()
                     self._finish_chat_turn()
                 elif event == "error":
-                    self._append_message(
-                        "assistant",
-                        f"No pude completar la respuesta. Inténtalo de nuevo.\n\nDetalle: {value}",
+                    mensaje = (
+                        "No pude completar la respuesta. Inténtalo de nuevo."
+                        f"\n\nDetalle: {value}"
                     )
+                    self.chat_store.marcar_error(mensaje)
+                    if self.current_page == "Asistente IA":
+                        self._append_message("assistant", mensaje)
                     self._finish_chat_turn()
                 elif event == "services":
                     self._display_services(*value)
@@ -245,7 +259,7 @@ class ChatLogic:
                 elif event == "chat_quiz_evaluation_error":
                     self._show_chat_quiz_error(*value)
                 elif event == "quiz_generated":
-                    self._pending_chat_quizzes.append(value)
+                    self.chat_store.agregar_quiz(value)
                 elif event == "chat_quiz_answer_evaluated":
                     self._handle_chat_quiz_answer_result(*value)
                 elif event == "chat_quiz_answer_error":
@@ -266,9 +280,11 @@ class ChatLogic:
                     self._show_quiz_results(*value)
                 elif event == "quiz_evaluation_error":
                     self._show_quiz_evaluation_error(*value)
+                elif event == "tarea_actualizada":
+                    self._handle_tarea_actualizada(value)
         except queue.Empty:
             pass
-        self.root.after(80, self._process_queue)
+        self._process_after_id = self.root.after(80, self._process_queue)
 
     def _pulse_typing_indicator(self):
         if not self.busy or not hasattr(self, "status_label"):
@@ -293,21 +309,10 @@ class ChatLogic:
             )
 
     def _finish_chat_turn(self):
-        if self.current_page == "Asistente IA":
-            has_stream_quiz = self._attach_stream_quiz()
-            if not has_stream_quiz:
-                pending_quizzes = getattr(self, "_pending_chat_quizzes", [])
-                if hasattr(self, "stream_bubble"):
-                    for quiz in pending_quizzes:
-                        self._render_chat_quiz(self.stream_bubble, quiz)
-                elif hasattr(self, "message_list"):
-                    for quiz in pending_quizzes:
-                        self._append_generated_quiz(quiz)
-        self._pending_chat_quizzes = []
         typing_after_id = getattr(self, "_typing_after_id", None)
         if typing_after_id:
             self.root.after_cancel(typing_after_id)
-        self.busy = False
+            self._typing_after_id = None
         if hasattr(self, "status_label") and self.status_label.winfo_exists():
             self.status_base = "●  Disponible"
             self.status_label.configure(
@@ -319,6 +324,19 @@ class ChatLogic:
         if hasattr(self, "stream_bubble"):
             del self.stream_bubble
             del self.stream_text
-            del self.stream_content
         if self.current_page == "Asistente IA" and hasattr(self, "canvas"):
             self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
+
+    def _attach_stream_quizzes(self):
+        """Incrusta en la respuesta los quizzes generados durante el turno."""
+        quizzes = self.chat_store.quices_del_turno()
+        if not quizzes:
+            return
+        if hasattr(self, "stream_bubble") and self.stream_bubble.winfo_exists():
+            if self._attach_stream_quiz():
+                return
+            for quiz in quizzes:
+                self._render_chat_quiz(self.stream_bubble, quiz)
+        elif hasattr(self, "message_list"):
+            for quiz in quizzes:
+                self._append_generated_quiz(quiz)

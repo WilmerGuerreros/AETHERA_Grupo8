@@ -1,6 +1,5 @@
 """Quiz interactivo incrustado en una respuesta del asistente."""
 
-import threading
 import tkinter as tk
 from typing import Any, Protocol
 
@@ -16,6 +15,7 @@ from core.quizzes import (
 class _ChatQuizHost(Protocol):
     chat: Any
     event_queue: Any
+    tasks: Any
 
 
 class ChatQuizView(_ChatQuizHost):
@@ -254,12 +254,12 @@ class ChatQuizView(_ChatQuizHost):
             state["answer_error"] = ""
             index = state["index"]
             draw_page()
-            worker = threading.Thread(
-                target=self._evaluate_chat_quiz_answer,
-                args=(shell, quiz, state, index, page["id"], letter),
-                daemon=True,
+            self.tasks.lanzar(
+                "evaluar_respuesta_quiz_chat",
+                lambda _tarea: self._evaluate_chat_quiz_answer(
+                    shell, quiz, state, index, page["id"], letter
+                ),
             )
-            worker.start()
 
         def move(offset):
             if state["answer_pending"] or state["progress_pending"]:
@@ -270,9 +270,9 @@ class ChatQuizView(_ChatQuizHost):
             state["progress_pending"] = True
             state["progress_target"] = target_index
             draw_page()
-            worker = threading.Thread(
-                target=self._save_chat_quiz_progress,
-                args=(
+            self.tasks.lanzar(
+                "guardar_avance_quiz_chat",
+                lambda _tarea: self._save_chat_quiz_progress(
                     shell,
                     quiz,
                     state,
@@ -280,9 +280,7 @@ class ChatQuizView(_ChatQuizHost):
                     dict(state["answers"]),
                     "move",
                 ),
-                daemon=True,
             )
-            worker.start()
 
         def finish():
             if state["answer_pending"] or state["progress_pending"]:
@@ -301,11 +299,7 @@ class ChatQuizView(_ChatQuizHost):
                 pady=18,
             )
             loading.pack(anchor="w")
-            worker = threading.Thread(
-                target=evaluate,
-                daemon=True,
-            )
-            worker.start()
+            self.tasks.lanzar("evaluar_quiz_chat", lambda _tarea: evaluate())
 
         def evaluate():
             try:
@@ -397,9 +391,9 @@ class ChatQuizView(_ChatQuizHost):
             state["answers"].pop(page["id"], None)
         text_widget.configure(state="disabled")
         state["progress_pending"] = True
-        worker = threading.Thread(
-            target=self._save_chat_quiz_progress,
-            args=(
+        self.tasks.lanzar(
+            "guardar_avance_quiz_chat",
+            lambda _tarea: self._save_chat_quiz_progress(
                 shell,
                 quiz,
                 state,
@@ -407,9 +401,7 @@ class ChatQuizView(_ChatQuizHost):
                 dict(state["answers"]),
                 "autosave",
             ),
-            daemon=True,
         )
-        worker.start()
 
     def _cancel_chat_quiz_progress_save(self, shell, state):
         after_id = state.pop("progress_after_id", None)

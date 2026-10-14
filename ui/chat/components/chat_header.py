@@ -23,9 +23,13 @@ class ChatHeader:
             color=COLORS["muted"],
         ).pack(anchor="w", padx=16, pady=(0, 13))
         self.status_base = (
-            "✦  GuIA está pensando" if self.busy else "●  Disponible"
+            f"✦  {self.chat_store.estado}"
+            if self.chat_store.ocupado
+            else "●  Disponible"
         )
-        status_color = COLORS["accent_light"] if self.busy else COLORS["green"]
+        status_color = (
+            COLORS["accent_light"] if self.chat_store.ocupado else COLORS["green"]
+        )
         self.chat_status_label = tk.Label(
             intro,
             text=self.status_base,

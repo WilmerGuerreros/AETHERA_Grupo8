@@ -1,6 +1,5 @@
 """Sección servicios de la interfaz de Aethera."""
 
-import threading
 import tkinter as tk
 from tkinter import ttk
 
@@ -181,12 +180,13 @@ class ServicesSection:
         query = self.service_search_var.get().strip().casefold()
         self._services_request_id += 1
         request_id = self._services_request_id
-        worker = threading.Thread(
-            target=self._search_services,
-            args=(request_id, category, selected_district, query),
-            daemon=True,
+        self.tasks.lanzar(
+            "buscar_servicios",
+            lambda _tarea: self._search_services(
+                request_id, category, selected_district, query
+            ),
+            contexto={"consulta": query},
         )
-        worker.start()
 
     def _search_services(self, request_id, category, selected_district, query):
         try:

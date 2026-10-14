@@ -1,6 +1,5 @@
 """Orquestador de la sección de quizzes."""
 
-import threading
 import tkinter as tk
 from tkinter import ttk
 from typing import Any, Callable, Protocol
@@ -21,6 +20,7 @@ class _QuizDesktopHost(Protocol):
     content: Any
     chat: Any
     event_queue: Any
+    tasks: Any
     current_page: str
     _label: Callable[..., tk.Label]
     _card: Callable[..., RoundedFrame]
@@ -283,12 +283,12 @@ class QuizSection(_QuizDesktopHost):
         state["answer_pending"] = True
         state["answer_error"] = ""
         self._render_quiz_page(window, quiz, state)
-        worker = threading.Thread(
-            target=self._evaluate_quiz_answer_worker,
-            args=(window, quiz, state, indice, pregunta_id, key),
-            daemon=True,
+        self.tasks.lanzar(
+            "evaluar_respuesta_quiz",
+            lambda _tarea: self._evaluate_quiz_answer_worker(
+                window, quiz, state, indice, pregunta_id, key
+            ),
         )
-        worker.start()
 
     def _evaluate_quiz_answer_worker(
         self, window, quiz, state, indice, pregunta_id, key
@@ -335,9 +335,9 @@ class QuizSection(_QuizDesktopHost):
         state["progress_pending"] = True
         state["progress_target"] = target_index
         self._render_quiz_page(window, quiz, state)
-        worker = threading.Thread(
-            target=self._save_quiz_progress_worker,
-            args=(
+        self.tasks.lanzar(
+            "guardar_avance_quiz",
+            lambda _tarea: self._save_quiz_progress_worker(
                 window,
                 quiz,
                 state,
@@ -345,9 +345,7 @@ class QuizSection(_QuizDesktopHost):
                 dict(state["respuestas"]),
                 action,
             ),
-            daemon=True,
         )
-        worker.start()
 
     def _schedule_quiz_progress_save(self, window, quiz, state):
         if state["progress_pending"]:
@@ -369,9 +367,9 @@ class QuizSection(_QuizDesktopHost):
         if response_widget and response_widget.winfo_exists():
             response_widget.configure(state="disabled")
         state["progress_pending"] = True
-        worker = threading.Thread(
-            target=self._save_quiz_progress_worker,
-            args=(
+        self.tasks.lanzar(
+            "guardar_avance_quiz",
+            lambda _tarea: self._save_quiz_progress_worker(
                 window,
                 quiz,
                 state,
@@ -379,9 +377,7 @@ class QuizSection(_QuizDesktopHost):
                 dict(state["respuestas"]),
                 "autosave",
             ),
-            daemon=True,
         )
-        worker.start()
 
     def _save_quiz_progress_worker(
         self, window, quiz, state, target_index, respuestas, action
@@ -470,12 +466,12 @@ class QuizSection(_QuizDesktopHost):
             fg=COLORS["accent_light"],
             font=(FONT, 15, "bold"),
         ).pack(expand=True)
-        worker = threading.Thread(
-            target=self._evaluate_quiz_worker,
-            args=(quiz, state["respuestas"], window),
-            daemon=True,
+        self.tasks.lanzar(
+            "evaluar_quiz",
+            lambda _tarea: self._evaluate_quiz_worker(
+                quiz, state["respuestas"], window
+            ),
         )
-        worker.start()
 
     def _cancel_quiz_progress_save(self, window, state):
         after_id = state.pop("progress_after_id", None)

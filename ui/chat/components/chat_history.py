@@ -5,10 +5,7 @@ import re
 import tkinter as tk
 from tkinter import ttk
 
-from core.quizzes import (
-    quiz_desde_mensaje,
-    quiz_desde_resultado_herramienta,
-)
+from core.quizzes import quiz_desde_mensaje
 from ...tema import COLORS, FONT
 from ...utilidades import (
     EMOJI_CHAR,
@@ -31,6 +28,10 @@ class ChatHistory:
                 count=1,
             )
             text, attachments = self._split_user_message(text)
+        if quiz is None and not text.strip() and not attachments:
+            # Una ronda del asistente sin texto visible (p. ej. solo tool_calls
+            # con espacios) no debe dibujar una burbuja vacía.
+            return
         outer = tk.Frame(self.message_list, bg=COLORS["background"])
         outer.pack(fill="x", padx=15, pady=8)
         bubble_color = "#30245f" if is_user else COLORS["surface"]
@@ -262,44 +263,49 @@ class ChatHistory:
     def _insert_color_emoji(self, widget, emoji):
         widget.insert("end", emoji, "emoji")
 
-    def _append_stream_chunk(self, chunk):
-        if not hasattr(self, "stream_bubble"):
-            outer = tk.Frame(self.message_list, bg=COLORS["background"])
-            outer.pack(fill="x", padx=15, pady=8)
-            stream_background = "#14283b"
-            self.stream_bubble = self._card(
-                outer,
-                bg=stream_background,
-                border="#405176",
-                radius=24,
-                gradient=("#17223d", stream_background, "#20214b"),
-            )
-            self.stream_bubble.pack(side="left", padx=(0, 80))
-            tk.Label(
-                self.stream_bubble,
-                text="GuIA",
-                bg=stream_background,
-                fg=COLORS["accent_light"],
-                font=(FONT, 10, "bold"),
-            ).pack(anchor="w", padx=18, pady=(14, 4))
-            self.stream_text = self._create_formatted_message(
-                self.stream_bubble,
-                "",
-                background=stream_background,
-                foreground=COLORS["text"],
-                width=max(50, (self.root.winfo_width() - 560) // 9),
-            )
-            self.stream_text.pack(anchor="w", padx=18, pady=(0, 15))
-            self.stream_content = ""
-            self._animate_card_in(outer)
-        self.stream_content += chunk
-        self._set_formatted_text(self.stream_text, self.stream_content)
+    def _refresh_stream_bubble(self):
+        if not self.chat_store.stream_texto.strip():
+            # Aún no hay texto visible: no creamos una burbuja vacía.
+            return
+        self._ensure_stream_bubble()
+        self._set_formatted_text(self.stream_text, self.chat_store.stream_texto)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
+    def _ensure_stream_bubble(self):
+        if hasattr(self, "stream_bubble") and self.stream_bubble.winfo_exists():
+            return
+        outer = tk.Frame(self.message_list, bg=COLORS["background"])
+        outer.pack(fill="x", padx=15, pady=8)
+        stream_background = "#14283b"
+        self.stream_bubble = self._card(
+            outer,
+            bg=stream_background,
+            border="#405176",
+            radius=24,
+            gradient=("#17223d", stream_background, "#20214b"),
+        )
+        self.stream_bubble.pack(side="left", padx=(0, 80))
+        tk.Label(
+            self.stream_bubble,
+            text="GuIA",
+            bg=stream_background,
+            fg=COLORS["accent_light"],
+            font=(FONT, 10, "bold"),
+        ).pack(anchor="w", padx=18, pady=(14, 4))
+        self.stream_text = self._create_formatted_message(
+            self.stream_bubble,
+            "",
+            background=stream_background,
+            foreground=COLORS["text"],
+            width=max(50, (self.root.winfo_width() - 560) // 9),
+        )
+        self.stream_text.pack(anchor="w", padx=18, pady=(0, 15))
+        self._animate_card_in(outer)
+
     def _attach_stream_quiz(self):
-        if not hasattr(self, "stream_content"):
+        if not hasattr(self, "stream_text"):
             return False
-        quiz = quiz_desde_mensaje(self.stream_content)
+        quiz = quiz_desde_mensaje(self.chat_store.stream_texto)
         if quiz is None:
             return False
         self.stream_text.destroy()
@@ -353,25 +359,15 @@ class ChatHistory:
         self.canvas = canvas
         self._bind_smooth_scroll(canvas, self.message_list)
 
-        assistant_quiz_ids = {
-            quiz["quiz_id"]
-            for message in self.chat.historial
-            if message.get("role") == "assistant"
-            and message.get("content")
-            and (quiz := quiz_desde_mensaje(message["content"])) is not None
-        }
-        for message in self.chat.historial:
-            if message.get("role") in {"assistant", "user"} and message.get("content"):
-                self._append_message(message["role"], message["content"])
-            elif (
-                message.get("role") == "tool"
-                and message.get("name") == "crear_quiz"
-            ):
-                quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
-                if quiz is not None and quiz["quiz_id"] not in assistant_quiz_ids:
-                    self._append_generated_quiz(quiz)
-        if not self.message_list.winfo_children():
-            self._append_message(
-                "assistant",
-                "¡Hola! Soy GuIA. ¿Qué te gustaría organizar o conversar hoy?",
-            )
+        # La transcripción se reconstruye desde el modelo: no depende de que
+        # los widgets anteriores sigan vivos.
+        for entrada in self.chat_store.entradas():
+            rol = entrada["rol"]
+            if rol in {"assistant", "user"}:
+                self._append_message(rol, entrada["texto"])
+            elif rol in {"error", "saludo"}:
+                self._append_message("assistant", entrada["texto"])
+            elif rol == "quiz":
+                self._append_generated_quiz(entrada["quiz"])
+            elif rol == "stream":
+                self._refresh_stream_bubble()
