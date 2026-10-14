@@ -1,8 +1,11 @@
 """Reglas, validaciones y consultas de calendario.
 
-``core`` es ciego al almacenamiento: valida la petición, delega la lectura y la
-escritura en el repositorio de Data y devuelve el resultado. No conoce rutas,
-archivos ni el formato ICS.
+``core`` es ciego al almacenamiento y a los catálogos: no conoce rutas,
+archivos, el formato ICS, qué orígenes existen ni qué categorías hay. Solo
+valida el formato de la petición, delega en Data los filtros y relega el
+resultado (o sus excepciones) tal cual. Los catálogos disponibles se piden a
+Data a través de las funciones ``origenes_disponibles`` y
+``categorias_disponibles``.
 """
 
 import logging
@@ -10,24 +13,30 @@ from datetime import date, datetime, time
 from typing import Any
 
 from data.calendar import (
+    ORIGEN_EDITABLE,
     CalendarioInvalido,
     CalendarStore,
+    CategoriaDesconocida,
     EventoAmbiguo,
     EventoNoEncontrado,
+    OrigenDesconocido,
+)
+from data.calendar import (
+    categorias_disponibles as _categorias_disponibles,
+)
+from data.calendar import (
+    origenes_disponibles as _origenes_disponibles,
 )
 
 
-ORIGENES_CALENDARIO = {
-    "Ambos": "ambos",
-    "Académico": "academico",
-    "Personal": "personal",
-}
-CATEGORIAS_CALENDARIO = {
-    "Evaluaciones": {"evaluation_week"},
-    "Bienestar": {"wellbeing_activity"},
-    "Períodos académicos": {"period_start", "period_end"},
-    "Actividades": {"university_activity"},
-}
+def origenes_disponibles() -> tuple[str, ...]:
+    """Devuelve los orígenes (calendarios) disponibles, según Data."""
+    return _origenes_disponibles()
+
+
+def categorias_disponibles(store: CalendarStore | None = None) -> set[str]:
+    """Devuelve las categorías del calendario académico, según Data."""
+    return _categorias_disponibles(store)
 
 
 def _resolver_store(store: CalendarStore | None) -> CalendarStore:
@@ -36,13 +45,18 @@ def _resolver_store(store: CalendarStore | None) -> CalendarStore:
 
 
 def buscar_eventos(
-    tipo: str,
+    tipo: str = "any",
     fecha_inicio: str = "1900-01-01",
     fecha_fin: str = "2100-01-01",
-    origen: str = "ambos",
+    origen: str | None = None,
     store: CalendarStore | None = None,
 ) -> list[dict[str, Any]]:
-    """Devuelve eventos filtrados por rango, categoría y origen."""
+    """Devuelve eventos filtrados por rango, categoría y origen.
+
+    ``tipo`` es una categoría exacta o ``"any"`` para todas; ``origen`` es uno
+    de los calendarios disponibles o ``None`` para consultarlos todos. Data es
+    quien valida que la categoría y el origen existan.
+    """
     try:
         dt_inicio_busqueda = date.fromisoformat(fecha_inicio)
         dt_fin_busqueda = date.fromisoformat(fecha_fin)
@@ -55,38 +69,18 @@ def buscar_eventos(
     if not isinstance(tipo, str):
         return [{"error": "La categoría debe ser una cadena de texto."}]
     tipo_normalizado = tipo.strip().lower()
-    categorias_validas = {
-        "any",
-        "period_start",
-        "evaluation_week",
-        "wellbeing_activity",
-        "period_end",
-        "university_activity",
-    }
-    if tipo_normalizado not in categorias_validas:
-        return [
-            {
-                "error": (
-                    f"Categoría inválida: {tipo}. Usa una de estas opciones: "
-                    f"{', '.join(sorted(categorias_validas))}."
-                )
-            }
-        ]
+    categorias = None if tipo_normalizado in ("", "any") else {tipo_normalizado}
 
     origen_normalizado = origen.strip().lower() if isinstance(origen, str) else ""
-    origenes = {
-        "academico": ("academico",),
-        "personal": ("personal",),
-        "ambos": ("academico", "personal"),
-    }
-    if origen_normalizado not in origenes:
-        return [{"error": "El origen debe ser 'academico', 'personal' o 'ambos'."}]
+    if origen_normalizado:
+        origenes = (origen_normalizado,)
+    else:
+        origenes = _origenes_disponibles()
 
-    categorias = None if tipo_normalizado == "any" else {tipo_normalizado}
     try:
         almacen = _resolver_store(store)
         eventos = []
-        for nombre_origen in origenes[origen_normalizado]:
+        for nombre_origen in origenes:
             eventos.extend(
                 almacen.listar(
                     nombre_origen,
@@ -99,6 +93,8 @@ def buscar_eventos(
             eventos,
             key=lambda evento: (evento["fecha_inicio"], evento["resumen"]),
         )
+    except (OrigenDesconocido, CategoriaDesconocida) as error:
+        return [{"error": str(error)}]
     except (OSError, UnicodeDecodeError) as error:
         logging.exception("No se pudieron cargar los calendarios.")
         return [{"error": f"No se pudieron cargar los calendarios: {error}"}]
@@ -107,29 +103,30 @@ def buscar_eventos(
 def obtener_eventos_semana(
     fecha_inicio: date,
     fecha_fin: date,
-    origen: str,
-    categoria: str,
+    origen: str | None = None,
+    categoria: str | None = None,
     store: CalendarStore | None = None,
 ) -> list[dict[str, Any]]:
-    """Carga eventos de un rango y aplica el origen y categoría seleccionados."""
-    origen_consulta = ORIGENES_CALENDARIO.get(origen)
-    if origen_consulta is None:
-        raise ValueError(f"Origen de calendario inválido: {origen}")
+    """Carga eventos de un rango aplicando el origen y la categoría elegidos.
+
+    ``origen`` y ``categoria`` son códigos provistos por Data, o ``None`` para
+    no filtrar. Data valida su existencia y Core solo relega el error.
+    """
+    if isinstance(categoria, str) and categoria.strip():
+        tipo = categoria.strip()
+    else:
+        tipo = "any"
 
     eventos = buscar_eventos(
-        "any",
+        tipo,
         fecha_inicio=fecha_inicio.isoformat(),
         fecha_fin=fecha_fin.isoformat(),
-        origen=origen_consulta,
+        origen=origen,
         store=store,
     )
     if eventos and "error" in eventos[0]:
         raise ValueError(eventos[0]["error"])
-
-    categorias = CATEGORIAS_CALENDARIO.get(categoria)
-    if categorias is None:
-        return eventos
-    return [evento for evento in eventos if evento.get("categoria") in categorias]
+    return eventos
 
 
 def eliminar_evento(
@@ -234,7 +231,8 @@ def crear_evento(
             "hora_inicio": hora_inicio or None,
             "hora_fin": hora_fin or None,
             "descripcion": descripcion,
-            "origen": "personal",
+            "origen": ORIGEN_EDITABLE,
+            "editable": True,
         },
     }
 
@@ -263,8 +261,8 @@ def guardar_evento_personal(
 def borrar_evento_personal(
     evento: dict[str, Any], store: CalendarStore | None = None
 ) -> dict[str, str]:
-    """Elimina un evento solo cuando su origen es el calendario personal."""
-    if evento.get("origen") != "personal":
+    """Elimina un evento solo cuando pertenece al calendario personal (editable)."""
+    if evento.get("origen") != ORIGEN_EDITABLE:
         return {"error": "Solo se pueden eliminar eventos del calendario Personal."}
     uid = evento.get("uid")
     if not isinstance(uid, str) or not uid.strip():

@@ -33,11 +33,15 @@ class CalendarSection(CalendarHeader, CalendarGrid, CalendarModal):
         )
         self.calendar_canvas.delete("all")
         try:
+            origen = self._calendar_source_options.get(self.calendar_source_var.get())
+            categoria = self._calendar_category_options.get(
+                self.calendar_category_var.get()
+            )
             events = obtener_eventos_semana(
                 start,
                 end,
-                self.calendar_source_var.get(),
-                self.calendar_category_var.get(),
+                origen,
+                categoria,
             )
             self.calendar_events = events
             self.calendar_count_label.configure(

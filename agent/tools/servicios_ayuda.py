@@ -14,11 +14,12 @@ def buscar_servicios_ayuda(
     Busca los servicios asociados a un motivo de orientación y sus datos de derivación.
 
     Args:
-        categoria: Uno de 'academic_pressure', 'social_support',
-            'career_concern', 'sleep_and_routine' o 'service_navigation'.
-        distrito: Identificador opcional: 'DIST_GAIA', 'DIST_HORIZON',
-            'DIST_NEBULA', 'DIST_QUANTUM' o 'DIST_VECTOR'. Si se omite,
-            se devuelven los servicios de todos los distritos.
+        categoria: Código del motivo de orientación. El catálogo de categorías
+            válidas lo administra Data; si el código no existe, la herramienta
+            devuelve un error que enumera las categorías disponibles.
+        distrito: Identificador opcional del distrito. Si se omite, se
+            devuelven los servicios de todos los distritos. Un distrito
+            inexistente también devuelve un error con las opciones válidas.
 
     Returns:
         Un diccionario con la categoría y los servicios relacionados.

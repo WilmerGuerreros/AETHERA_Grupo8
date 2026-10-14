@@ -1,11 +1,14 @@
-"""Cálculo de carga académica y detección de semanas de sobrecarga."""
+"""Cálculo de carga académica y detección de semanas de sobrecarga.
 
-import csv
-import logging
-from datetime import date, datetime, timedelta
+Solo recibe de Data las evaluaciones ya normalizadas y aplica la regla de
+negocio: agrupa por semana, suma intensidad y marca las semanas que alcanzan el
+umbral. No conoce el nombre del recurso, sus columnas ni sus categorías.
+"""
+
+from datetime import date, timedelta
 from typing import Any
 
-from data.resources import leer_recurso_csv
+from data.workload import CalendarioAcademicoInvalido, listar_evaluaciones
 
 
 def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
@@ -14,74 +17,22 @@ def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
         return {"error": "El umbral debe ser un entero mayor que cero."}
 
     try:
-        calendar_data = leer_recurso_csv("D7_calendar.csv")
-    except (OSError, UnicodeDecodeError, csv.Error, ValueError) as error:
-        logging.error("Error al leer el calendario académico: %s", error)
-        calendar_data = []
-
-    if not calendar_data:
-        return {"error": "No se pudieron cargar los datos del calendario académico."}
-
-    columnas_requeridas = {
-        "calendar_event_id",
-        "period_id",
-        "event_type",
-        "title",
-        "start_date",
-        "end_date",
-        "evaluation_intensity",
-    }
-    columnas_disponibles = set(calendar_data[0])
-    columnas_faltantes = columnas_requeridas - columnas_disponibles
-    if columnas_faltantes:
-        return {
-            "error": (
-                "El CSV no contiene las columnas requeridas: "
-                + ", ".join(sorted(columnas_faltantes))
-            )
-        }
+        evaluaciones = listar_evaluaciones()
+    except CalendarioAcademicoInvalido as error:
+        return {"error": str(error)}
 
     evaluaciones_por_semana: dict[str, list[dict[str, Any]]] = {}
-    for evento in calendar_data:
-        tipo_evento = (evento.get("event_type") or "").strip().lower()
-        if tipo_evento != "evaluation_week":
-            continue
-
-        event_id = evento.get("calendar_event_id", "desconocido")
-        try:
-            fecha_inicio = datetime.strptime(evento["start_date"], "%Y-%m-%d").date()
-            fecha_fin = datetime.strptime(evento["end_date"], "%Y-%m-%d").date()
-            intensidad = int(evento["evaluation_intensity"])
-        except (TypeError, ValueError) as error:
-            return {
-                "error": (
-                    f"Datos inválidos para el evento {event_id}: "
-                    f"fechas YYYY-MM-DD e intensidad entera requeridas ({error})."
-                )
-            }
-
-        if fecha_inicio > fecha_fin:
-            return {"error": f"El evento {event_id} termina antes de su fecha de inicio."}
-        if intensidad < 0:
-            return {"error": f"La intensidad del evento {event_id} no puede ser negativa."}
-        if intensidad == 0:
-            continue
-
-        semanas_del_evento: set[str] = set()
-        fecha_actual: date = fecha_inicio
-        while fecha_actual <= fecha_fin:
-            semana_iso = fecha_actual.isocalendar()
-            semanas_del_evento.add(f"{semana_iso.year}-W{semana_iso.week:02d}")
-            fecha_actual += timedelta(days=1)
-
+    for evaluacion in evaluaciones:
         detalle_evento = {
-            "evento": evento["title"],
-            "fecha_inicio": fecha_inicio.isoformat(),
-            "fecha_fin": fecha_fin.isoformat(),
-            "intensidad": intensidad,
-            "periodo_id": evento["period_id"],
+            "evento": evaluacion["evento"],
+            "fecha_inicio": evaluacion["fecha_inicio"].isoformat(),
+            "fecha_fin": evaluacion["fecha_fin"].isoformat(),
+            "intensidad": evaluacion["intensidad"],
+            "periodo_id": evaluacion["periodo_id"],
         }
-        for semana in semanas_del_evento:
+        for semana in _semanas_cubiertas(
+            evaluacion["fecha_inicio"], evaluacion["fecha_fin"]
+        ):
             evaluaciones_por_semana.setdefault(semana, []).append(detalle_evento)
 
     semanas_criticas = []
@@ -105,3 +56,14 @@ def evaluar_riesgo_sobrecarga(umbral: int = 3) -> dict[str, Any]:
             else "Carga académica dentro de parámetros normales."
         ),
     }
+
+
+def _semanas_cubiertas(fecha_inicio: date, fecha_fin: date) -> set[str]:
+    """Devuelve las semanas ISO (``2026-W07``) que abarca el evento."""
+    semanas: set[str] = set()
+    fecha_actual = fecha_inicio
+    while fecha_actual <= fecha_fin:
+        semana_iso = fecha_actual.isocalendar()
+        semanas.add(f"{semana_iso.year}-W{semana_iso.week:02d}")
+        fecha_actual += timedelta(days=1)
+    return semanas

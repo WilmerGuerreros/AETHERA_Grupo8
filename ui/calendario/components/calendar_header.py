@@ -2,11 +2,24 @@
 
 import tkinter as tk
 
-from ...tema import COLORS, MONTH_NAMES
+from core.calendar import categorias_disponibles, origenes_disponibles
+from ...tema import COLORS, MONTH_NAMES, opciones_por_etiqueta
 from ...widgets import AnimatedDropdown
 
 
 class CalendarHeader:
+    def _origenes_calendario(self):
+        try:
+            return origenes_disponibles()
+        except (OSError, ValueError, KeyError, TypeError):
+            return ()
+
+    def _categorias_calendario(self):
+        try:
+            return categorias_disponibles()
+        except (OSError, ValueError, KeyError, TypeError):
+            return ()
+
     def _format_calendar_range(self, start, end):
         start_month = MONTH_NAMES[start.month - 1]
         end_month = MONTH_NAMES[end.month - 1]
@@ -99,26 +112,31 @@ class CalendarHeader:
             color=COLORS["muted"],
             bg=COLORS["surface"],
         ).pack(side="left", padx=(0, 8))
-        self.calendar_source_var = tk.StringVar(value="Ambos")
+        self.calendar_source_var = tk.StringVar()
+        self._calendar_source_options = opciones_por_etiqueta(
+            self._origenes_calendario(), etiqueta_vacia="Todos los calendarios"
+        )
+        self.calendar_source_var.set(next(iter(self._calendar_source_options)))
         self.calendar_source_selector = AnimatedDropdown(
             filter_area,
             textvariable=self.calendar_source_var,
-            values=("Ambos", "Académico", "Personal"),
+            values=tuple(self._calendar_source_options),
             width=145,
             on_select=lambda _value: self._refresh_calendar(),
         )
         self.calendar_source_selector.pack(side="left", padx=(0, 7))
-        self.calendar_category_var = tk.StringVar(value="Todos los eventos")
+        self._calendar_all_categories_label = "Todas las categorías"
+        self._calendar_category_options = opciones_por_etiqueta(
+            self._categorias_calendario(),
+            etiqueta_vacia=self._calendar_all_categories_label,
+        )
+        self.calendar_category_var = tk.StringVar(
+            value=self._calendar_all_categories_label
+        )
         self.calendar_category_selector = AnimatedDropdown(
             filter_area,
             textvariable=self.calendar_category_var,
-            values=(
-                "Todos los eventos",
-                "Evaluaciones",
-                "Bienestar",
-                "Períodos académicos",
-                "Actividades",
-            ),
+            values=tuple(self._calendar_category_options),
             width=205,
             on_select=lambda _value: self._refresh_calendar(),
         )

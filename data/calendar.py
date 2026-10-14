@@ -1,8 +1,9 @@
 """Lectura, consulta y escritura de los calendarios académico y personal.
 
-Este módulo es el único que conoce el formato ICS, las rutas de los archivos y
-la forma de guardarlos. ``core`` solo pide eventos con filtros y delega aquí
-las altas y bajas; no sabe cómo se almacenan ni cómo se buscan.
+Este módulo es el único que conoce el formato ICS, las rutas de los archivos, la
+forma de guardarlos y el catálogo de orígenes y categorías del calendario.
+``core`` solo pide eventos con filtros y delega aquí las altas y bajas; no sabe
+cómo se almacenan, cómo se buscan ni qué categorías existen.
 """
 
 import os
@@ -16,6 +17,11 @@ from data.paths import resource_path, user_calendar_path
 
 
 RECURSO_CALENDARIO = "D7_calendar.ics"
+
+# Orígenes (calendarios) disponibles. ``ORIGEN_EDITABLE`` es el único en el que
+# el usuario puede crear y eliminar eventos; el resto es de solo lectura.
+ORIGENES = ("academico", "personal")
+ORIGEN_EDITABLE = "personal"
 
 CABECERA_PERSONAL = (
     "BEGIN:VCALENDAR\r\n"
@@ -36,6 +42,14 @@ class EventoNoEncontrado(ValueError):
 
 class EventoAmbiguo(ValueError):
     """El identificador aparece en más de un evento personal."""
+
+
+class OrigenDesconocido(ValueError):
+    """El origen (calendario) pedido no existe."""
+
+
+class CategoriaDesconocida(ValueError):
+    """La categoría pedida no existe en el calendario académico."""
 
 
 class CalendarStore:
@@ -74,11 +88,26 @@ class CalendarStore:
 
         ``categorias`` restringe el resultado a esas categorías; ``None`` las
         incluye todas. El calendario personal inexistente equivale a vacío.
+
+        Lanza ``OrigenDesconocido`` si el origen no existe y
+        ``CategoriaDesconocida`` si alguna categoría pedida no existe.
         """
+        if origen not in ORIGENES:
+            raise OrigenDesconocido(
+                f"Origen inválido: {origen!r}. Usa uno de estos: "
+                f"{', '.join(ORIGENES)}."
+            )
+        if categorias is not None:
+            self._validar_categorias(categorias)
+
         contenido = self._leer(origen)
         return _parsear_eventos(
             contenido, origen, fecha_inicio, fecha_fin, categorias
         )
+
+    def categorias_disponibles(self) -> set[str]:
+        """Devuelve las categorías presentes en el calendario académico."""
+        return _extraer_categorias(self._leer("academico"))
 
     # --- escritura ---
 
@@ -173,6 +202,16 @@ class CalendarStore:
 
     # --- internos ---
 
+    def _validar_categorias(self, categorias: set[str]) -> None:
+        disponibles = self.categorias_disponibles()
+        desconocidas = {categoria.lower() for categoria in categorias}
+        desconocidas -= disponibles | {ORIGEN_EDITABLE}
+        if desconocidas:
+            raise CategoriaDesconocida(
+                f"Categoría inválida: {', '.join(sorted(desconocidas))}. Usa una "
+                f"de estas: {', '.join(sorted(disponibles))}."
+            )
+
     def _leer(self, origen: str) -> str:
         if origen == "personal":
             try:
@@ -224,6 +263,28 @@ class CalendarStore:
         finally:
             if temporal and os.path.exists(temporal):
                 os.unlink(temporal)
+
+
+def origenes_disponibles() -> tuple[str, ...]:
+    """Devuelve los orígenes (calendarios) disponibles."""
+    return ORIGENES
+
+
+def categorias_disponibles(store: "CalendarStore | None" = None) -> set[str]:
+    """Devuelve las categorías del calendario académico."""
+    return (store if store is not None else CalendarStore()).categorias_disponibles()
+
+
+def _extraer_categorias(contenido: str) -> set[str]:
+    """Recopila los valores de la propiedad ICS ``CATEGORIES``."""
+    categorias: set[str] = set()
+    for linea in _desplegar_lineas(contenido.splitlines()):
+        if linea.startswith("CATEGORIES:"):
+            for valor in linea.split(":", 1)[1].split(","):
+                valor = valor.strip().lower()
+                if valor:
+                    categorias.add(valor)
+    return categorias
 
 
 def _desplegar_lineas(lineas: list[str]) -> list[str]:
@@ -352,6 +413,7 @@ def _parsear_eventos(
                             evento_actual.get("DESCRIPTION", "")
                         ),
                         "origen": origen,
+                        "editable": origen == ORIGEN_EDITABLE,
                     }
                 )
         elif en_evento and ":" in linea:

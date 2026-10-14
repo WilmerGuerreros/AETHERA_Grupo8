@@ -3,15 +3,17 @@
 import tkinter as tk
 from tkinter import ttk
 
-from core.services import buscar_servicios_ayuda
+from core.services import (
+    buscar_servicios_ayuda,
+    categorias_disponibles,
+    distritos_disponibles,
+)
 from .tema import (
     COLORS,
     FONT,
-    SERVICE_CATEGORIES,
-    SERVICE_CHANNELS,
-    SERVICE_DISTRICTS,
-    SERVICE_TYPES,
     WEEKDAYS,
+    humanizar_etiqueta,
+    opciones_por_etiqueta,
 )
 from .widgets import AnimatedDropdown
 
@@ -43,16 +45,25 @@ class ServicesSection:
         filters = tk.Frame(controls, bg=COLORS["surface"])
         filters.pack(fill="x", padx=18, pady=(0, 16))
 
+        self._service_category_options = opciones_por_etiqueta(
+            self._categorias_servicio()
+        )
+        self._service_district_options = opciones_por_etiqueta(
+            self._distritos_servicio(), etiqueta_vacia="Todos los distritos"
+        )
+
         category_filter = tk.Frame(filters, bg=COLORS["surface"])
         category_filter.pack(side="left", padx=(0, 12))
         self._label(category_filter, "TIPO DE APOYO", size=8, color=COLORS["muted"]).pack(
             anchor="w", pady=(0, 5)
         )
-        self.category_var = tk.StringVar(value=next(iter(SERVICE_CATEGORIES)))
+        self.category_var = tk.StringVar(
+            value=next(iter(self._service_category_options))
+        )
         self.category_selector = AnimatedDropdown(
             category_filter,
             textvariable=self.category_var,
-            values=tuple(SERVICE_CATEGORIES),
+            values=tuple(self._service_category_options),
             width=320,
             on_select=lambda _value: self._on_service_filter(),
         )
@@ -63,11 +74,13 @@ class ServicesSection:
         self._label(district_filter, "DISTRITO", size=8, color=COLORS["muted"]).pack(
             anchor="w", pady=(0, 5)
         )
-        self.district_var = tk.StringVar(value=next(iter(SERVICE_DISTRICTS)))
+        self.district_var = tk.StringVar(
+            value=next(iter(self._service_district_options))
+        )
         self.district_selector = AnimatedDropdown(
             district_filter,
             textvariable=self.district_var,
-            values=tuple(SERVICE_DISTRICTS),
+            values=tuple(self._service_district_options),
             width=250,
             on_select=lambda _value: self._on_service_filter(),
         )
@@ -154,6 +167,18 @@ class ServicesSection:
     def _on_service_filter(self, _event=None):
         self._load_services()
 
+    def _categorias_servicio(self):
+        try:
+            return categorias_disponibles()
+        except (OSError, ValueError, KeyError, TypeError):
+            return set()
+
+    def _distritos_servicio(self):
+        try:
+            return distritos_disponibles()
+        except (OSError, ValueError, KeyError, TypeError):
+            return set()
+
     def _on_service_search(self, *_args):
         if hasattr(self, "service_cards_container"):
             if self._search_after_id:
@@ -175,8 +200,8 @@ class ServicesSection:
         for child in self.service_cards_container.winfo_children():
             child.destroy()
         self.service_count.configure(text="Cargando…")
-        category = SERVICE_CATEGORIES[self.category_var.get()]
-        selected_district = SERVICE_DISTRICTS[self.district_var.get()]
+        category = self._service_category_options.get(self.category_var.get())
+        selected_district = self._service_district_options.get(self.district_var.get())
         query = self.service_search_var.get().strip().casefold()
         self._services_request_id += 1
         request_id = self._services_request_id
@@ -300,10 +325,7 @@ class ServicesSection:
             wraplength=330,
             justify="left",
         ).pack(anchor="w")
-        service_type = SERVICE_TYPES.get(
-            service["tipo_servicio"],
-            service["tipo_servicio"].replace("_", " ").title(),
-        )
+        service_type = humanizar_etiqueta(service["tipo_servicio"])
         district = self._format_district(service["ubicacion"]["distrito_id"])
         self._label(
             title_area,
@@ -320,8 +342,7 @@ class ServicesSection:
         )
         channels = service["canales_atencion"]
         channel_names = [
-            SERVICE_CHANNELS.get(channel, channel.replace("_", " ").title())
-            for channel in channels
+            humanizar_etiqueta(channel) for channel in channels
         ]
         self._service_detail(card, "CANALES DE ATENCIÓN", "  ·  ".join(channel_names))
         self._service_detail(
@@ -359,8 +380,7 @@ class ServicesSection:
         ).pack(anchor="w", pady=(2, 0))
 
     def _format_district(self, district_id):
-        name = district_id.removeprefix("DIST_").title()
-        return f"Distrito {name}"
+        return humanizar_etiqueta(district_id)
 
     def _format_schedule(self, schedule):
         day_range, _, hours = schedule.partition(" ")

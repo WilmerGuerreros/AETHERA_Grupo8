@@ -3,7 +3,7 @@
 import math
 from datetime import date, datetime, time, timedelta
 
-from ...tema import COLORS, EVENT_STYLES, FONT, WEEKDAY_NAMES
+from ...tema import COLORS, FONT, WEEKDAY_NAMES, estilo_evento, humanizar_etiqueta
 from ...widgets import mezclar_color
 
 
@@ -351,10 +351,7 @@ class CalendarGrid:
             x1 = left + (last_index + 1) * column_width - 5
             y0 = top + index * row_height + 4
             y1 = y0 + row_height - 6
-            fill, accent, border = EVENT_STYLES.get(
-                event.get("categoria"),
-                (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]),
-            )
+            fill, accent, border = estilo_evento(event.get("categoria"))
             tag = f"calendar_event_{index}"
             self._canvas_round_rect(
                 canvas,
@@ -395,8 +392,8 @@ class CalendarGrid:
                 x0 + 12,
                 y0 + 22,
                 text=(
-                    "Personal"
-                    if event.get("origen") == "personal"
+                    humanizar_etiqueta(event.get("origen", ""))
+                    if event.get("editable")
                     else self._format_calendar_category(event.get("categoria", ""))
                 ),
                 anchor="nw",
@@ -515,10 +512,7 @@ class CalendarGrid:
                 if y1 <= y0:
                     continue
 
-                fill, accent, border = EVENT_STYLES.get(
-                    event.get("categoria"),
-                    (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]),
-                )
+                fill, accent, border = estilo_evento(event.get("categoria"))
                 tag = f"calendar_timed_event_{day_index}_{event_index}"
                 self._canvas_round_rect(
                     canvas,
@@ -618,14 +612,7 @@ class CalendarGrid:
         )
 
     def _format_calendar_category(self, category):
-        names = {
-            "evaluation_week": "Semana de evaluaciones",
-            "wellbeing_activity": "Bienestar y pausa",
-            "period_start": "Inicio de período",
-            "period_end": "Cierre de período",
-            "university_activity": "Actividad universitaria",
-        }
-        return names.get(category, category.replace("_", " ").title())
+        return humanizar_etiqueta(category)
 
     def _highlight_calendar_event(self, tag, accent):
         self.calendar_canvas.itemconfigure(f"{tag}_bg", outline=accent, width=2)

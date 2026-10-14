@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from core.calendar import buscar_eventos
 from core.workload import evaluar_riesgo_sobrecarga
-from .tema import COLORS
+from .tema import COLORS, humanizar_etiqueta
 
 
 class DashboardSection:
@@ -136,7 +136,7 @@ class DashboardSection:
 
     def _get_upcoming_events(self):
         today = date.today().isoformat()
-        events = buscar_eventos("any", fecha_inicio=today, origen="ambos")
+        events = buscar_eventos("any", fecha_inicio=today)
         if events and "error" in events[0]:
             raise ValueError(events[0]["error"])
         return sorted(
@@ -168,9 +168,9 @@ class DashboardSection:
             weight="bold",
         ).pack(anchor="w")
         etiqueta = (
-            "Personal"
-            if event.get("origen") == "personal"
-            else event.get("categoria", "").replace("_", " ").title()
+            humanizar_etiqueta(event.get("origen", ""))
+            if event.get("editable")
+            else humanizar_etiqueta(event.get("categoria", ""))
         )
         self._label(
             details,

@@ -5,7 +5,7 @@ from datetime import date
 from tkinter import messagebox, ttk
 
 from core.calendar import borrar_evento_personal, guardar_evento_personal
-from ...tema import COLORS, EVENT_STYLES, FONT
+from ...tema import COLORS, FONT, estilo_evento, humanizar_etiqueta
 
 
 class CalendarModal:
@@ -112,8 +112,12 @@ class CalendarModal:
                 error_label.configure(text=result["error"])
                 return
             dialog.destroy()
-            self.calendar_source_var.set("Personal")
-            self.calendar_category_var.set("Todos los eventos")
+            origen_creado = result["evento"].get("origen")
+            for etiqueta, codigo in self._calendar_source_options.items():
+                if codigo == origen_creado:
+                    self.calendar_source_var.set(etiqueta)
+                    break
+            self.calendar_category_var.set(self._calendar_all_categories_label)
             self._refresh_calendar()
 
         buttons = tk.Frame(panel, bg="#17213b")
@@ -134,8 +138,9 @@ class CalendarModal:
 
         dialog = tk.Toplevel(self.root)
         self._calendar_event_dialog = dialog
-        origen = event.get("origen", "academico")
-        nombre_calendario = "Personal" if origen == "personal" else "Académico"
+        origen = event.get("origen", "")
+        es_personal = bool(event.get("editable"))
+        nombre_calendario = humanizar_etiqueta(origen)
         dialog.title(event.get("resumen", "Evento"))
         dialog.configure(bg=COLORS["background"])
         dialog.transient(self.root)
@@ -155,15 +160,12 @@ class CalendarModal:
         details = tk.Frame(panel, bg="#17213b")
         details.pack(fill="both", expand=True, padx=24, pady=(20, 8))
         category = event.get("categoria", "")
-        _, accent, _ = EVENT_STYLES.get(
-            category,
-            (COLORS["surface_light"], COLORS["accent_light"], COLORS["border"]),
-        )
+        _, accent, _ = estilo_evento(category)
         self._label(
             details,
             (
-                "PERSONAL"
-                if origen == "personal"
+                humanizar_etiqueta(origen).upper()
+                if es_personal
                 else self._format_calendar_category(category).upper()
             ),
             size=9,
@@ -194,13 +196,13 @@ class CalendarModal:
             color=COLORS["muted"],
             bg="#17213b",
         ).pack(anchor="w", pady=(14, 10))
-        if origen == "personal":
+        if es_personal:
             descripcion = event.get("descripcion")
             detalle = "Descripción"
             detalle_texto = descripcion or "Evento personal"
         else:
             district = event.get("distrito_id") or "ALL"
-            detalle = f"Ubicación: {district.replace('DIST_', 'Distrito ').title()}"
+            detalle = f"Ubicación: {humanizar_etiqueta(district)}"
         self._label(
             details,
             detalle,
@@ -209,7 +211,7 @@ class CalendarModal:
             weight="bold",
             bg="#17213b",
         ).pack(anchor="w", pady=(0, 5))
-        if origen == "personal":
+        if es_personal:
             description_frame = tk.Frame(details, bg="#17213b")
             description_frame.pack(fill="both", expand=True)
             description = tk.Text(
@@ -247,7 +249,7 @@ class CalendarModal:
             "Cerrar",
             lambda: self._close_calendar_event_dialog(dialog),
         ).pack(side="right")
-        if origen == "personal":
+        if es_personal:
             tk.Button(
                 buttons,
                 text="Eliminar evento",

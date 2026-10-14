@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 import core.calendar as core_calendar
+import core.workload as core_workload
 from core.calendar import (
     borrar_evento_personal,
     buscar_eventos,
@@ -16,8 +17,12 @@ from core.calendar import (
 from data.calendar import (
     CalendarioInvalido,
     CalendarStore,
+    CategoriaDesconocida,
     EventoAmbiguo,
     EventoNoEncontrado,
+    OrigenDesconocido,
+    categorias_disponibles,
+    origenes_disponibles,
 )
 
 
@@ -156,6 +161,30 @@ class CalendarStoreTests(unittest.TestCase):
         with self.assertRaises(CalendarioInvalido):
             self.store.eliminar("x@aethera")
 
+    def test_categorias_disponibles_reflejan_el_recurso(self):
+        self.assertEqual(
+            self.store.categorias_disponibles(),
+            {"evaluation_week", "wellbeing_activity"},
+        )
+
+    def test_origenes_disponibles_son_los_calendarios(self):
+        self.assertEqual(origenes_disponibles(), ("academico", "personal"))
+
+    def test_listar_origen_desconocido_lanza(self):
+        with self.assertRaises(OrigenDesconocido):
+            self.store.listar("otro")
+
+    def test_listar_categoria_desconocida_lanza(self):
+        with self.assertRaises(CategoriaDesconocida):
+            self.store.listar("academico", categorias={"no-existe"})
+
+    def test_evento_expone_si_es_editable(self):
+        self.assertFalse(self._store().listar("academico")[0]["editable"])
+
+        self.store.agregar("Repaso", date(2026, 12, 1))
+
+        self.assertTrue(self.store.listar("personal")[0]["editable"])
+
 
 class CalendarioCoreTests(unittest.TestCase):
     def setUp(self):
@@ -217,19 +246,33 @@ class CalendarioCoreTests(unittest.TestCase):
     def test_obtener_eventos_semana_origen_invalido(self):
         with self.assertRaises(ValueError):
             obtener_eventos_semana(
-                date(2026, 11, 2), date(2026, 11, 8), "Otro", "Bienestar"
+                date(2026, 11, 2), date(2026, 11, 8), "otro", "evaluation_week"
             )
 
     def test_obtener_eventos_semana_filtra_por_categoria(self):
         eventos = obtener_eventos_semana(
             date(2026, 11, 2),
             date(2026, 11, 8),
-            "Académico",
-            "Bienestar",
+            "academico",
+            "wellbeing_activity",
             store=self.store,
         )
 
         self.assertEqual([evento["uid"] for evento in eventos], ["ev-2@aethera"])
+
+    def test_obtener_eventos_semana_sin_filtros(self):
+        eventos = obtener_eventos_semana(
+            date(2026, 11, 2),
+            date(2026, 11, 8),
+            None,
+            None,
+            store=self.store,
+        )
+
+        self.assertEqual(
+            [evento["uid"] for evento in eventos],
+            ["ev-1@aethera", "ev-2@aethera"],
+        )
 
     def test_crear_evento_valida_titulo(self):
         self.assertIn("error", crear_evento("   ", "2026-11-05", store=self.store))
@@ -272,6 +315,13 @@ class CalendarioCoreTests(unittest.TestCase):
 
         self.assertIn("error", resultado)
 
+    def test_core_relega_los_catalogos_de_data(self):
+        self.assertEqual(
+            core_calendar.categorias_disponibles(self.store),
+            self.store.categorias_disponibles(),
+        )
+        self.assertEqual(core_calendar.origenes_disponibles(), origenes_disponibles())
+
     def test_core_no_conoce_el_formato_ni_las_rutas(self):
         codigo = inspect.getsource(core_calendar)
 
@@ -281,6 +331,29 @@ class CalendarioCoreTests(unittest.TestCase):
         self.assertNotIn("read_text", codigo)
         self.assertNotIn("resource_path", codigo)
         self.assertNotIn("user_calendar_path", codigo)
+
+    def test_core_no_conoce_las_categorias_ni_los_origenes(self):
+        codigo = inspect.getsource(core_calendar)
+
+        for categoria in (
+            "evaluation_week",
+            "wellbeing_activity",
+            "period_start",
+            "period_end",
+            "university_activity",
+        ):
+            self.assertNotIn(categoria, codigo)
+        for origen in ('"academico"', "'academico'", '"personal"', "'personal'"):
+            self.assertNotIn(origen, codigo)
+        self.assertNotIn("ambos", codigo)
+
+    def test_core_workload_no_conoce_el_recurso_ni_las_categorias(self):
+        codigo = inspect.getsource(core_workload)
+
+        self.assertNotIn("D7_calendar", codigo)
+        self.assertNotIn("evaluation_week", codigo)
+        self.assertNotIn("leer_recurso", codigo)
+        self.assertNotIn("csv", codigo)
 
 
 if __name__ == "__main__":

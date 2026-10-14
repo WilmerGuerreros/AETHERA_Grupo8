@@ -11,7 +11,7 @@ class ProximosEventosTests(unittest.TestCase):
         capturado = {}
         original = dashboard.buscar_eventos
 
-        def buscar_falso(tipo, fecha_inicio=None, fecha_fin="2100-01-01", origen="ambos"):
+        def buscar_falso(tipo, fecha_inicio=None, fecha_fin="2100-01-01", origen=None):
             capturado["tipo"] = tipo
             capturado["origen"] = origen
             return eventos
@@ -23,10 +23,10 @@ class ProximosEventosTests(unittest.TestCase):
             dashboard.buscar_eventos = original
         return resultado, capturado
 
-    def test_pide_ambos_origenes(self):
+    def test_pide_todos_los_origenes(self):
         _, capturado = self._invocar([])
 
-        self.assertEqual(capturado["origen"], "ambos")
+        self.assertIsNone(capturado["origen"])
 
     def test_incluye_personales_y_ordena_por_fecha_y_hora(self):
         eventos = [
