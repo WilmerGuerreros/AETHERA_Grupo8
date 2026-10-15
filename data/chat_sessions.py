@@ -23,16 +23,65 @@ class ChatArchiveStore:
     def create_directory(self, chat_id: str, title: str = "Nuevo chat") -> Path:
         """Crea el directorio del chat y su estructura de memoria."""
         directory = self.session_directory(chat_id, title)
-        memory_root = directory / "MEMORIA"
+        self.ensure_chat_structure(chat_id)
+        return directory
+
+    def ensure_chat_structure(self, chat_id: str) -> None:
+        """Crea las cinco carpetas hermanas y migra el esquema anterior."""
+        directory = self.session_directory(chat_id)
+        legacy_memory = directory / "MEMORIA"
+        mappings = {
+            "HISTORIAL": "MEMORIA BRUTA",
+            "MEMORIA BRUTA": "MEMORIA BRUTA",
+            "RESUMEN": "RESUMEN",
+            "INDICE": "INDICE",
+            "ARCHIVOS ADJUNTOS": "ARCHIVOS ADJUNTOS",
+            "ARCHIVOS GENERADOS": "ARCHIVOS GENERADOS",
+        }
+        if legacy_memory.is_dir():
+            for old_name, new_name in mappings.items():
+                source = legacy_memory / old_name
+                if source.is_dir():
+                    self._merge_directory(source, directory / new_name)
+            try:
+                legacy_memory.rmdir()
+            except OSError:
+                pass
+
+        for old_name, new_name in mappings.items():
+            source = directory / old_name
+            destination = directory / new_name
+            if source != destination and source.is_dir():
+                self._merge_directory(source, destination)
+
         for name in (
-            "HISTORIAL",
+            "MEMORIA BRUTA",
+            "ARCHIVOS ADJUNTOS",
             "RESUMEN",
             "INDICE",
-            "ARCHIVOS ADJUNTOS",
             "ARCHIVOS GENERADOS",
         ):
-            (memory_root / name).mkdir(parents=True, exist_ok=True)
-        return directory
+            (directory / name).mkdir(parents=True, exist_ok=True)
+
+    def import_legacy_memory(self, chat_id: str, source_root: Path) -> None:
+        """Importa memoria antigua y la distribuye en las carpetas nuevas."""
+        source_root = Path(source_root)
+        directory = self.session_directory(chat_id)
+        if not source_root.is_dir() or source_root.resolve() == directory.resolve():
+            return
+        self.ensure_chat_structure(chat_id)
+        mappings = {
+            "HISTORIAL": "MEMORIA BRUTA",
+            "MEMORIA BRUTA": "MEMORIA BRUTA",
+            "RESUMEN": "RESUMEN",
+            "INDICE": "INDICE",
+            "ARCHIVOS ADJUNTOS": "ARCHIVOS ADJUNTOS",
+            "ARCHIVOS GENERADOS": "ARCHIVOS GENERADOS",
+        }
+        for old_name, new_name in mappings.items():
+            source = source_root / old_name
+            if source.is_dir():
+                self._copy_directory(source, directory / new_name)
 
     def save_quiz_result(
         self,
@@ -94,13 +143,8 @@ class ChatArchiveStore:
 
     def generated_files_directory(self, chat_id: str) -> Path:
         """Devuelve y crea la carpeta de archivos generados del chat."""
-        directory = (
-            self.session_directory(chat_id)
-            / "MEMORIA"
-            / "ARCHIVOS GENERADOS"
-        )
-        directory.mkdir(parents=True, exist_ok=True)
-        return directory
+        self.ensure_chat_structure(chat_id)
+        return self.session_directory(chat_id) / "ARCHIVOS GENERADOS"
 
     def session_directory(
         self,
@@ -135,18 +179,26 @@ class ChatArchiveStore:
         return destination
 
     def archive_memory(self, chat_id: str) -> Path | None:
-        """Mueve solo la memoria del chat a ``CHATS ARCHIVADOS``."""
+        """Mueve las cinco carpetas del chat a ``CHATS ARCHIVADOS``."""
         directory = self.session_directory(chat_id)
-        memory = directory / "MEMORIA"
-        if not memory.exists():
-            return None
+        self.ensure_chat_structure(chat_id)
         archive_root = self.root / "CHATS ARCHIVADOS"
         archive_root.mkdir(parents=True, exist_ok=True)
         archive_directory = archive_root / directory.name
         archive_directory.mkdir(parents=True, exist_ok=False)
-        destination = archive_directory / "MEMORIA"
-        memory.replace(destination)
-        return destination
+        moved = False
+        for name in (
+            "MEMORIA BRUTA",
+            "ARCHIVOS ADJUNTOS",
+            "RESUMEN",
+            "INDICE",
+            "ARCHIVOS GENERADOS",
+        ):
+            source = directory / name
+            if source.exists():
+                source.replace(archive_directory / name)
+                moved = True
+        return archive_directory if moved else None
 
     def delete_directory(self, chat_id: str) -> None:
         """Elimina la carpeta activa y sus archivos adjuntos/transcripción."""
@@ -160,8 +212,8 @@ class ChatArchiveStore:
         source_path = Path(source)
         if not source_path.is_file():
             raise FileNotFoundError(f"No se encontró el archivo adjunto: {source_path}")
-        memory = self.session_directory(chat_id) / "MEMORIA" / "ARCHIVOS ADJUNTOS"
-        memory.mkdir(parents=True, exist_ok=True)
+        self.ensure_chat_structure(chat_id)
+        memory = self.session_directory(chat_id) / "ARCHIVOS ADJUNTOS"
         safe_name = re.sub(r"[^\w.-]+", "_", source_path.name).strip("._")
         if not safe_name:
             safe_name = "adjunto"
@@ -236,3 +288,44 @@ class ChatArchiveStore:
             encoding="utf-8",
         )
         temporary_path.replace(path)
+
+    @classmethod
+    def _merge_directory(cls, source: Path, destination: Path) -> None:
+        """Mueve un directorio, preservando archivos ante colisiones."""
+        if not destination.exists():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(destination)
+            return
+
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in source.iterdir():
+            target = destination / item.name
+            if target.exists() and item.is_dir() and target.is_dir():
+                cls._merge_directory(item, target)
+            elif target.exists():
+                target = destination / (
+                    f"{item.stem}_migrado_{uuid4().hex[:8]}{item.suffix}"
+                )
+                item.replace(target)
+            else:
+                item.replace(target)
+        source.rmdir()
+
+    @classmethod
+    def _copy_directory(cls, source: Path, destination: Path) -> None:
+        """Copia una carpeta importada sin borrar el original ni colisiones."""
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in source.iterdir():
+            target = destination / item.name
+            if item.is_dir():
+                if target.exists() and not target.is_dir():
+                    target = destination / (
+                        f"{item.name}_migrado_{uuid4().hex[:8]}"
+                    )
+                cls._copy_directory(item, target)
+            else:
+                if target.exists():
+                    target = destination / (
+                        f"{item.stem}_migrado_{uuid4().hex[:8]}{item.suffix}"
+                    )
+                shutil.copy2(item, target)

@@ -1,7 +1,6 @@
 """Creación y persistencia de conversaciones independientes."""
 
 import logging
-import shutil
 import threading
 import uuid
 from collections.abc import Callable
@@ -61,17 +60,15 @@ class ChatManager:
         with self._lock:
             chat_id = uuid.uuid4().hex
             directory = self.archive_store.create_directory(chat_id, "Nuevo chat")
-            memory_root = directory / "MEMORIA"
+            if importar_memoria_anterior:
+                self.archive_store.import_legacy_memory(
+                    chat_id,
+                    application_data_directory() / "memoria",
+                )
             memory = Memoria(
-                MemoryStore(memory_root),
+                MemoryStore(directory),
                 modelo=self.motor.modelo,
             )
-            if importar_memoria_anterior:
-                self._import_legacy_memory(memory_root)
-                memory = Memoria(
-                    MemoryStore(memory_root),
-                    modelo=self.motor.modelo,
-                )
             if self._initial_history is not None:
                 history = self._apply_system_prompt(self._initial_history)
             else:
@@ -157,10 +154,7 @@ class ChatManager:
                 metadata.get("folder"),
             )
             self.archive_store.generated_files_directory(chat_id)
-            memory = Memoria(
-                MemoryStore(directory / "MEMORIA"),
-                modelo=self.motor.modelo,
-            )
+            memory = Memoria(MemoryStore(directory), modelo=self.motor.modelo)
             history = self.archive_store.load_history(chat_id)
             if history is None:
                 history = self._history_with_memory(memory)
@@ -215,14 +209,6 @@ class ChatManager:
 
     def _history_with_memory(self, memory: Memoria) -> list[dict[str, Any]]:
         return self._apply_system_prompt(memory.contexto_inicial()[1:])
-
-    @staticmethod
-    def _import_legacy_memory(memory_root: Path) -> None:
-        legacy_root = application_data_directory() / "memoria"
-        if not legacy_root.is_dir() or legacy_root.resolve() == memory_root.resolve():
-            return
-        shutil.copytree(legacy_root, memory_root, dirs_exist_ok=True)
-
 
 def title_from_message(message: str) -> str:
     """Genera un título breve a partir del primer mensaje visible."""

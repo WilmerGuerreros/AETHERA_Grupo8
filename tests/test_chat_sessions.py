@@ -21,7 +21,7 @@ class ChatSessionTests(unittest.TestCase):
             segundo = manager.create_session()
 
             carpetas_memoria = (
-                "HISTORIAL",
+                "MEMORIA BRUTA",
                 "RESUMEN",
                 "INDICE",
                 "ARCHIVOS ADJUNTOS",
@@ -31,7 +31,8 @@ class ChatSessionTests(unittest.TestCase):
             for session in (primero, segundo):
                 self.assertTrue((session.directory / "CONVERSACION.json").is_file())
                 for carpeta in carpetas_memoria:
-                    self.assertTrue((session.directory / "MEMORIA" / carpeta).is_dir())
+                    self.assertTrue((session.directory / carpeta).is_dir())
+                self.assertFalse((session.directory / "MEMORIA").exists())
                 self.assertEqual(session.history[0]["content"], "Prompt de sistema compartido.")
                 self.assertIs(session.conversation.motor, motor)
 
@@ -103,13 +104,14 @@ class ChatSessionTests(unittest.TestCase):
             remove = manager.create_session()
             source = Path(directory) / "guia.pdf"
             source.write_bytes(b"contenido pdf")
-
             saved = manager.store_attachment(keep.chat_id, source)
+            generated_report = keep.directory / "ARCHIVOS GENERADOS" / "quiz.json"
+            generated_report.write_text('{"resultado": 100}', encoding="utf-8")
             manager.delete_session(remove.chat_id, keep_memory=False)
 
             self.assertEqual(
                 saved.parent,
-                keep.directory / "MEMORIA" / "ARCHIVOS ADJUNTOS",
+                keep.directory / "ARCHIVOS ADJUNTOS",
             )
             self.assertEqual(saved.read_bytes(), b"contenido pdf")
             self.assertFalse(remove.directory.exists())
@@ -119,9 +121,16 @@ class ChatSessionTests(unittest.TestCase):
                 root
                 / "CHATS ARCHIVADOS"
                 / keep.directory.name
-                / "MEMORIA"
             )
             self.assertTrue((archived_memory / "ARCHIVOS ADJUNTOS" / saved.name).is_file())
+            self.assertTrue(
+                (archived_memory / "ARCHIVOS GENERADOS" / generated_report.name).is_file()
+            )
+            self.assertTrue((archived_memory / "MEMORIA BRUTA").is_dir())
+            self.assertTrue((archived_memory / "RESUMEN").is_dir())
+            self.assertTrue((archived_memory / "INDICE").is_dir())
+            self.assertTrue((archived_memory / "ARCHIVOS GENERADOS").is_dir())
+            self.assertFalse((archived_memory / "MEMORIA").exists())
             self.assertFalse(keep.directory.exists())
             self.assertFalse(manager.sessions)
 
@@ -168,7 +177,7 @@ class ChatSessionTests(unittest.TestCase):
 
             self.assertEqual(
                 saved.parent,
-                first.directory / "MEMORIA" / "ARCHIVOS GENERADOS",
+                first.directory / "ARCHIVOS GENERADOS",
             )
             self.assertTrue(saved.is_file())
             self.assertNotEqual(saved, manager.save_quiz_result(
@@ -187,7 +196,7 @@ class ChatSessionTests(unittest.TestCase):
                 "Correcto.",
             )
             self.assertEqual(
-                list((second.directory / "MEMORIA" / "ARCHIVOS GENERADOS").glob("*.json")),
+                list((second.directory / "ARCHIVOS GENERADOS").glob("*.json")),
                 [],
             )
 
@@ -219,10 +228,49 @@ class ChatSessionTests(unittest.TestCase):
             self.assertTrue(
                 (
                     manager.sessions["legacy01"].directory
-                    / "MEMORIA"
                     / "ARCHIVOS GENERADOS"
                 ).is_dir()
             )
+
+    def test_existing_nested_memory_layout_is_migrated_to_sibling_folders(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            chat_directory = root / "Legacy_legacy02"
+            old_raw = chat_directory / "MEMORIA" / "HISTORIAL"
+            old_raw.mkdir(parents=True)
+            raw_file = old_raw / "HISTORIAL_0001.txt"
+            raw_file.write_text("Usuario: Hola\nAethera: Buenas", encoding="utf-8")
+            generated = chat_directory / "MEMORIA" / "ARCHIVOS GENERADOS"
+            generated.mkdir()
+            report = generated / "QUIZ_test.json"
+            report.write_text('{"resultado": 100}', encoding="utf-8")
+            (root / "CHATS.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "legacy02",
+                            "title": "Legacy",
+                            "folder": chat_directory.name,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            self.assertTrue(
+                (chat_directory / "MEMORIA BRUTA" / raw_file.name).is_file()
+            )
+            self.assertTrue(
+                (chat_directory / "ARCHIVOS GENERADOS" / report.name).is_file()
+            )
+            self.assertFalse((chat_directory / "MEMORIA").exists())
 
 
 if __name__ == "__main__":

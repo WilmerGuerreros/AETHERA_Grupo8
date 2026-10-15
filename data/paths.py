@@ -79,7 +79,7 @@ def memory_paths(raiz: Path | None = None) -> MemoryPaths:
     """
     raiz = Path(raiz) if raiz is not None else application_data_directory() / "memoria"
     return MemoryPaths(
-        historial=raiz / "HISTORIAL",
+        historial=raiz / "MEMORIA BRUTA",
         resumen=raiz / "RESUMEN",
         indice=raiz / "INDICE",
         adjuntos=raiz / "ARCHIVOS ADJUNTOS",

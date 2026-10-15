@@ -43,11 +43,11 @@ Los valores que suelen ajustarse están en `config.py`:
 
 Los datos escribibles (chats, memoria, calendario personal y quices) viven bajo una
 raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema operativo
-en el ejecutable empaquetado. Cada chat guarda su transcripción y una carpeta `MEMORIA`
-propia con `HISTORIAL`, `RESUMEN`, `INDICE`, `ARCHIVOS ADJUNTOS` y
-`ARCHIVOS GENERADOS`. Al terminar un quiz, sus preguntas, respuestas, resultados y
-retroalimentación se guardan en un JSON dentro de `MEMORIA/ARCHIVOS GENERADOS` del chat
-desde el que se inició. Todas las conversaciones
+en el ejecutable empaquetado. Cada chat guarda su transcripción y cinco carpetas
+hermanas directamente bajo su directorio: `MEMORIA BRUTA`, `ARCHIVOS ADJUNTOS`,
+`RESUMEN`, `INDICE` y `ARCHIVOS GENERADOS`. Al terminar un quiz, sus preguntas,
+respuestas, resultados y retroalimentación se guardan en un JSON dentro de
+`ARCHIVOS GENERADOS` del chat desde el que se inició. Todas las conversaciones
 comparten el mismo modelo, prompt de sistema y opciones de generación; sus historiales y
 memorias no se comparten. Las carpetas activas usan el nombre del chat y un identificador
 hexadecimal único; al eliminar una conversación se puede borrar su memoria o conservarla
