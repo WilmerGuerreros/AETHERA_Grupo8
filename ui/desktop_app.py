@@ -14,7 +14,13 @@ from .estado.chat import ChatStore
 from .estado.tareas import CORRIENDO, PENDIENTE, TaskManager
 from .tema import COLORS, FONT
 from .tk_env import configure_tk_environment
-from .widgets import RoundedButton, RoundedFrame, mezclar_color, texto_con_elipsis
+from .widgets import (
+    RoundedButton,
+    RoundedFrame,
+    imagen_emoji_color,
+    mezclar_color,
+    texto_con_elipsis,
+)
 
 from .dashboard import DashboardSection
 from .calendario import CalendarSection
@@ -216,7 +222,7 @@ class AetheraDesktopApp(
                 row,
                 text=page,
                 command=lambda selected=page: self.show_page(selected),
-                icon=icon,
+                icon=self._emoji_image(icon, size=25),
             )
             button.pack(side="left", fill="x", expand=True, padx=(10, 0))
             self.nav_buttons[page] = button
@@ -338,8 +344,24 @@ class AetheraDesktopApp(
             **kwargs,
         )
 
-    def _button(self, parent, text, command, primary=False):
-        return RoundedButton(parent, text, command, primary=primary)
+    def _emoji_image(self, emoji, size=22):
+        key = (emoji, size)
+        if key not in self._emoji_images:
+            self._emoji_images[key] = imagen_emoji_color(
+                emoji,
+                self.root,
+                size=size,
+            )
+        return self._emoji_images[key]
+
+    def _button(self, parent, text, command, primary=False, icon=None):
+        return RoundedButton(
+            parent,
+            text,
+            command,
+            primary=primary,
+            icon=self._emoji_image(icon) if icon else None,
+        )
 
     def _animate_widget_color(self, widget, option, target, steps=20):
         key = (widget, option)

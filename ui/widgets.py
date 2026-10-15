@@ -1,9 +1,12 @@
 """Widgets reutilizables con esquinas redondeadas y animaciones."""
 
 import math
+import os
+from pathlib import Path
 
 import tkinter as tk
 from tkinter import font as tkfont
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from .tema import COLORS, FONT
 
@@ -32,6 +35,35 @@ def texto_con_elipsis(texto, fuente, ancho):
     while texto and medida.measure(texto + elipsis) > ancho:
         texto = texto[:-1].rstrip()
     return texto + elipsis
+
+
+def imagen_emoji_color(emoji, master, size=24):
+    """Renderiza un emoji de color usando la fuente emoji del sistema."""
+    windows_directory = Path(os.environ.get("WINDIR", r"C:\Windows"))
+    font_path = windows_directory / "Fonts" / "seguiemj.ttf"
+    if not font_path.is_file():
+        raise FileNotFoundError(
+            f"No se encontró la fuente de emoji a color: {font_path}"
+        )
+    font = ImageFont.truetype(str(font_path), size * 2)
+    bounds = font.getbbox(emoji)
+    padding = 4
+    image = Image.new(
+        "RGBA",
+        (
+            max(1, bounds[2] - bounds[0] + padding * 2),
+            max(1, bounds[3] - bounds[1] + padding * 2),
+        ),
+        (0, 0, 0, 0),
+    )
+    ImageDraw.Draw(image).text(
+        (padding - bounds[0], padding - bounds[1]),
+        emoji,
+        font=font,
+        embedded_color=True,
+    )
+    image.thumbnail((size, size), Image.Resampling.LANCZOS)
+    return ImageTk.PhotoImage(image, master=master)
 
 
 def _rounded_scanline(width, height, radius, y):
@@ -176,11 +208,6 @@ class RoundedButton(tk.Canvas):
         self.selected = False
         self.font = (FONT, 11, "bold")
         self.text_font = tkfont.Font(parent, font=self.font)
-        self.icon_font = tkfont.Font(
-            parent,
-            family="Segoe UI Emoji",
-            size=17,
-        )
         self._display_gradient = self.gradient
         self._gradient_animation_id = None
         width = max(116, len(text) * 8 + 40)
@@ -275,7 +302,7 @@ class RoundedButton(tk.Canvas):
         )
         available_width = max(0, width - 28)
         if self.icon:
-            icon_width = self.icon_font.measure(self.icon)
+            icon_width = self.icon.width()
             gap = 8
             visible_text = texto_con_elipsis(
                 self.text,
@@ -285,11 +312,10 @@ class RoundedButton(tk.Canvas):
             text_width = self.text_font.measure(visible_text)
             group_width = icon_width + gap + text_width
             left = (width - group_width) / 2
-            self.create_text(
+            self.create_image(
                 left + icon_width / 2,
                 height / 2,
-                text=self.icon,
-                font=self.icon_font,
+                image=self.icon,
                 tags="button",
             )
             self.create_text(
