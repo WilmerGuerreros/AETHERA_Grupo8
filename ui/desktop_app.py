@@ -195,18 +195,18 @@ class AetheraDesktopApp(
             text="MENÚ PRINCIPAL",
             bg=COLORS["sidebar"],
             fg="#7381a4",
-            font=(FONT, 9, "bold"),
+            font=(FONT, 10, "bold"),
         ).pack(anchor="w", padx=24, pady=(0, 10))
 
         self.nav_buttons = {}
         self.nav_indicators = {}
         for page, icon in (
-            ("Inicio", "⌂"),
-            ("Asistente IA", "✧"),
-            ("Calendario", "▦"),
-            ("Carga académica", "▤"),
-            ("Servicios de apoyo", "♡"),
-            ("Quiz", "⚗"),
+            ("Inicio", "\U0001F3E0"),
+            ("Asistente IA", "\U0001F916"),
+            ("Calendario", "\U0001F4C5"),
+            ("Carga académica", "\U0001F4DA"),
+            ("Servicios de apoyo", "\U0001F499"),
+            ("Quiz", "\U0001F9E0"),
         ):
             row = tk.Frame(self.sidebar, bg=COLORS["sidebar"])
             row.pack(fill="x", padx=12, pady=2)
@@ -214,8 +214,9 @@ class AetheraDesktopApp(
             indicator.place(x=0, rely=0.5, anchor="w", width=3, height=0)
             button = RoundedButton(
                 row,
-                text=f"{icon}    {page}",
+                text=page,
                 command=lambda selected=page: self.show_page(selected),
+                icon=icon,
             )
             button.pack(side="left", fill="x", expand=True, padx=(10, 0))
             self.nav_buttons[page] = button
@@ -340,7 +341,7 @@ class AetheraDesktopApp(
     def _button(self, parent, text, command, primary=False):
         return RoundedButton(parent, text, command, primary=primary)
 
-    def _animate_widget_color(self, widget, option, target, steps=12):
+    def _animate_widget_color(self, widget, option, target, steps=20):
         key = (widget, option)
         after_id = self._widget_color_animations.pop(key, None)
         if after_id:
@@ -365,7 +366,7 @@ class AetheraDesktopApp(
                 return
             if progress < 1:
                 self._widget_color_animations[key] = self.root.after(
-                    16,
+                    14,
                     lambda next_step=index + 1: step(next_step),
                 )
             else:
@@ -376,18 +377,18 @@ class AetheraDesktopApp(
     def _bind_native_widget_animations(self, widget):
         if isinstance(widget, tk.Button):
             base_color = widget.cget("bg")
-            hover_color = mezclar_color(base_color, COLORS["accent"], 0.32)
+            hover_color = mezclar_color(base_color, COLORS["accent"], 0.5)
             widget.bind(
                 "<Enter>",
                 lambda _event: self._animate_widget_color(
-                    widget, "bg", hover_color
+                    widget, "bg", hover_color, steps=22
                 ),
                 add="+",
             )
             widget.bind(
                 "<Leave>",
                 lambda _event: self._animate_widget_color(
-                    widget, "bg", base_color
+                    widget, "bg", base_color, steps=22
                 ),
                 add="+",
             )
@@ -562,7 +563,7 @@ class AetheraDesktopApp(
             row = tk.Frame(
                 self.chat_list,
                 bg=COLORS["surface_light"] if selected else COLORS["surface"],
-                height=42,
+                height=44,
                 cursor="hand2",
             )
             row.pack(fill="x", padx=6, pady=2)
@@ -581,7 +582,7 @@ class AetheraDesktopApp(
                 text=session.title,
                 bg=row.cget("bg"),
                 fg=COLORS["text"] if selected else COLORS["muted"],
-                font=(FONT, 9, "bold" if selected else "normal"),
+                font=(FONT, 10, "bold" if selected else "normal"),
                 anchor="w",
                 padx=4,
                 cursor="hand2",
@@ -604,19 +605,23 @@ class AetheraDesktopApp(
                 relief="flat",
                 bd=0,
                 padx=7,
-                font=(FONT, 13, "bold"),
+                font=(FONT, 15, "bold"),
                 cursor="hand2",
             )
             actions.pack(side="right", padx=(0, 5))
             actions.bind(
                 "<Enter>",
                 lambda _event, button=actions:
-                    button.configure(fg=COLORS["accent_light"]),
+                    self._animate_chat_action_button(button, True),
             )
             actions.bind(
                 "<Leave>",
-                lambda _event, button=actions, bg=row.cget("bg"):
-                    button.configure(fg=COLORS["muted"], bg=bg),
+                lambda _event, button=actions, parent=row:
+                    self._animate_chat_action_button(
+                        button,
+                        False,
+                        parent.cget("bg"),
+                    ),
             )
             for widget in (row, indicator, title_label):
                 widget.bind(
@@ -646,13 +651,42 @@ class AetheraDesktopApp(
 
     def _set_chat_row_hover(self, row, selected, hovered):
         color = (
-            COLORS["surface_light"]
+            "#26365a"
             if selected or hovered
             else COLORS["surface"]
         )
-        self._animate_widget_color(row, "bg", color, steps=16)
+        self._animate_widget_color(row, "bg", color, steps=22)
         for child in row.winfo_children():
-            self._animate_widget_color(child, "bg", color, steps=16)
+            self._animate_widget_color(child, "bg", color, steps=22)
+        title = next(
+            (
+                child
+                for child in row.winfo_children()
+                if isinstance(child, tk.Label) and child.cget("anchor") == "w"
+            ),
+            None,
+        )
+        if title is not None:
+            self._animate_widget_color(
+                title,
+                "fg",
+                COLORS["text"] if selected or hovered else COLORS["muted"],
+                steps=22,
+            )
+
+    def _animate_chat_action_button(self, button, hovered, base=None):
+        self._animate_widget_color(
+            button,
+            "fg",
+            COLORS["accent_light"] if hovered else COLORS["muted"],
+            steps=22,
+        )
+        self._animate_widget_color(
+            button,
+            "bg",
+            "#35466f" if hovered else base or COLORS["surface"],
+            steps=22,
+        )
 
     def _fit_chat_title(self, label, title):
         width = label.winfo_width() - 10
@@ -696,7 +730,7 @@ class AetheraDesktopApp(
         panel.pack(fill="both", expand=True, padx=1, pady=1)
         rename_button = tk.Button(
             panel,
-            text="✎   Renombrar",
+            text="\U0000270F\ufe0f   Renombrar",
             command=lambda: (
                 popup.destroy(),
                 self._rename_chat_dialog(chat_id),
@@ -710,13 +744,13 @@ class AetheraDesktopApp(
             bd=0,
             padx=14,
             pady=9,
-            font=(FONT, 9),
+            font=("Segoe UI Emoji", 10),
             cursor="hand2",
         )
         rename_button.pack(fill="x", padx=4, pady=(4, 1))
         delete_button = tk.Button(
             panel,
-            text="⌫   Eliminar chat",
+            text="\U0001F5D1\ufe0f   Eliminar chat",
             command=lambda: (
                 popup.destroy(),
                 self._delete_chat_dialog(chat_id),
@@ -730,7 +764,7 @@ class AetheraDesktopApp(
             bd=0,
             padx=14,
             pady=9,
-            font=(FONT, 9),
+            font=("Segoe UI Emoji", 10),
             cursor="hand2",
         )
         delete_button.pack(fill="x", padx=4, pady=(1, 4))
@@ -741,9 +775,20 @@ class AetheraDesktopApp(
                     self._animate_widget_color(
                         target,
                         "bg",
-                        COLORS["surface_light"]
+                        "#303c60"
                         if target is rename_button
-                        else "#3b1d2a",
+                        else "#572331",
+                        steps=24,
+                    ),
+            )
+            button.bind(
+                "<Leave>",
+                lambda _event, target=button:
+                    self._animate_widget_color(
+                        target,
+                        "bg",
+                        COLORS["surface"],
+                        steps=24,
                     ),
             )
 
@@ -1030,7 +1075,7 @@ class AetheraDesktopApp(
                 delattr(self, attribute)
 
     def _animate_nav_selection(self, selected_page):
-        duration = 0.18
+        duration = 0.28
         started = time.monotonic()
         for page, button in self.nav_buttons.items():
             after_id = self._nav_animation_ids.pop(page, None)
@@ -1068,8 +1113,8 @@ class AetheraDesktopApp(
                     x=0,
                     rely=0.5,
                     anchor="w",
-                    width=3,
-                    height=round(30 * indicator_progress),
+                    width=4,
+                    height=round(34 * indicator_progress),
                 )
                 if progress < 1:
                     self._nav_animation_ids[nav_page] = self.root.after(

@@ -26,7 +26,7 @@ class ChatSection(ChatHeader, ChatHistory, ChatQuizView, ChatInput, ChatLogic):
             text="Recientes",
             bg=COLORS["surface"],
             fg=COLORS["muted"],
-            font=(FONT, 9, "bold"),
+            font=(FONT, 10, "bold"),
             anchor="w",
         ).pack(fill="x", padx=14, pady=(16, 10))
         self._button(

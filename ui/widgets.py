@@ -159,10 +159,11 @@ def _gradient_color(stops, position):
 class RoundedButton(tk.Canvas):
     """Botón de estilo minimalista con estados hover y presionado."""
 
-    def __init__(self, parent, text, command, primary=False):
+    def __init__(self, parent, text, command, primary=False, icon=None):
         self.primary = primary
         self.command = command
         self.text = text
+        self.icon = icon
         self.disabled = False
         self.hovered = False
         self.pressed = False
@@ -173,7 +174,13 @@ class RoundedButton(tk.Canvas):
             else ("#18223b", "#1d2943", "#18223b")
         )
         self.selected = False
-        self.font = (FONT, 10, "bold")
+        self.font = (FONT, 11, "bold")
+        self.text_font = tkfont.Font(parent, font=self.font)
+        self.icon_font = tkfont.Font(
+            parent,
+            family="Segoe UI Emoji",
+            size=17,
+        )
         self._display_gradient = self.gradient
         self._gradient_animation_id = None
         width = max(116, len(text) * 8 + 40)
@@ -247,47 +254,76 @@ class RoundedButton(tk.Canvas):
                 width=2,
                 tags="button",
             )
-        elif self.selected:
+        elif self.selected or self.hovered:
             self.create_polygon(
                 *points,
                 smooth=True,
                 splinesteps=20,
                 fill="",
                 outline=outline,
-                width=1,
+                width=2 if self.selected else 1.5,
                 tags="button",
             )
-        self.create_text(
-            width / 2,
-            height / 2,
-            text=texto_con_elipsis(
-                self.text,
-                self.font,
-                max(0, width - 28),
-            ),
-            fill=(
-                "#8792ad"
-                if self.disabled
-                else COLORS["text"]
-                if self.selected or self.hovered
-                else COLORS["muted"]
-                if not self.primary
-                else "white"
-            ),
-            font=self.font,
-            tags="button",
+        text_color = (
+            "#8792ad"
+            if self.disabled
+            else COLORS["text"]
+            if self.selected or self.hovered
+            else COLORS["muted"]
+            if not self.primary
+            else "white"
         )
+        available_width = max(0, width - 28)
+        if self.icon:
+            icon_width = self.icon_font.measure(self.icon)
+            gap = 8
+            visible_text = texto_con_elipsis(
+                self.text,
+                self.text_font,
+                max(0, available_width - icon_width - gap),
+            )
+            text_width = self.text_font.measure(visible_text)
+            group_width = icon_width + gap + text_width
+            left = (width - group_width) / 2
+            self.create_text(
+                left + icon_width / 2,
+                height / 2,
+                text=self.icon,
+                font=self.icon_font,
+                tags="button",
+            )
+            self.create_text(
+                left + icon_width + gap + text_width / 2,
+                height / 2,
+                text=visible_text,
+                fill=text_color,
+                font=self.text_font,
+                tags="button",
+            )
+        else:
+            self.create_text(
+                width / 2,
+                height / 2,
+                text=texto_con_elipsis(
+                    self.text,
+                    self.text_font,
+                    available_width,
+                ),
+                fill=text_color,
+                font=self.text_font,
+                tags="button",
+            )
 
     def _gradient_for_state(self):
         if self.disabled:
             color = COLORS["border"]
             return color, mezclar_color(color, COLORS["surface_light"], 0.4), color
         if self.pressed:
-            return ("#4439bd", "#5144cf", "#315fae")
+            return ("#3825c7", "#5040e8", "#2678e8")
         if self.selected:
-            return ("#5145d7", "#5f53e8", "#326fc6")
+            return ("#6049f5", "#6255f4", "#3287f4")
         if self.hovered:
-            return ("#302b62", "#383774", "#264b76")
+            return ("#4434a8", "#4643b6", "#2869a8")
         if self.focused and not self.primary:
             return ("#24234b", "#292952", "#203a5d")
         return self.gradient
@@ -305,7 +341,7 @@ class RoundedButton(tk.Canvas):
         def step(index):
             if not self.winfo_exists():
                 return
-            progress = min(1.0, index / 9)
+            progress = min(1.0, index / 16)
             eased = 1 - (1 - progress) ** 3
             self._display_gradient = tuple(
                 mezclar_color(first, last, eased)
@@ -324,7 +360,11 @@ class RoundedButton(tk.Canvas):
 
     def set_selected(self, selected):
         self.selected = selected
-        self.font = (FONT, 10, "bold" if selected else "normal")
+        self.font = (FONT, 12 if selected else 11, "bold" if selected else "normal")
+        self.text_font.configure(
+            size=12 if selected else 11,
+            weight="bold" if selected else "normal",
+        )
         self._animate_gradient()
 
     def _on_enter(self, _event):
