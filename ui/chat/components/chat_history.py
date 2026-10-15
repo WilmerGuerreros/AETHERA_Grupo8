@@ -319,6 +319,31 @@ class ChatHistory:
         self._animate_card_in(outer)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
+    def _append_archive_notice(self):
+        session = self.chat_manager.sessions[self._active_chat_id]
+        folder_name = f"{session.directory.name}/MEMORIA BRUTA"
+        notice = tk.Frame(
+            self.message_list,
+            bg=COLORS["surface_light"],
+            highlightbackground=COLORS["border"],
+            highlightthickness=1,
+        )
+        notice.pack(fill="x", padx=60, pady=(10, 14))
+        tk.Label(
+            notice,
+            text=(
+                "¡Dirígete a la carpeta de memoria bruta "
+                f"«{folder_name}» para ver mensajes más antiguos!"
+            ),
+            bg=COLORS["surface_light"],
+            fg=COLORS["muted"],
+            font=(FONT, 9),
+            wraplength=max(360, self.root.winfo_width() - 520),
+            justify="center",
+            padx=12,
+            pady=8,
+        ).pack(fill="x")
+
     def _render_chat_history(self):
         self._active_chat_quiz_sessions = [
             session
@@ -358,6 +383,8 @@ class ChatHistory:
                 self._append_message(rol, entrada["texto"])
             elif rol in {"error", "saludo"}:
                 self._append_message("assistant", entrada["texto"])
+            elif rol == "archive_notice":
+                self._append_archive_notice()
             elif rol == "quiz":
                 self._append_generated_quiz(entrada["quiz"])
             elif rol == "stream":

@@ -14,6 +14,14 @@ from data.paths import chat_archives_directory
 class ChatArchiveStore:
     """Almacena chats en directorios separados bajo la raíz de datos de Aethera."""
 
+    MEMORY_DIRECTORIES = (
+        "MEMORIA BRUTA",
+        "ARCHIVOS ADJUNTOS",
+        "RESUMEN",
+        "INDICE",
+        "ARCHIVOS GENERADOS",
+    )
+
     def __init__(self, root: Path | str | None = None) -> None:
         self.root = Path(root) if root is not None else chat_archives_directory()
         self.root.mkdir(parents=True, exist_ok=True)
@@ -43,10 +51,8 @@ class ChatArchiveStore:
                 source = legacy_memory / old_name
                 if source.is_dir():
                     self._merge_directory(source, directory / new_name)
-            try:
-                legacy_memory.rmdir()
-            except OSError:
-                pass
+            if legacy_memory.exists():
+                self._merge_directory(legacy_memory, directory / "MEMORIA BRUTA")
 
         for old_name, new_name in mappings.items():
             source = directory / old_name
@@ -54,14 +60,30 @@ class ChatArchiveStore:
             if source != destination and source.is_dir():
                 self._merge_directory(source, destination)
 
-        for name in (
-            "MEMORIA BRUTA",
-            "ARCHIVOS ADJUNTOS",
-            "RESUMEN",
-            "INDICE",
-            "ARCHIVOS GENERADOS",
-        ):
+        for name in self.MEMORY_DIRECTORIES:
             (directory / name).mkdir(parents=True, exist_ok=True)
+
+    def memory_is_empty(self, chat_id: str) -> bool:
+        """Indica si memoria bruta y resúmenes carecen de archivos con datos."""
+        directory = self.session_directory(chat_id)
+        return not any(
+            self._contains_nonempty_file(directory / name)
+            for name in ("MEMORIA BRUTA", "RESUMEN")
+        )
+
+    def archive_chat_directory(self, chat_id: str) -> Path:
+        """Saca un chat de la lista activa preservando todo bajo CHATS ARCHIVADOS."""
+        directory = self.session_directory(chat_id)
+        archive_root = self.root / "CHATS ARCHIVADOS"
+        archive_root.mkdir(parents=True, exist_ok=True)
+        destination = archive_root / directory.name
+        if destination.exists():
+            destination = archive_root / (
+                f"{directory.name}_archivado_{uuid4().hex[:8]}"
+            )
+        directory.replace(destination)
+        self._directories.pop(chat_id, None)
+        return destination
 
     def import_legacy_memory(self, chat_id: str, source_root: Path) -> None:
         """Importa memoria antigua y la distribuye en las carpetas nuevas."""
@@ -329,3 +351,10 @@ class ChatArchiveStore:
                         f"{item.stem}_migrado_{uuid4().hex[:8]}{item.suffix}"
                     )
                 shutil.copy2(item, target)
+
+    @staticmethod
+    def _contains_nonempty_file(directory: Path) -> bool:
+        return directory.is_dir() and any(
+            path.is_file() and path.stat().st_size > 0
+            for path in directory.rglob("*")
+        )

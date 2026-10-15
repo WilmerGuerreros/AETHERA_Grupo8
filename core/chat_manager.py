@@ -146,14 +146,23 @@ class ChatManager:
             self.archive_store.save_history(chat_id, session.history)
 
     def _load_sessions(self) -> None:
-        for metadata in self.archive_store.load_metadata():
+        metadata_entries = self.archive_store.load_metadata()
+        for metadata in metadata_entries:
             chat_id = metadata["id"]
             directory = self.archive_store.session_directory(
                 chat_id,
                 metadata["title"],
                 metadata.get("folder"),
             )
-            self.archive_store.generated_files_directory(chat_id)
+            self.archive_store.ensure_chat_structure(chat_id)
+            if self.archive_store.memory_is_empty(chat_id):
+                archived = self.archive_store.archive_chat_directory(chat_id)
+                log.info(
+                    "Se retiró el chat vacío %s y se conservó en %s",
+                    chat_id,
+                    archived,
+                )
+                continue
             memory = Memoria(MemoryStore(directory), modelo=self.motor.modelo)
             history = self.archive_store.load_history(chat_id)
             if history is None:
@@ -170,6 +179,8 @@ class ChatManager:
                 history,
                 memory,
             )
+        if len(self.sessions) != len(metadata_entries):
+            self.archive_store.save_metadata(self.sessions.values())
 
     def _build_session(
         self,

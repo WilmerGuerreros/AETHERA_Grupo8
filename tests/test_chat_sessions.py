@@ -71,6 +71,8 @@ class ChatSessionTests(unittest.TestCase):
             )
             first = next(iter(manager.sessions.values()))
             second = manager.create_session()
+            first.memory.guardar("Persistencia de chat uno", "Respuesta uno")
+            second.memory.guardar("Persistencia de chat dos", "Respuesta dos")
             manager.rename_session(first.chat_id, "Planificación de Álgebra")
             manager.rename_session(second.chat_id, "Planificación de Álgebra")
 
@@ -204,7 +206,12 @@ class ChatSessionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "chats"
             chat_directory = root / "Legacy_legacy01"
-            (chat_directory / "MEMORIA").mkdir(parents=True)
+            raw_directory = chat_directory / "MEMORIA BRUTA"
+            raw_directory.mkdir(parents=True)
+            (raw_directory / "HISTORIAL_0001.txt").write_text(
+                "Usuario: Interacción existente\nAethera: Respuesta existente",
+                encoding="utf-8",
+            )
             (root / "CHATS.json").write_text(
                 json.dumps(
                     [
@@ -231,6 +238,71 @@ class ChatSessionTests(unittest.TestCase):
                     / "ARCHIVOS GENERADOS"
                 ).is_dir()
             )
+
+    def test_restoration_repairs_missing_chat_folders(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            session = next(iter(manager.sessions.values()))
+            session.memory.guardar("Hola", "Buenas")
+            (session.directory / "ARCHIVOS ADJUNTOS").rmdir()
+            (session.directory / "ARCHIVOS GENERADOS").rmdir()
+            (session.directory / "RESUMEN").rmdir()
+
+            restored = ChatManager(
+                manager.motor,
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            restored_session = restored.sessions[session.chat_id]
+            for folder in (
+                "MEMORIA BRUTA",
+                "ARCHIVOS ADJUNTOS",
+                "RESUMEN",
+                "INDICE",
+                "ARCHIVOS GENERADOS",
+            ):
+                self.assertTrue((restored_session.directory / folder).is_dir())
+            self.assertIn("Hola", restored_session.memory.store.leer_historial(1))
+
+    def test_vaciar_memoria_bruta_y_resumen_retira_chat_y_archiva_sus_datos(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            session = next(iter(manager.sessions.values()))
+            session.history.extend(
+                [
+                    {"role": "user", "content": "Turno no persistido en memoria"},
+                    {"role": "assistant", "content": "Respuesta recuperable"},
+                ]
+            )
+            manager.save_history(session.chat_id)
+
+            restored = ChatManager(
+                manager.motor,
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            self.assertNotIn(session.chat_id, restored.sessions)
+            archived = root / "CHATS ARCHIVADOS" / session.directory.name
+            self.assertTrue((archived / "CONVERSACION.json").is_file())
+            self.assertTrue((archived / "MEMORIA BRUTA").is_dir())
+            metadata = json.loads((root / "CHATS.json").read_text(encoding="utf-8"))
+            self.assertNotIn(session.chat_id, {item["id"] for item in metadata})
 
     def test_existing_nested_memory_layout_is_migrated_to_sibling_folders(self):
         with tempfile.TemporaryDirectory() as directory:

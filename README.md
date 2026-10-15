@@ -53,6 +53,12 @@ memorias no se comparten. Las carpetas activas usan el nombre del chat y un iden
 hexadecimal único; al eliminar una conversación se puede borrar su memoria o conservarla
 en `CHATS DE AETHERA AI/CHATS ARCHIVADOS/`.
 
+Al iniciar la aplicación se comprueba y repara la estructura de carpetas de cada chat.
+Si `MEMORIA BRUTA` y `RESUMEN` no contienen datos, el chat se retira de la lista activa
+y su carpeta completa se conserva en `CHATS ARCHIVADOS`. La interfaz muestra las últimas
+20 interacciones anteriores al inicio; si hay más, al principio del historial aparece
+la ruta de `MEMORIA BRUTA` con los mensajes antiguos.
+
 ## Estructura
 
 - `agent/`: cliente LLM, prompts estáticos, sesión conversacional y herramientas finas.

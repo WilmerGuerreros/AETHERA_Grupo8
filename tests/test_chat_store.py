@@ -140,6 +140,41 @@ class ChatStoreTests(unittest.TestCase):
             [("user", "créame un quiz"), ("assistant", "Listo.")],
         )
 
+    def test_limita_al_inicio_a_veinte_interacciones_y_muestra_aviso_de_archivo(self):
+        historial = [{"role": "system", "content": "Prompt."}]
+        for indice in range(25):
+            historial.extend(
+                [
+                    {"role": "user", "content": f"Pregunta {indice}"},
+                    {"role": "assistant", "content": f"Respuesta {indice}"},
+                ]
+            )
+
+        store = ChatStore(historial, max_interacciones_visibles=20)
+        entradas = store.entradas()
+
+        self.assertEqual(entradas[0], {"rol": "archive_notice"})
+        visibles = [entrada for entrada in entradas if entrada["rol"] == "user"]
+        self.assertEqual(len(visibles), 20)
+        self.assertEqual(visibles[0]["texto"], "Pregunta 5")
+        self.assertEqual(visibles[-1]["texto"], "Pregunta 24")
+
+        historial.extend(
+            [
+                {"role": "user", "content": "Pregunta actual"},
+                {"role": "assistant", "content": "Respuesta actual"},
+            ]
+        )
+        entradas_actualizadas = store.entradas()
+        self.assertEqual(entradas_actualizadas[0], {"rol": "archive_notice"})
+        self.assertEqual(
+            entradas_actualizadas[-2:],
+            [
+                {"rol": "user", "texto": "Pregunta actual"},
+                {"rol": "assistant", "texto": "Respuesta actual"},
+            ],
+        )
+
     def test_el_indicador_solo_se_actualiza_mientras_hay_turno(self):
         store = ChatStore([])
         store.actualizar_estado("Consultando crear quiz")

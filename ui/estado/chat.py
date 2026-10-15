@@ -33,7 +33,11 @@ def _tiene_texto(contenido: Any) -> bool:
 class ChatStore:
     """Transcripción visible del chat, independiente de los widgets."""
 
-    def __init__(self, historial: list[dict[str, Any]] | None = None):
+    def __init__(
+        self,
+        historial: list[dict[str, Any]] | None = None,
+        max_interacciones_visibles: int | None = None,
+    ):
         self._historial: list[dict[str, Any]] = historial if historial is not None else []
         self._lock = threading.RLock()
         self._stream_texto = ""
@@ -44,6 +48,21 @@ class ChatStore:
         self._marca_turno = 0
         self._ocupado = False
         self._estado = ESTADO_LIBRE
+        if max_interacciones_visibles is not None and max_interacciones_visibles < 1:
+            raise ValueError("El límite de interacciones visibles debe ser positivo.")
+        self._indice_inicio_visible = 0
+        self._hay_historial_anterior = False
+        if max_interacciones_visibles is not None:
+            posiciones_usuario = [
+                indice
+                for indice, mensaje in enumerate(self._historial)
+                if mensaje.get("role") == "user"
+            ]
+            if len(posiciones_usuario) > max_interacciones_visibles:
+                self._indice_inicio_visible = posiciones_usuario[
+                    -max_interacciones_visibles
+                ]
+                self._hay_historial_anterior = True
 
     @property
     def ocupado(self) -> bool:
@@ -132,8 +151,16 @@ class ChatStore:
 
         embebidos = self._ids_quiz_embebidos(mensajes)
         emitidos: set[str] = set()
-        salidas: list[dict[str, Any]] = []
-        consumidos = 0
+        salidas: list[dict[str, Any]] = (
+            [{"rol": "archive_notice"}]
+            if self._hay_historial_anterior
+            else []
+        )
+        mensajes_visibles = enumerate(
+            mensajes[self._indice_inicio_visible :],
+            start=self._indice_inicio_visible + 1,
+        )
+        consumidos = self._indice_inicio_visible
 
         def volcar_hasta(indice: int) -> None:
             while pendientes and pendientes[0]["indice"] <= indice:
@@ -145,7 +172,7 @@ class ChatStore:
                     emitidos.add(quiz_id)
                 salidas.append(extra)
 
-        for posicion, mensaje in enumerate(mensajes, start=1):
+        for posicion, mensaje in mensajes_visibles:
             salidas.extend(self._entradas_de_mensaje(mensaje, embebidos, emitidos))
             consumidos = posicion
             volcar_hasta(consumidos)

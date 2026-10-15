@@ -14,7 +14,7 @@ MODELO_RESUMEN = "nemotron-3-super:cloud"
 OPCIONES_LLM = {
     "temperature": 0.3,
     "num_ctx": 200000,#solo para cloud.
-    "think": "low",
+    "think": "medium",
 }
 
 # Cantidad de interacciones que se acumulan antes de resumir y sellar una sección.

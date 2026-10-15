@@ -117,7 +117,7 @@ class AetheraDesktopApp(
             )
         self.chat_manager = chat_manager
         self._chat_stores = {
-            chat_id: ChatStore(session.history)
+            chat_id: self._new_chat_store(session)
             for chat_id, session in self.chat_manager.sessions.items()
         }
         self._chat_attachments = {
@@ -557,6 +557,11 @@ class AetheraDesktopApp(
         self.chat_store = self._chat_stores[chat_id]
         self._attached_pdfs = self._chat_attachments.setdefault(chat_id, [])
 
+    @staticmethod
+    def _new_chat_store(session):
+        """Mantiene en pantalla veinte interacciones al iniciar la aplicación."""
+        return ChatStore(session.history, max_interacciones_visibles=20)
+
     def _create_chat(self):
         if (
             self.current_page == "Asistente IA"
@@ -566,7 +571,7 @@ class AetheraDesktopApp(
         self._discard_stream_widgets()
         self._cancel_chat_typing_indicator()
         session = self.chat_manager.create_session()
-        self._chat_stores[session.chat_id] = ChatStore(session.history)
+        self._chat_stores[session.chat_id] = self._new_chat_store(session)
         self._chat_attachments[session.chat_id] = []
         self._activate_chat(session.chat_id)
         self._sync_chat_list()
@@ -1003,7 +1008,9 @@ class AetheraDesktopApp(
             self._chat_attachments.pop(chat_id, None)
             if not self.chat_manager.sessions:
                 new_session = self.chat_manager.create_session()
-                self._chat_stores[new_session.chat_id] = ChatStore(new_session.history)
+                self._chat_stores[new_session.chat_id] = self._new_chat_store(
+                    new_session
+                )
                 self._chat_attachments[new_session.chat_id] = []
             if self._active_chat_id == chat_id:
                 next_id = next(reversed(self.chat_manager.sessions))
