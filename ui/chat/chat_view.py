@@ -77,13 +77,18 @@ class ChatSection(ChatHeader, ChatHistory, ChatQuizView, ChatInput, ChatLogic):
         self.chat_list_canvas.pack(side="left", fill="both", expand=True)
         self.chat_list_scrollbar.pack(side="right", fill="y")
         self._bind_smooth_scroll(self.chat_list_canvas, self.chat_list)
+        self.chat_list_canvas.bind(
+            "<Enter>",
+            lambda _event: self.chat_list_canvas.focus_set(),
+            add="+",
+        )
         workspace = tk.Frame(layout, bg=COLORS["background"])
         workspace.pack(side="left", fill="both", expand=True)
         self.content = workspace
         self._render_chat_header()
         self._render_chat_history()
         self._render_chat_input()
-        self._sync_chat_selector()
+        self._sync_chat_list()
         if self.chat_store.ocupado:
             # El turno siguió corriendo fuera de la página: retomamos el aviso.
             self._typing_phase = 0

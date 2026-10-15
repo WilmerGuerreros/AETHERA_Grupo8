@@ -58,6 +58,71 @@ class ChatSessionTests(unittest.TestCase):
                 {"nemotron-3-super:cloud"},
             )
 
+    def test_renombrar_usa_slug_y_codigo_hexadecimal_sin_colisiones(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=Path(directory) / "chats",
+            )
+            first = next(iter(manager.sessions.values()))
+            second = manager.create_session()
+            manager.rename_session(first.chat_id, "Planificación de Álgebra")
+            manager.rename_session(second.chat_id, "Planificación de Álgebra")
+
+            self.assertIn("Planificación_de_Álgebra", first.directory.name)
+            self.assertTrue(first.directory.name.endswith(first.chat_id))
+            self.assertTrue(second.directory.name.endswith(second.chat_id))
+            self.assertNotEqual(first.directory, second.directory)
+            self.assertTrue((first.directory / "CONVERSACION.json").exists())
+
+            restored = ChatManager(
+                manager.motor,
+                {},
+                "Prompt.",
+                root=Path(directory) / "chats",
+            )
+            self.assertEqual(
+                restored.sessions[first.chat_id].directory.name,
+                first.directory.name,
+            )
+
+    def test_delete_archive_and_attachment_storage_are_scoped_to_chat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            keep = next(iter(manager.sessions.values()))
+            remove = manager.create_session()
+            source = Path(directory) / "guia.pdf"
+            source.write_bytes(b"contenido pdf")
+
+            saved = manager.store_attachment(keep.chat_id, source)
+            manager.delete_session(remove.chat_id, keep_memory=False)
+
+            self.assertEqual(
+                saved.parent,
+                keep.directory / "MEMORIA" / "ARCHIVOS ADJUNTOS",
+            )
+            self.assertEqual(saved.read_bytes(), b"contenido pdf")
+            self.assertFalse(remove.directory.exists())
+
+            manager.delete_session(keep.chat_id, keep_memory=True)
+            archived_memory = (
+                root
+                / "CHATS ARCHIVADOS"
+                / keep.directory.name
+                / "MEMORIA"
+            )
+            self.assertTrue((archived_memory / "ARCHIVOS ADJUNTOS" / saved.name).is_file())
+            self.assertFalse(keep.directory.exists())
+            self.assertFalse(manager.sessions)
+
 
 if __name__ == "__main__":
     unittest.main()

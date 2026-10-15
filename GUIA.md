@@ -67,8 +67,9 @@
 
 Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.application_data_directory()`:
 
-- `CHATS DE AETHERA AI/chat_<id>/` — transcripción `CONVERSACION.json` y carpeta `MEMORIA/` con `HISTORIAL/`, `RESUMEN/`, `INDICE/` y `ARCHIVOS ADJUNTOS/`; cada chat mantiene su propia memoria.
+- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/` — transcripción `CONVERSACION.json` y carpeta `MEMORIA/` con `HISTORIAL/`, `RESUMEN/`, `INDICE/` y `ARCHIVOS ADJUNTOS/`; cada chat mantiene su propia memoria y los PDF adjuntos se copian a su carpeta.
 - `CHATS DE AETHERA AI/CHATS.json` — lista de chats y títulos.
+- `CHATS DE AETHERA AI/CHATS ARCHIVADOS/<nombre>_<id-hexadecimal>/MEMORIA/` — memoria conservada al eliminar un chat eligiendo “No, conservar”.
 - `data/calendario.ics` — calendario personal editable.
 - `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`).
 

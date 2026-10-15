@@ -32,11 +32,24 @@ class ChatLogic:
             if normalized_path in existing_paths:
                 continue
             existing_paths.add(normalized_path)
+            try:
+                ruta_archivada = self.chat_manager.store_attachment(
+                    self._active_chat_id,
+                    ruta,
+                )
+            except (OSError, ValueError, KeyError) as error:
+                logging.exception("No se pudo guardar el adjunto del chat.")
+                if hasattr(self, "pdf_status_label") and self.pdf_status_label.winfo_exists():
+                    self.pdf_status_label.configure(
+                        text=f"No se pudo guardar {os.path.basename(ruta)}: {error}",
+                        fg=COLORS["red"],
+                    )
+                continue
             self._pdf_request_id += 1
             document = {
                 "id": self._pdf_request_id,
                 "name": os.path.basename(ruta),
-                "path": ruta,
+                "path": str(ruta_archivada),
                 "text": "",
                 "state": "loading",
                 "error": "",
@@ -49,44 +62,53 @@ class ChatLogic:
         for document in selected:
             self.tasks.lanzar(
                 "extraer_pdf",
-                lambda _tarea, doc=document: self._extract_pdf_in_background(
-                    doc["id"], doc["path"]
+                lambda _tarea, doc=document, chat_id=self._active_chat_id: (
+                    self._extract_pdf_in_background(
+                        chat_id, doc["id"], doc["path"]
+                    )
                 ),
                 contexto={"pdf_id": document["id"], "nombre": document["name"]},
             )
 
-    def _extract_pdf_in_background(self, request_id, ruta):
+    def _extract_pdf_in_background(self, chat_id, request_id, ruta):
         try:
             texto = extraer_texto_pdf(ruta)
-            self.event_queue.put(("pdf_loaded", (request_id, texto)))
+            self.event_queue.put(("pdf_loaded", (chat_id, request_id, texto)))
         except Exception as error:
-            self.event_queue.put(("pdf_error", (request_id, str(error))))
+            self.event_queue.put(("pdf_error", (chat_id, request_id, str(error))))
 
-    def _find_attached_pdf(self, request_id):
+    def _find_attached_pdf(self, request_id, chat_id=None):
+        attachments = (
+            self._chat_attachments.get(chat_id, [])
+            if chat_id is not None
+            else self._attached_pdfs
+        )
         return next(
             (
                 document
-                for document in self._attached_pdfs
+                for document in attachments
                 if document["id"] == request_id
             ),
             None,
         )
 
-    def _handle_pdf_loaded(self, request_id, texto):
-        document = self._find_attached_pdf(request_id)
+    def _handle_pdf_loaded(self, chat_id, request_id, texto):
+        document = self._find_attached_pdf(request_id, chat_id)
         if document is None:
             return
         document["state"] = "ready"
         document["text"] = texto
-        self._sync_pdf_controls()
+        if chat_id == self._active_chat_id:
+            self._sync_pdf_controls()
 
-    def _handle_pdf_error(self, request_id, error):
-        document = self._find_attached_pdf(request_id)
+    def _handle_pdf_error(self, chat_id, request_id, error):
+        document = self._find_attached_pdf(request_id, chat_id)
         if document is None:
             return
         document["state"] = "error"
         document["error"] = error
-        self._sync_pdf_controls()
+        if chat_id == self._active_chat_id:
+            self._sync_pdf_controls()
 
     def _remove_pdf(self, request_id=None):
         if request_id is None:
@@ -97,6 +119,7 @@ class ChatLogic:
                 for document in self._attached_pdfs
                 if document["id"] != request_id
             ]
+        self._chat_attachments[self._active_chat_id] = self._attached_pdfs
         self._sync_pdf_controls()
 
     def _user_message_preview(self, text):
@@ -174,7 +197,7 @@ class ChatLogic:
                 session.chat_id,
                 title_from_message(text),
             )
-            self._sync_chat_selector()
+            self._sync_chat_list()
         self._remove_pdf()
         self.chat_store.iniciar_turno()
         self.send_button.configure(state="disabled")
@@ -325,8 +348,8 @@ class ChatLogic:
             store.finalizar_turno()
             if is_active:
                 self._finish_chat_turn()
-            if hasattr(self, "_sync_chat_selector"):
-                self._sync_chat_selector()
+            if hasattr(self, "_sync_chat_list"):
+                self._sync_chat_list()
         elif event == "error":
             mensaje = (
                 "No pude completar la respuesta. Inténtalo de nuevo."
@@ -337,8 +360,8 @@ class ChatLogic:
                 self._append_message("assistant", mensaje)
             if is_active:
                 self._finish_chat_turn()
-            if hasattr(self, "_sync_chat_selector"):
-                self._sync_chat_selector()
+            if hasattr(self, "_sync_chat_list"):
+                self._sync_chat_list()
 
     def _pulse_typing_indicator(self):
         if not self.busy or not hasattr(self, "status_label"):

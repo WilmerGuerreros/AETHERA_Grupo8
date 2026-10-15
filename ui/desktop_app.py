@@ -114,6 +114,10 @@ class AetheraDesktopApp(
             chat_id: ChatStore(session.history)
             for chat_id, session in self.chat_manager.sessions.items()
         }
+        self._chat_attachments = {
+            chat_id: []
+            for chat_id in self.chat_manager.sessions
+        }
         self._active_chat_id = next(iter(self.chat_manager.sessions))
         self._activate_chat(self._active_chat_id)
 
@@ -528,6 +532,7 @@ class AetheraDesktopApp(
         self._active_chat_id = chat_id
         self.chat = session.conversation
         self.chat_store = self._chat_stores[chat_id]
+        self._attached_pdfs = self._chat_attachments.setdefault(chat_id, [])
 
     def _create_chat(self):
         if (
@@ -539,12 +544,12 @@ class AetheraDesktopApp(
         self._cancel_chat_typing_indicator()
         session = self.chat_manager.create_session()
         self._chat_stores[session.chat_id] = ChatStore(session.history)
-        self._attached_pdfs.clear()
+        self._chat_attachments[session.chat_id] = []
         self._activate_chat(session.chat_id)
-        self._sync_chat_selector()
+        self._sync_chat_list()
         self.show_page("Asistente IA")
 
-    def _sync_chat_selector(self):
+    def _sync_chat_list(self):
         if not hasattr(self, "chat_list") or not self.chat_list.winfo_exists():
             return
         for item in self.chat_list.winfo_children():
@@ -587,6 +592,32 @@ class AetheraDesktopApp(
                 lambda event, label=title_label, title=session.title:
                     self._fit_chat_title(label, title),
             )
+            actions = tk.Button(
+                row,
+                text="⋯",
+                command=lambda selected_id=chat_id:
+                    self._show_chat_actions(selected_id),
+                bg=row.cget("bg"),
+                fg=COLORS["muted"],
+                activebackground=COLORS["border"],
+                activeforeground=COLORS["text"],
+                relief="flat",
+                bd=0,
+                padx=7,
+                font=(FONT, 13, "bold"),
+                cursor="hand2",
+            )
+            actions.pack(side="right", padx=(0, 5))
+            actions.bind(
+                "<Enter>",
+                lambda _event, button=actions:
+                    button.configure(fg=COLORS["accent_light"]),
+            )
+            actions.bind(
+                "<Leave>",
+                lambda _event, button=actions, bg=row.cget("bg"):
+                    button.configure(fg=COLORS["muted"], bg=bg),
+            )
             for widget in (row, indicator, title_label):
                 widget.bind(
                     "<Button-1>",
@@ -594,6 +625,34 @@ class AetheraDesktopApp(
                         selected_id
                     ),
                 )
+            for widget in (row, indicator, title_label, actions):
+                widget.bind(
+                    "<Button-3>",
+                    lambda event, selected_id=chat_id:
+                        self._show_chat_actions(selected_id, event),
+                )
+            for widget in (row, title_label):
+                widget.bind(
+                    "<Enter>",
+                    lambda _event, target=row, active=selected:
+                        self._set_chat_row_hover(target, active, True),
+                )
+                widget.bind(
+                    "<Leave>",
+                    lambda _event, target=row, active=selected:
+                        self._set_chat_row_hover(target, active, False),
+                )
+            self._animate_card_in(row)
+
+    def _set_chat_row_hover(self, row, selected, hovered):
+        color = (
+            COLORS["surface_light"]
+            if selected or hovered
+            else COLORS["surface"]
+        )
+        self._animate_widget_color(row, "bg", color, steps=16)
+        for child in row.winfo_children():
+            self._animate_widget_color(child, "bg", color, steps=16)
 
     def _fit_chat_title(self, label, title):
         width = label.winfo_width() - 10
@@ -616,11 +675,285 @@ class AetheraDesktopApp(
             return
         self._discard_stream_widgets()
         self._cancel_chat_typing_indicator()
-        self._attached_pdfs.clear()
         self._activate_chat(chat_id)
-        self._sync_chat_selector()
+        self._sync_chat_list()
         if self.current_page == "Asistente IA":
             self.show_page("Asistente IA")
+
+    def _show_chat_actions(self, chat_id, event=None):
+        if chat_id not in self.chat_manager.sessions:
+            return
+        popup = tk.Toplevel(self.root)
+        popup.overrideredirect(True)
+        popup.configure(bg=COLORS["surface"])
+        popup.transient(self.root)
+        if event is not None:
+            x, y = event.x_root, event.y_root
+        else:
+            x, y = self.root.winfo_pointerxy()
+        popup.geometry(f"+{x}+{y}")
+        panel = self._card(
+            popup,
+            bg=COLORS["surface"],
+            border=COLORS["accent"],
+            radius=14,
+        )
+        panel.pack(fill="both", expand=True, padx=1, pady=1)
+        rename_button = tk.Button(
+            panel,
+            text="✎   Renombrar",
+            command=lambda: (
+                popup.destroy(),
+                self._rename_chat_dialog(chat_id),
+            ),
+            anchor="w",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            activebackground=COLORS["surface_light"],
+            activeforeground=COLORS["accent_light"],
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=9,
+            font=(FONT, 9),
+            cursor="hand2",
+        )
+        rename_button.pack(fill="x", padx=4, pady=(4, 1))
+        delete_button = tk.Button(
+            panel,
+            text="⌫   Eliminar chat",
+            command=lambda: (
+                popup.destroy(),
+                self._delete_chat_dialog(chat_id),
+            ),
+            anchor="w",
+            bg=COLORS["surface"],
+            fg=COLORS["red"],
+            activebackground="#3b1d2a",
+            activeforeground="#ffabb3",
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=9,
+            font=(FONT, 9),
+            cursor="hand2",
+        )
+        delete_button.pack(fill="x", padx=4, pady=(1, 4))
+        for button in (rename_button, delete_button):
+            button.bind(
+                "<Enter>",
+                lambda _event, target=button:
+                    self._animate_widget_color(
+                        target,
+                        "bg",
+                        COLORS["surface_light"]
+                        if target is rename_button
+                        else "#3b1d2a",
+                    ),
+            )
+
+        def close_if_outside(event):
+            if event.widget.winfo_toplevel() is not popup and popup.winfo_exists():
+                popup.destroy()
+
+        outside_click_binding = self.root.bind(
+            "<Button-1>",
+            close_if_outside,
+            add="+",
+        )
+
+        def release_outside_click_binding(_event):
+            self.root.unbind("<Button-1>", outside_click_binding)
+
+        popup.bind("<Escape>", lambda _event: popup.destroy())
+        popup.bind("<Destroy>", release_outside_click_binding, add="+")
+        popup.focus_force()
+        self._animate_card_in(panel)
+
+    def _rename_chat_dialog(self, chat_id):
+        session = self.chat_manager.sessions.get(chat_id)
+        if session is None:
+            return
+        dialog, panel = self._create_chat_dialog("Renombrar conversación", "#6558f5")
+        tk.Label(
+            panel,
+            text="Nombre de la conversación",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=(FONT, 11, "bold"),
+        ).pack(anchor="w", padx=20, pady=(20, 8))
+        entry = tk.Entry(
+            panel,
+            bg=COLORS["surface_light"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief="flat",
+            font=(FONT, 11),
+        )
+        entry.pack(fill="x", padx=20, pady=(0, 16), ipady=8)
+        entry.insert(0, session.title)
+        self._bind_native_widget_animations(entry)
+        error_label = tk.Label(
+            panel,
+            text="",
+            bg=COLORS["surface"],
+            fg=COLORS["red"],
+            font=(FONT, 9),
+        )
+        error_label.pack(fill="x", padx=20)
+
+        def save():
+            title = entry.get().strip()
+            if not title:
+                error_label.configure(text="Escribe un nombre para continuar.")
+                return
+            try:
+                self.chat_manager.rename_session(chat_id, title)
+            except (OSError, ValueError) as error:
+                error_label.configure(text=f"No se pudo renombrar: {error}")
+                return
+            self._sync_chat_list()
+            dialog.destroy()
+
+        buttons = tk.Frame(panel, bg=COLORS["surface"])
+        buttons.pack(fill="x", padx=16, pady=16)
+        self._button(buttons, "Cancelar", dialog.destroy).pack(side="right", padx=(8, 0))
+        self._button(buttons, "Guardar", save, primary=True).pack(side="right")
+        entry.bind("<Return>", lambda _event: save())
+        entry.focus_set()
+        entry.selection_range(0, "end")
+        dialog.grab_set()
+        self._animate_card_in(panel)
+
+    def _delete_chat_dialog(self, chat_id):
+        session = self.chat_manager.sessions.get(chat_id)
+        if session is None:
+            return
+        if self._chat_stores[chat_id].ocupado:
+            self._show_chat_notice(
+                "No se puede eliminar una conversación mientras está respondiendo."
+            )
+            return
+        if any(
+            document["state"] == "loading"
+            for document in self._chat_attachments.get(chat_id, [])
+        ):
+            self._show_chat_notice(
+                "Espera a que termine el procesamiento de los PDF antes de eliminar el chat."
+            )
+            return
+        dialog, panel = self._create_chat_dialog("Eliminar conversación", COLORS["red"])
+        tk.Label(
+            panel,
+            text="¿Eliminar esta conversación?",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=(FONT, 12, "bold"),
+        ).pack(anchor="w", padx=20, pady=(20, 8))
+        question = tk.Label(
+            panel,
+            text="¿Eliminar también la carpeta de memoria del chat?",
+            bg="#3b1d2a",
+            fg="#ffabb3",
+            font=(FONT, 10, "bold"),
+            wraplength=390,
+            justify="left",
+            padx=12,
+            pady=12,
+            highlightbackground=COLORS["red"],
+            highlightthickness=1,
+        )
+        question.pack(fill="x", padx=20, pady=(0, 12))
+        tk.Label(
+            panel,
+            text="Si eliges No, la memoria se conservará en CHATS ARCHIVADOS.",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            font=(FONT, 9),
+            wraplength=390,
+            justify="left",
+        ).pack(fill="x", padx=20, pady=(0, 12))
+        buttons = tk.Frame(panel, bg=COLORS["surface"])
+        buttons.pack(fill="x", padx=14, pady=(0, 16))
+
+        def confirm(keep_memory):
+            try:
+                self.chat_manager.delete_session(chat_id, keep_memory)
+            except (OSError, ValueError, KeyError) as error:
+                self._show_chat_notice(f"No se pudo eliminar el chat: {error}")
+                return
+            dialog.destroy()
+            self._chat_stores.pop(chat_id, None)
+            self._chat_attachments.pop(chat_id, None)
+            if not self.chat_manager.sessions:
+                new_session = self.chat_manager.create_session()
+                self._chat_stores[new_session.chat_id] = ChatStore(new_session.history)
+                self._chat_attachments[new_session.chat_id] = []
+            if self._active_chat_id == chat_id:
+                next_id = next(reversed(self.chat_manager.sessions))
+                self._activate_chat(next_id)
+            self._sync_chat_list()
+            if self.current_page == "Asistente IA":
+                self.show_page("Asistente IA")
+
+        self._button(
+            buttons,
+            "Retroceder",
+            dialog.destroy,
+        ).pack(side="right", padx=(6, 0))
+        self._button(
+            buttons,
+            "No, conservar",
+            lambda: confirm(True),
+        ).pack(side="right", padx=6)
+        self._button(
+            buttons,
+            "Sí, eliminar",
+            lambda: confirm(False),
+            primary=True,
+        ).pack(side="right", padx=6)
+        dialog.grab_set()
+        self._animate_card_in(panel)
+
+    def _create_chat_dialog(self, title, accent):
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.transient(self.root)
+        dialog.configure(bg=COLORS["background"])
+        dialog.resizable(False, False)
+        width, height = 520, 310
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - width) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - height) // 2
+        dialog.geometry(f"{width}x{height}+{max(0, x)}+{max(0, y)}")
+        panel = self._card(
+            dialog,
+            bg=COLORS["surface"],
+            border=accent,
+            radius=22,
+        )
+        panel.pack(fill="both", expand=True, padx=2, pady=2)
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        return dialog, panel
+
+    def _show_chat_notice(self, message):
+        dialog, panel = self._create_chat_dialog("Aethera", COLORS["yellow"])
+        tk.Label(
+            panel,
+            text=message,
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            font=(FONT, 10),
+            wraplength=420,
+            justify="left",
+        ).pack(fill="x", padx=20, pady=20)
+        self._button(panel, "Entendido", dialog.destroy, primary=True).pack(
+            side="right",
+            padx=16,
+            pady=12,
+        )
+        dialog.grab_set()
+        self._animate_card_in(panel)
 
     def _scrollbar_command(self, canvas, *arguments):
         if not canvas.winfo_exists() or not arguments:

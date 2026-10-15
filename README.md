@@ -46,7 +46,9 @@ raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema op
 en el ejecutable empaquetado. Cada chat guarda su transcripción y una carpeta `MEMORIA`
 propia con `HISTORIAL`, `RESUMEN`, `INDICE` y `ARCHIVOS ADJUNTOS`. Todas las conversaciones
 comparten el mismo modelo, prompt de sistema y opciones de generación; sus historiales y
-memorias no se comparten.
+memorias no se comparten. Las carpetas activas usan el nombre del chat y un identificador
+hexadecimal único; al eliminar una conversación se puede borrar su memoria o conservarla
+en `CHATS DE AETHERA AI/CHATS ARCHIVADOS/`.
 
 ## Estructura
 

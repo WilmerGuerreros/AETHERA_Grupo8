@@ -60,7 +60,7 @@ class ChatManager:
         """Crea un chat y su estructura de memoria aislada."""
         with self._lock:
             chat_id = uuid.uuid4().hex
-            directory = self.archive_store.create_directory(chat_id)
+            directory = self.archive_store.create_directory(chat_id, "Nuevo chat")
             memory_root = directory / "MEMORIA"
             memory = Memoria(
                 MemoryStore(memory_root),
@@ -99,8 +99,30 @@ class ChatManager:
             clean_title = " ".join(title.split()).strip()
             if not clean_title:
                 return
-            session.title = clean_title[:60]
+            clean_title = clean_title[:60]
+            session.directory = self.archive_store.rename_directory(
+                chat_id,
+                clean_title,
+            )
+            session.title = clean_title
             self.archive_store.save_metadata(self.sessions.values())
+
+    def delete_session(self, chat_id: str, keep_memory: bool) -> None:
+        """Elimina el chat, opcionalmente conservando su memoria archivada."""
+        with self._lock:
+            if chat_id not in self.sessions:
+                raise KeyError(f"No existe el chat: {chat_id}")
+            if keep_memory:
+                self.archive_store.archive_memory(chat_id)
+            self.archive_store.delete_directory(chat_id)
+            del self.sessions[chat_id]
+            self.archive_store.save_metadata(self.sessions.values())
+
+    def store_attachment(self, chat_id: str, source: str | Path) -> Path:
+        """Guarda un documento adjunto en la memoria de su conversación."""
+        if chat_id not in self.sessions:
+            raise KeyError(f"No existe el chat: {chat_id}")
+        return self.archive_store.store_attachment(chat_id, source)
 
     def save_history(self, chat_id: str) -> None:
         """Guarda la transcripción completa del chat en su propio directorio."""
@@ -111,7 +133,11 @@ class ChatManager:
     def _load_sessions(self) -> None:
         for metadata in self.archive_store.load_metadata():
             chat_id = metadata["id"]
-            directory = self.archive_store.session_directory(chat_id)
+            directory = self.archive_store.session_directory(
+                chat_id,
+                metadata["title"],
+                metadata.get("folder"),
+            )
             memory = Memoria(
                 MemoryStore(directory / "MEMORIA"),
                 modelo=self.motor.modelo,
