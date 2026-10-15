@@ -6,6 +6,7 @@ import tempfile
 import time
 import tkinter as tk
 from datetime import date, timedelta
+from tkinter import font as tkfont
 from tkinter import ttk
 
 from core.chat_manager import ChatManager
@@ -13,7 +14,7 @@ from .estado.chat import ChatStore
 from .estado.tareas import CORRIENDO, PENDIENTE, TaskManager
 from .tema import COLORS, FONT
 from .tk_env import configure_tk_environment
-from .widgets import RoundedButton, RoundedFrame, mezclar_color
+from .widgets import RoundedButton, RoundedFrame, mezclar_color, texto_con_elipsis
 
 from .dashboard import DashboardSection
 from .calendario import CalendarSection
@@ -134,6 +135,17 @@ class AetheraDesktopApp(
             lightcolor=COLORS["border"],
             darkcolor=COLORS["border"],
             padding=12,
+        )
+        style.configure(
+            "Aethera.Vertical.TScrollbar",
+            background=COLORS["accent"],
+            troughcolor=COLORS["surface_light"],
+            bordercolor=COLORS["surface"],
+            lightcolor=COLORS["accent_light"],
+            darkcolor=COLORS["accent"],
+            arrowcolor=COLORS["muted"],
+            arrowsize=10,
+            width=9,
         )
         style.map(
             "Aethera.TCombobox",
@@ -288,6 +300,7 @@ class AetheraDesktopApp(
 
         self.content = tk.Frame(self.main, bg=COLORS["background"])
         self.content.pack(fill="both", expand=True, padx=30, pady=24)
+        self.page_content = self.content
 
     def _toggle_fullscreen(self, _event=None):
         self._fullscreen = not self._fullscreen
@@ -422,6 +435,9 @@ class AetheraDesktopApp(
         if animation and animation.get("after_id"):
             self.root.after_cancel(animation["after_id"])
         start = canvas.yview()[0] if animation is None else animation["current"]
+        if abs(start - target) < 0.001:
+            self._scroll_animations.pop(key, None)
+            return
         self._scroll_animations[key] = {
             "start": start,
             "target": target,
@@ -489,7 +505,8 @@ class AetheraDesktopApp(
         self.current_page = page
         self.page_title.configure(text=page)
         self._animate_nav_selection(page)
-        for child in self.content.winfo_children():
+        self.content = self.page_content
+        for child in self.page_content.winfo_children():
             child.destroy()
 
         if page == "Inicio":
@@ -512,28 +529,6 @@ class AetheraDesktopApp(
         self.chat = session.conversation
         self.chat_store = self._chat_stores[chat_id]
 
-    def _select_chat(self, _event=None):
-        if not getattr(self, "_chat_ids", None):
-            return
-        index = self.chat_selector.current()
-        if index < 0 or index >= len(self._chat_ids):
-            return
-        chat_id = self._chat_ids[index]
-        if chat_id == self._active_chat_id:
-            return
-        if (
-            self.current_page == "Asistente IA"
-            and not self._flush_chat_quiz_progress_before_navigation()
-        ):
-            self._sync_chat_selector()
-            return
-        self._discard_stream_widgets()
-        self._cancel_chat_typing_indicator()
-        self._attached_pdfs.clear()
-        self._activate_chat(chat_id)
-        if self.current_page == "Asistente IA":
-            self.show_page("Asistente IA")
-
     def _create_chat(self):
         if (
             self.current_page == "Asistente IA"
@@ -550,18 +545,97 @@ class AetheraDesktopApp(
         self.show_page("Asistente IA")
 
     def _sync_chat_selector(self):
-        if not hasattr(self, "chat_selector") or not self.chat_selector.winfo_exists():
+        if not hasattr(self, "chat_list") or not self.chat_list.winfo_exists():
             return
-        sessions = list(self.chat_manager.sessions.values())
+        for item in self.chat_list.winfo_children():
+            item.destroy()
+        sessions = list(reversed(self.chat_manager.sessions.values()))
         self._chat_ids = [session.chat_id for session in sessions]
-        self.chat_selector.configure(
-            values=[
-                f"{session.title}{'  ·  en curso' if self._chat_stores[session.chat_id].ocupado else ''}"
-                for session in sessions
-            ]
-        )
-        if self._active_chat_id in self._chat_ids:
-            self.chat_selector.current(self._chat_ids.index(self._active_chat_id))
+        for session in sessions:
+            chat_id = session.chat_id
+            selected = chat_id == self._active_chat_id
+            row = tk.Frame(
+                self.chat_list,
+                bg=COLORS["surface_light"] if selected else COLORS["surface"],
+                height=42,
+                cursor="hand2",
+            )
+            row.pack(fill="x", padx=6, pady=2)
+            row.pack_propagate(False)
+            indicator = tk.Label(
+                row,
+                text="●" if self._chat_stores[chat_id].ocupado else "",
+                bg=row.cget("bg"),
+                fg=COLORS["accent_light"],
+                font=(FONT, 8, "bold"),
+                width=2,
+            )
+            indicator.pack(side="left", padx=(5, 0))
+            title_label = tk.Label(
+                row,
+                text=session.title,
+                bg=row.cget("bg"),
+                fg=COLORS["text"] if selected else COLORS["muted"],
+                font=(FONT, 9, "bold" if selected else "normal"),
+                anchor="w",
+                padx=4,
+                cursor="hand2",
+            )
+            title_label.pack(side="left", fill="both", expand=True, padx=(0, 8))
+            title_label.bind(
+                "<Configure>",
+                lambda event, label=title_label, title=session.title:
+                    self._fit_chat_title(label, title),
+            )
+            for widget in (row, indicator, title_label):
+                widget.bind(
+                    "<Button-1>",
+                    lambda _event, selected_id=chat_id: self._activate_from_list(
+                        selected_id
+                    ),
+                )
+
+    def _fit_chat_title(self, label, title):
+        width = label.winfo_width() - 10
+        if width > 0:
+            label.configure(
+                text=texto_con_elipsis(
+                    title,
+                    tkfont.Font(font=label.cget("font")),
+                    width,
+                )
+            )
+
+    def _activate_from_list(self, chat_id):
+        if chat_id == self._active_chat_id:
+            return
+        if (
+            self.current_page == "Asistente IA"
+            and not self._flush_chat_quiz_progress_before_navigation()
+        ):
+            return
+        self._discard_stream_widgets()
+        self._cancel_chat_typing_indicator()
+        self._attached_pdfs.clear()
+        self._activate_chat(chat_id)
+        self._sync_chat_selector()
+        if self.current_page == "Asistente IA":
+            self.show_page("Asistente IA")
+
+    def _scrollbar_command(self, canvas, *arguments):
+        if not canvas.winfo_exists() or not arguments:
+            return
+        current = canvas.yview()[0]
+        if arguments[0] == "moveto":
+            target = float(arguments[1])
+        elif arguments[0] == "scroll":
+            count = int(arguments[1])
+            increment = 0.72 if arguments[2] == "pages" else 0.055
+            target = current + count * increment
+        else:
+            canvas.yview(*arguments)
+            return
+        self._animate_scroll(canvas, min(1.0, max(0.0, target)), duration=130)
 
     def _cancel_chat_typing_indicator(self):
         after_id = getattr(self, "_typing_after_id", None)
@@ -632,6 +706,11 @@ class AetheraDesktopApp(
             step()
 
     def _bind_smooth_scroll(self, canvas, child):
+        self._scroll_targets = [
+            (existing_canvas, existing_child)
+            for existing_canvas, existing_child in self._scroll_targets
+            if existing_canvas.winfo_exists() and existing_child.winfo_exists()
+        ]
         self._scroll_targets.append((canvas, child))
 
     def _animate_card_in(self, widget, grid=False):

@@ -3,6 +3,7 @@
 import math
 
 import tkinter as tk
+from tkinter import font as tkfont
 
 from .tema import COLORS, FONT
 
@@ -15,6 +16,22 @@ def mezclar_color(start, end, amount):
         round(first + (last - first) * amount)
         for first, last in zip(start_rgb, end_rgb)
     )
+
+
+def texto_con_elipsis(texto, fuente, ancho):
+    """Recorta texto al ancho disponible sin partir palabras visualmente."""
+    if ancho <= 0:
+        return ""
+    medida = fuente if isinstance(fuente, tkfont.Font) else tkfont.Font(font=fuente)
+    if medida.measure(texto) <= ancho:
+        return texto
+    elipsis = "…"
+    if medida.measure(elipsis) > ancho:
+        return ""
+    texto = texto.rstrip()
+    while texto and medida.measure(texto + elipsis) > ancho:
+        texto = texto[:-1].rstrip()
+    return texto + elipsis
 
 
 def _rounded_scanline(width, height, radius, y):
@@ -243,7 +260,11 @@ class RoundedButton(tk.Canvas):
         self.create_text(
             width / 2,
             height / 2,
-            text=self.text,
+            text=texto_con_elipsis(
+                self.text,
+                self.font,
+                max(0, width - 28),
+            ),
             fill=(
                 "#8792ad"
                 if self.disabled
@@ -399,6 +420,18 @@ class AnimatedDropdown(tk.Frame):
         self.canvas.bind("<space>", self.toggle)
         self.canvas.configure(takefocus=True)
         self.textvariable.trace_add("write", self._draw)
+        self.bind("<Configure>", self._resize)
+
+    def _resize(self, event):
+        self.canvas.configure(width=event.width)
+        self._draw()
+
+    def set_width(self, width):
+        """Ajusta el selector a su celda sin desbordar el área disponible."""
+        width = max(110, int(width))
+        self.configure(width=width)
+        self.canvas.configure(width=width)
+        self._draw()
 
     def _draw(self, *_args):
         if not self.winfo_exists():
@@ -483,7 +516,11 @@ class AnimatedDropdown(tk.Frame):
         self.canvas.create_text(
             36,
             height / 2,
-            text=selected,
+            text=texto_con_elipsis(
+                selected,
+                (FONT, 10, "bold"),
+                max(0, width - 72),
+            ),
             anchor="w",
             fill=COLORS["text"],
             font=(FONT, 10, "bold"),

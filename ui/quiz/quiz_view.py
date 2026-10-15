@@ -54,7 +54,11 @@ class QuizSection(_QuizDesktopHost):
         scrollbar = ttk.Scrollbar(
             self.quiz_list_card,
             orient="vertical",
-            command=self.quiz_canvas.yview,
+            style="Aethera.Vertical.TScrollbar",
+            command=lambda *args: self._scrollbar_command(
+                self.quiz_canvas,
+                *args,
+            ),
         )
         self.quiz_cards = tk.Frame(self.quiz_canvas, bg=COLORS["surface"])
         self.quiz_cards.bind(

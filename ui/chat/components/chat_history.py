@@ -342,7 +342,12 @@ class ChatHistory:
         transcript = self._card(self.content)
         transcript.pack(fill="both", expand=True)
         canvas = tk.Canvas(transcript, bg=COLORS["background"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(transcript, orient="vertical", command=canvas.yview)
+        scrollbar = ttk.Scrollbar(
+            transcript,
+            orient="vertical",
+            style="Aethera.Vertical.TScrollbar",
+            command=lambda *args: self._scrollbar_command(canvas, *args),
+        )
         self.message_list = tk.Frame(canvas, bg=COLORS["background"])
         self.message_list.bind(
             "<Configure>",

@@ -1,9 +1,10 @@
 """Título, subtítulo e estado del chat."""
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import font as tkfont
 
 from ...tema import COLORS, FONT
+from ...widgets import texto_con_elipsis
 
 
 class ChatHeader:
@@ -12,17 +13,33 @@ class ChatHeader:
         intro.pack(fill="x", pady=(0, 12))
         title_area = tk.Frame(intro, bg=COLORS["surface"])
         title_area.pack(side="left", fill="x", expand=True)
-        self._label(
+        heading = self._label(
             title_area,
             "Un espacio para pensar tu siguiente paso",
             size=14,
             weight="bold",
-        ).pack(anchor="w", padx=16, pady=(13, 3))
-        self._label(
+        )
+        heading.pack(fill="x", padx=16, pady=(13, 3))
+        heading.bind(
+            "<Configure>",
+            lambda event: self._fit_chat_heading(
+                event.widget,
+                "Un espacio para pensar tu siguiente paso",
+            ),
+        )
+        subtitle = self._label(
             title_area,
             "GuIA te acompaña a organizarte; tú decides cómo avanzar.",
             color=COLORS["muted"],
-        ).pack(anchor="w", padx=16, pady=(0, 13))
+        )
+        subtitle.pack(fill="x", padx=16, pady=(0, 13))
+        subtitle.bind(
+            "<Configure>",
+            lambda event: self._fit_chat_heading(
+                event.widget,
+                "GuIA te acompaña a organizarte; tú decides cómo avanzar.",
+            ),
+        )
         self.status_base = (
             f"✦  {self.chat_store.estado}"
             if self.chat_store.ocupado
@@ -40,20 +57,15 @@ class ChatHeader:
         )
         self.chat_status_label.pack(side="right", padx=16)
         self.status_label = self.chat_status_label
-        chat_controls = tk.Frame(intro, bg=COLORS["surface"])
-        chat_controls.pack(fill="x", padx=14, pady=(0, 12))
-        self.chat_selector = ttk.Combobox(
-            chat_controls,
-            state="readonly",
-            style="Aethera.TCombobox",
-            width=34,
-        )
-        self.chat_selector.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.chat_selector.bind("<<ComboboxSelected>>", self._select_chat)
-        self._button(
-            chat_controls,
-            "＋ Nuevo chat",
-            self._create_chat,
-            primary=True,
-        ).pack(side="left")
-        self._sync_chat_selector()
+
+    @staticmethod
+    def _fit_chat_heading(label, text):
+        width = label.winfo_width() - 32
+        if width > 0:
+            label.configure(
+                text=texto_con_elipsis(
+                    text,
+                    tkfont.Font(font=label.cget("font")),
+                    width,
+                )
+            )
