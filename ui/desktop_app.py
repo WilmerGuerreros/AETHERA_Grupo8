@@ -687,11 +687,6 @@ class AetheraDesktopApp(
         popup.overrideredirect(True)
         popup.configure(bg=COLORS["surface"])
         popup.transient(self.root)
-        if event is not None:
-            x, y = event.x_root, event.y_root
-        else:
-            x, y = self.root.winfo_pointerxy()
-        popup.geometry(f"+{x}+{y}")
         panel = self._card(
             popup,
             bg=COLORS["surface"],
@@ -753,22 +748,72 @@ class AetheraDesktopApp(
             )
 
         def close_if_outside(event):
-            if event.widget.winfo_toplevel() is not popup and popup.winfo_exists():
-                popup.destroy()
+            try:
+                clicked_outside = event.widget.winfo_toplevel() is not popup
+            except tk.TclError:
+                clicked_outside = True
+            if clicked_outside and popup.winfo_exists():
+                close_popup()
 
-        outside_click_binding = self.root.bind(
+        def close_popup():
+            if popup.winfo_exists():
+                popup.destroy()
+            self.root.unbind_class("all", "<Button-1>", outside_click_binding)
+
+        outside_click_binding = self.root.bind_class(
+            "all",
             "<Button-1>",
             close_if_outside,
             add="+",
         )
-
-        def release_outside_click_binding(_event):
-            self.root.unbind("<Button-1>", outside_click_binding)
-
-        popup.bind("<Escape>", lambda _event: popup.destroy())
-        popup.bind("<Destroy>", release_outside_click_binding, add="+")
+        popup.bind("<Escape>", lambda _event: close_popup())
+        popup.bind(
+            "<Destroy>",
+            lambda _event: self.root.unbind_class(
+                "all",
+                "<Button-1>",
+                outside_click_binding,
+            ),
+            add="+",
+        )
+        popup.update_idletasks()
+        width = popup.winfo_reqwidth()
+        height = popup.winfo_reqheight()
+        if event is not None:
+            pointer_x, pointer_y = event.x_root, event.y_root
+        else:
+            pointer_x, pointer_y = self.root.winfo_pointerxy()
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x, y = self._chat_actions_position(
+            pointer_x,
+            pointer_y,
+            width,
+            height,
+            screen_width,
+            screen_height,
+        )
+        popup.geometry(f"{width}x{height}+{x}+{y}")
+        popup.deiconify()
+        popup.lift()
         popup.focus_force()
         self._animate_card_in(panel)
+
+    @staticmethod
+    def _chat_actions_position(
+        pointer_x,
+        pointer_y,
+        width,
+        height,
+        screen_width,
+        screen_height,
+    ):
+        x = max(0, min(pointer_x - width, screen_width - width))
+        y = pointer_y + 6
+        if y + height > screen_height:
+            y = pointer_y - height - 6
+        y = max(0, min(y, screen_height - height))
+        return x, y
 
     def _rename_chat_dialog(self, chat_id):
         session = self.chat_manager.sessions.get(chat_id)
