@@ -752,7 +752,9 @@ class AetheraDesktopApp(
         panel.pack(fill="both", expand=True, padx=1, pady=1)
         rename_button = tk.Button(
             panel,
-            text="\U0000270F\ufe0f   Renombrar",
+            text="Renombrar",
+            image=self._emoji_image("\U0000270F\ufe0f", size=22),
+            compound="left",
             command=lambda: (
                 popup.destroy(),
                 self._rename_chat_dialog(chat_id),
@@ -766,13 +768,15 @@ class AetheraDesktopApp(
             bd=0,
             padx=14,
             pady=9,
-            font=("Segoe UI Emoji", 10),
+            font=(FONT, 10),
             cursor="hand2",
         )
         rename_button.pack(fill="x", padx=4, pady=(4, 1))
         delete_button = tk.Button(
             panel,
-            text="\U0001F5D1\ufe0f   Eliminar chat",
+            text="Eliminar chat",
+            image=self._emoji_image("\U0001F5D1\ufe0f", size=22),
+            compound="left",
             command=lambda: (
                 popup.destroy(),
                 self._delete_chat_dialog(chat_id),
@@ -786,7 +790,7 @@ class AetheraDesktopApp(
             bd=0,
             padx=14,
             pady=9,
-            font=("Segoe UI Emoji", 10),
+            font=(FONT, 10),
             cursor="hand2",
         )
         delete_button.pack(fill="x", padx=4, pady=(1, 4))
