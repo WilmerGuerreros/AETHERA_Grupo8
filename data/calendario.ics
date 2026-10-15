@@ -4,160 +4,73 @@ PRODID:-//Aethera//Calendario Personal//ES
 CALSCALE:GREGORIAN
 X-WR-CALNAME:Personal
 BEGIN:VEVENT
-UID:359c95d0-2388-4268-a177-79b093da7256@aethera
-DTSTAMP:20261014T154046Z
-DTSTART:20261016T120000
-DTEND:20261016T140000
-SUMMARY:🧮 Matemáticas: Resolución de problemas tipo
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-12:10 Repaso rápido de fórmulas/teoremas clave (ficha r
- esumen).\n12:10-13:10 Resolución de 3-4 problemas tipo examen (cronometra
- do\, sin apuntes).\n13:10-13:20 Pausa activa.\n13:20-14:00 Corrección hon
- esta: identifica errores\, anota patrones\, rehaz el peor.
-END:VEVENT
-BEGIN:VEVENT
-UID:f055f30a-e5cb-4d5c-bd90-6fb0b2724af4@aethera
-DTSTAMP:20261014T154100Z
-DTSTART:20261017T120000
-DTEND:20261017T140000
-SUMMARY:🧪 Simulacro Mixto: Lenguaje + Matemáticas
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-13:00 Lenguaje: Mini-simulacro (análisis de texto corto 
- + pregunta de desarrollo\, 50') + autoevaluación (10').\n13:00-13:10 Paus
- a activa.\n13:10-14:00 Matemáticas: Mini-simulacro (2-3 problemas variado
- s\, 40') + corrección rápida (10').\nObjetivo: medir tiempo real y detec
- tar puntos débiles.
-END:VEVENT
-BEGIN:VEVENT
-UID:95bfd8b6-dae1-4172-b963-864f104b6a0b@aethera
-DTSTAMP:20261014T154107Z
-DTSTART:20261018T120000
-DTEND:20261018T140000
-SUMMARY:🌿 Domingo: Descanso real / Recarga (Sin estudio)
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Protege este tiempo para ti: deporte suave\, paseo\, cocina\, a
- migos\, lectura de ocio\, siesta\, naturaleza. Cero pantallas académicas.
-  La consolidación de memoria ocurre en el descanso.
-END:VEVENT
-BEGIN:VEVENT
-UID:a250406f-01c6-4592-a3f9-32a745611319@aethera
-DTSTAMP:20261014T154119Z
-DTSTART:20261019T120000
-DTEND:20261019T140000
-SUMMARY:🛠 Lunes: Gestión + Lenguaje: Redacción / Síntesis
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-12:30 Gestión: revisar calendario oficial\, consultar du
- das a profesores\, confirmar fechas\, organizar materiales.\n12:30-12:40 P
- ausa.\n12:40-13:40 Lenguaje: Práctica de redacción (ensayo\, comentario 
- de texto o síntesis según formato de examen) – cronometrado.\n13:40-14
- :00 Autoevaluación con rúbrica / lista de cotejo.
-END:VEVENT
-BEGIN:VEVENT
-UID:6a9df1f2-43c5-49d3-aa94-df45cd918be2@aethera
-DTSTAMP:20261014T154129Z
-DTSTART:20261020T120000
-DTEND:20261020T140000
-SUMMARY:🔁 Martes: Repaso integrado Matemáticas + Cierre semanal
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:12:00-12:50 Matemáticas: Repaso de errores del simulacro (sáb
- ado) + rehacer los 2 peores + ficha de "errores típicos míos".\n12:50-13
- :00 Pausa activa.\n13:00-13:40 Síntesis semanal: mapa mental / resumen 1 
- página por asignatura (qué sé\, qué falla\, qué pregunto en tutoría)
- .\n13:40-14:00 Planificación rápida semana siguiente (3 objetivos claros
- ).
-END:VEVENT
-BEGIN:VEVENT
-UID:40d30a26-8d18-4292-9f92-072b9094e763@aethera
-DTSTAMP:20261014T165832Z
+UID:0a3ddddb-dff6-470c-8161-4cd2e091b52b@aethera
+DTSTAMP:20261015T013337Z
 DTSTART:20261015T120000
-DTEND:20261015T123000
-SUMMARY:enviar solicitud a espacio burbuja pares
-CATEGORIES:personal
-X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Recordatorio para enviar solicitud al Espacio Brújula Pares (s
- ervicio de apoyo entre pares para presión académica en Distrito Gaia)
-END:VEVENT
-BEGIN:VEVENT
-UID:9c5ac5d2-0852-4435-be0d-3902378e777b@aethera
-DTSTAMP:20261014T165948Z
-DTSTART:20261014T140000
-DTEND:20261014T141000
+DTEND:20261015T121000
 SUMMARY:Activación y planificación
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Respiración 4-7-8\, revisión de objetivos de la sesión\, hid
- ratación. Preparación mental para bloques de estudio.
+DESCRIPTION:Respiración 4-7-8\, objetivos de la sesión\, hidratación
 END:VEVENT
 BEGIN:VEVENT
-UID:58295598-c3fe-4a4c-b8aa-44b401104b19@aethera
-DTSTAMP:20261014T165952Z
-DTSTART:20261014T141000
-DTEND:20261014T154000
+UID:f4119735-e35f-4553-a961-bbda0b33d78d@aethera
+DTSTAMP:20261015T013343Z
+DTSTART:20261015T121000
+DTEND:20261015T134000
 SUMMARY:Bloque 1: Materia prioritaria (90 min)
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Lectura activa + resumen en una hoja. Técnica: subrayado selec
- tivo\, parafraseo\, esquema final. Al terminar: escribe 3 ideas clave.
+DESCRIPTION:Lectura activa + resumen en 1 hoja → 3 ideas clave
 END:VEVENT
 BEGIN:VEVENT
-UID:9b5df5f2-2aac-4e97-b7b6-a2718280dd04@aethera
-DTSTAMP:20261014T165958Z
-DTSTART:20261014T154000
-DTEND:20261014T155500
+UID:98b2c24b-24d8-4931-8fba-b1d480df4513@aethera
+DTSTAMP:20261015T013409Z
+DTSTART:20261015T134000
+DTEND:20261015T135500
 SUMMARY:Pausa larga (15 min)
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Levántate\, estira\, come algo ligero\, sin pantallas. Movimie
- nto suave y hidratación.
+DESCRIPTION:Levántate\, estira\, come algo ligero\, sin pantallas
 END:VEVENT
 BEGIN:VEVENT
-UID:2ee075ab-3684-423f-90a0-28b29de41e4a@aethera
-DTSTAMP:20261014T170007Z
-DTSTART:20261014T155500
-DTEND:20261014T172500
+UID:0eb0ae2d-cd4f-44e8-a9f6-176a8b4c8c4d@aethera
+DTSTAMP:20261015T013421Z
+DTSTART:20261015T135500
+DTEND:20261015T152500
 SUMMARY:Bloque 2: Segunda materia / ejercicios (90 min)
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Autoexplicación en voz alta o mapa conceptual. Alterna con mat
- eria del Bloque 1 si son distintas. Al terminar: resuelve 2-3 problemas ti
- po examen.
+DESCRIPTION:Autoexplicación / mapa conceptual + 2-3 problemas tipo examen
 END:VEVENT
 BEGIN:VEVENT
-UID:c63a355b-45f6-4aa8-bf06-6209f087d11e@aethera
-DTSTAMP:20261014T170027Z
-DTSTART:20261014T172500
-DTEND:20261014T173500
+UID:67180874-a05b-4e38-afac-7dd8f38edf36@aethera
+DTSTAMP:20261015T013432Z
+DTSTART:20261015T152500
+DTEND:20261015T153500
 SUMMARY:Pausa corta (10 min)
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Movimiento\, hidratación\, estiramiento breve. Sin pantallas.
+DESCRIPTION:Movimiento\, agua
 END:VEVENT
 BEGIN:VEVENT
-UID:08d9397a-e0f4-4524-b3ca-5e9ee52c4ce5@aethera
-DTSTAMP:20261014T170038Z
-DTSTART:20261014T173500
-DTEND:20261014T183500
+UID:94daf38a-56df-47f4-8baa-36e357d565fe@aethera
+DTSTAMP:20261015T013437Z
+DTSTART:20261015T153500
+DTEND:20261015T163500
 SUMMARY:Bloque 3: Práctica / flashcards (60 min)
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:Tarea práctica\, preguntas tipo examen\, flashcards. Recuperac
- ión activa: genera tus propias preguntas. Al terminar: anota dudas para r
- esolver mañana.
+DESCRIPTION:Recuperación activa\, genera tus preguntas\, anota dudas
 END:VEVENT
 BEGIN:VEVENT
-UID:463152a6-b61c-4340-b842-8a2e7c868a8c@aethera
-DTSTAMP:20261014T170044Z
-DTSTART:20261014T183500
-DTEND:20261014T184500
-SUMMARY:Cierre y planificación mañana (10 min)
+UID:0e4ddd50-b2b7-4ffa-a5b9-47e25b3a6bd6@aethera
+DTSTAMP:20261015T013442Z
+DTSTART:20261015T163500
+DTEND:20261015T164500
+SUMMARY:Cierre y planificación viernes
 CATEGORIES:personal
 X-AETHERA-SOURCE:PERSONAL
-DESCRIPTION:¿Qué lograste? ¿Qué queda pendiente? Anota 3 tareas concret
- as para mañana. Guarda materiales y apaga pantallas.
+DESCRIPTION:Logros\, pendientes\, 3 tareas concretas para el viernes
 END:VEVENT
 END:VCALENDAR
