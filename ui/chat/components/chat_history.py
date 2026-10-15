@@ -9,7 +9,8 @@ from core.quizzes import quiz_desde_mensaje
 from ...tema import COLORS, FONT
 from ...utilidades import (
     EMOJI_CHAR,
-    INLINE_MARKDOWN,
+    MARKDOWN_LIST,
+    analizar_markdown_en_linea,
     _is_markdown_table_separator,
     _markdown_table_cells,
 )
@@ -84,8 +85,16 @@ class ChatHistory:
         self._animate_card_in(outer)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
-    def _create_formatted_message(self, parent, text, background, foreground, width):
-        line_count = self._estimate_message_lines(text, width)
+    def _create_formatted_message(
+        self,
+        parent,
+        text,
+        background,
+        foreground,
+        width,
+        max_lines=28,
+    ):
+        line_count = self._estimate_message_lines(text, width, max_lines)
         body = tk.Text(
             parent,
             width=width,
@@ -134,12 +143,12 @@ class ChatHistory:
         body.configure(state="disabled")
         return body
 
-    def _estimate_message_lines(self, text, width):
+    def _estimate_message_lines(self, text, width, max_lines=28):
         available = max(20, width)
         lines = 0
         for line in text.splitlines() or [""]:
             lines += max(1, math.ceil(len(line) / available))
-        return min(28, max(1, lines))
+        return max(1, lines) if max_lines is None else min(max_lines, max(1, lines))
 
     def _insert_formatted_text(self, widget, text):
         lines = text.splitlines()
@@ -180,7 +189,7 @@ class ChatHistory:
                         base_tag="quote",
                     )
                 else:
-                    list_match = re.match(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$", line)
+                    list_match = MARKDOWN_LIST.match(line)
                     if list_match:
                         marker = (
                             "•"
@@ -227,35 +236,12 @@ class ChatHistory:
         )
 
     def _insert_inline_formatted_text(self, widget, text, base_tag=None):
-        for part in INLINE_MARKDOWN.split(text):
-            if not part:
-                continue
-            tag = base_tag
-            value = part
-            if (
-                part.startswith(("***", "___"))
-                and part.endswith(part[:3])
-            ):
-                value = part[3:-3]
-                tag = "bold_italic"
-            elif part.startswith(("**", "__")) and part.endswith(part[:2]):
-                value = part[2:-2]
-                tag = "bold"
-            elif part.startswith("~~") and part.endswith("~~"):
-                value = part[2:-2]
-                tag = "strike"
-            elif part.startswith("`") and part.endswith("`"):
-                value = part[1:-1]
-                tag = "code"
-            elif part.startswith(("*", "_")) and part.endswith(part[0]):
-                value = part[1:-1]
-                tag = "italic"
-
+        for value, style in analizar_markdown_en_linea(text):
             segments = EMOJI_CHAR.split(value)
             emojis = EMOJI_CHAR.findall(value)
             for index, segment in enumerate(segments):
                 if segment:
-                    tags = tuple(item for item in (base_tag, tag) if item)
+                    tags = tuple(item for item in (base_tag, style) if item)
                     widget.insert("end", segment, tags)
                 if index < len(emojis):
                     self._insert_color_emoji(widget, emojis[index])

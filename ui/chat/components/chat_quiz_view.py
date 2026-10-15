@@ -507,14 +507,13 @@ class ChatQuizView(_ChatQuizHost):
             font=(FONT, 11, "bold"),
         ).pack(anchor="w", padx=14, pady=(12, 8))
         if result.get("feedback_final"):
-            tk.Label(
+            self._create_formatted_message(
                 shell,
-                text=result["feedback_final"],
-                bg=COLORS["surface_light"],
-                fg=COLORS["text"],
-                font=(FONT, 9),
-                wraplength=520,
-                justify="left",
+                result["feedback_final"],
+                background=COLORS["surface_light"],
+                foreground=COLORS["text"],
+                width=52,
+                max_lines=None,
             ).pack(fill="x", anchor="w", padx=14, pady=(0, 8))
         if result.get("porcentaje_desarrollo") is not None:
             tk.Label(
@@ -536,14 +535,14 @@ class ChatQuizView(_ChatQuizHost):
                 label = "Correcta" if item["correcta"] else "Incorrecta"
             else:
                 label = f"{item['porcentaje']}% de acierto"
-            tk.Label(
+            self._create_formatted_message(
                 shell,
-                text=f"{page['pregunta']}\n{label} · {item['retroalimentacion']}",
-                bg=COLORS["surface_light"],
-                fg=COLORS["text"],
-                font=(FONT, 9),
-                wraplength=520,
-                justify="left",
+                f"**{page['pregunta']}**\n**{label}** · "
+                f"{item['retroalimentacion']}",
+                background=COLORS["surface_light"],
+                foreground=COLORS["text"],
+                width=52,
+                max_lines=None,
             ).pack(fill="x", anchor="w", padx=14, pady=5)
 
     def _show_chat_quiz_error(self, shell, message):

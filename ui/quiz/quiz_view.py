@@ -26,6 +26,7 @@ class _QuizDesktopHost(Protocol):
     _card: Callable[..., RoundedFrame]
     _button: Callable[..., RoundedButton]
     _bind_smooth_scroll: Callable[..., None]
+    _create_formatted_message: Callable[..., tk.Text]
     show_page: Callable[[str], None]
 
 
@@ -235,12 +236,12 @@ class QuizSection(_QuizDesktopHost):
             )
             state["response_widget"] = response
         if feedback:
-            self._label(
+            self._create_formatted_message(
                 content,
                 feedback["retroalimentacion"],
-                color=COLORS["green"] if feedback["correcta"] else COLORS["red"],
-                wraplength=660,
-                justify="left",
+                background=COLORS["surface"],
+                foreground=COLORS["green"] if feedback["correcta"] else COLORS["red"],
+                width=72,
             ).pack(anchor="w", padx=22, pady=12)
         if state["answer_error"]:
             self._label(content, state["answer_error"], color=COLORS["red"]).pack(
@@ -500,26 +501,58 @@ class QuizSection(_QuizDesktopHost):
             return
         for child in window.winfo_children():
             child.destroy()
+        results_view = tk.Frame(window, bg=COLORS["background"])
+        results_view.pack(fill="both", expand=True, padx=(12, 6), pady=(12, 0))
+        canvas = tk.Canvas(
+            results_view,
+            bg=COLORS["background"],
+            highlightthickness=0,
+            bd=0,
+        )
+        scrollbar = ttk.Scrollbar(
+            results_view,
+            orient="vertical",
+            style="Aethera.Vertical.TScrollbar",
+            command=lambda *args: self._scrollbar_command(canvas, *args),
+        )
+        content = tk.Frame(canvas, bg=COLORS["background"])
+        content_window = canvas.create_window(
+            (0, 0),
+            window=content,
+            anchor="nw",
+        )
+        content.bind(
+            "<Configure>",
+            lambda _event: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind(
+            "<Configure>",
+            lambda event: canvas.itemconfigure(content_window, width=event.width),
+        )
+        canvas.configure(yscrollcommand=scrollbar.set)
+        self._bind_smooth_scroll(canvas, content)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y", padx=(4, 0))
+        text_width = max(40, (window.winfo_width() - 100) // 9)
         tk.Label(
-            window,
+            content,
             text=f"Resultado general: {resultado['porcentaje_total']}%",
             bg=COLORS["background"],
             fg=COLORS["green"],
             font=(FONT, 20, "bold"),
-        ).pack(anchor="w", padx=24, pady=(22, 12))
+        ).pack(anchor="w", padx=12, pady=(10, 12))
         if resultado.get("feedback_final"):
-            tk.Label(
-                window,
-                text=resultado["feedback_final"],
-                bg=COLORS["background"],
-                fg=COLORS["text"],
-                font=(FONT, 10),
-                justify="left",
-                wraplength=680,
-            ).pack(anchor="w", padx=24, pady=(0, 12))
+            self._create_formatted_message(
+                content,
+                resultado["feedback_final"],
+                background=COLORS["background"],
+                foreground=COLORS["text"],
+                width=text_width,
+                max_lines=None,
+            ).pack(fill="x", anchor="w", padx=12, pady=(0, 12))
         if resultado.get("porcentaje_desarrollo") is not None:
             tk.Label(
-                window,
+                content,
                 text=(
                     "Desarrollo · promedio de acierto "
                     f"{resultado['porcentaje_desarrollo']}%"
@@ -527,9 +560,7 @@ class QuizSection(_QuizDesktopHost):
                 bg=COLORS["background"],
                 fg=COLORS["accent_light"],
                 font=(FONT, 11, "bold"),
-            ).pack(anchor="w", padx=24, pady=(0, 10))
-        frame = tk.Frame(window, bg=COLORS["background"])
-        frame.pack(fill="both", expand=True, padx=24)
+            ).pack(anchor="w", padx=12, pady=(0, 10))
         paginas = {pagina["id"]: pagina for pagina in quiz["paginas"]}
         for item in resultado["retroalimentacion"]:
             pagina = paginas.get(item["pregunta_id"])
@@ -539,17 +570,17 @@ class QuizSection(_QuizDesktopHost):
                 etiqueta = "Correcta" if item["correcta"] else "Incorrecta"
             else:
                 etiqueta = f"{item['porcentaje']}% de acierto"
-            tk.Label(
-                frame,
-                text=f"{pagina['pregunta']} {etiqueta} · {item['retroalimentacion']}",
-                bg=COLORS["surface"],
-                fg=COLORS["text"],
-                font=(FONT, 9),
-                justify="left",
-                wraplength=680,
-                padx=14,
-                pady=10,
-            ).pack(fill="x", pady=5)
+            card = self._card(content, bg=COLORS["surface"])
+            card.pack(fill="x", padx=8, pady=5)
+            self._create_formatted_message(
+                card,
+                f"**{pagina['pregunta']}** · **{etiqueta}**\n"
+                f"{item['retroalimentacion']}",
+                background=COLORS["surface"],
+                foreground=COLORS["text"],
+                width=max(36, text_width - 4),
+                max_lines=None,
+            ).pack(fill="x", padx=14, pady=10)
         tk.Button(
             window,
             text="Cerrar",
