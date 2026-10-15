@@ -72,7 +72,7 @@ Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.
 - `CHATS DE AETHERA AI/CHATS.json` — lista de chats y títulos.
 - `CHATS DE AETHERA AI/CHATS ARCHIVADOS/<nombre>_<id-hexadecimal>/` — las cinco carpetas de memoria conservadas al eliminar un chat eligiendo “No, conservar”.
 - Al iniciar, se repara la estructura de carpetas que falte en cada chat. Si `MEMORIA BRUTA/` y `RESUMEN/` no contienen datos, se retira el chat activo y se conserva completo en `CHATS ARCHIVADOS/`.
-- La interfaz carga las últimas 20 interacciones anteriores al inicio de la aplicación; si existen mensajes más antiguos, muestra al principio del historial la ubicación de `MEMORIA BRUTA/`.
+- Al iniciar, la interfaz carga las últimas 20 interacciones de `MEMORIA BRUTA/` (o todas si hay menos), sin usar la transcripción JSON del agente para reconstruir la vista. Si existen interacciones más antiguas, muestra al principio del historial la ubicación de esa carpeta; la transcripción completa del agente se conserva aparte.
 - `data/calendario.ics` — calendario personal editable.
 - `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`). La copia completa de cada intento terminado también se archiva en `ARCHIVOS GENERADOS` del chat que lo inició.
 

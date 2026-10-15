@@ -559,8 +559,16 @@ class AetheraDesktopApp(
 
     @staticmethod
     def _new_chat_store(session):
-        """Mantiene en pantalla veinte interacciones al iniciar la aplicación."""
-        return ChatStore(session.history, max_interacciones_visibles=20)
+        """Carga la vista inicial únicamente desde la memoria bruta del chat."""
+        interacciones = session.memory.store.leer_interacciones_recientes(
+            session.memory.numero_seccion,
+            cantidad=21,
+        )
+        return ChatStore.desde_memoria_bruta(
+            interacciones,
+            nombre_carpeta=session.directory.name,
+            limit=20,
+        )
 
     def _create_chat(self):
         if (

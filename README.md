@@ -55,9 +55,10 @@ en `CHATS DE AETHERA AI/CHATS ARCHIVADOS/`.
 
 Al iniciar la aplicación se comprueba y repara la estructura de carpetas de cada chat.
 Si `MEMORIA BRUTA` y `RESUMEN` no contienen datos, el chat se retira de la lista activa
-y su carpeta completa se conserva en `CHATS ARCHIVADOS`. La interfaz muestra las últimas
-20 interacciones anteriores al inicio; si hay más, al principio del historial aparece
-la ruta de `MEMORIA BRUTA` con los mensajes antiguos.
+y su carpeta completa se conserva en `CHATS ARCHIVADOS`. Al iniciar, la interfaz carga
+sus últimas 20 interacciones (o todas si hay menos) leyendo exclusivamente los archivos
+de `MEMORIA BRUTA`; si hay interacciones más antiguas, al principio del historial aparece
+la ruta de esa carpeta. El historial completo de la conversación del agente se conserva aparte.
 
 ## Estructura
 

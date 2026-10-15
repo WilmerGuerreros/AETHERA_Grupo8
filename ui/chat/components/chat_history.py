@@ -319,9 +319,8 @@ class ChatHistory:
         self._animate_card_in(outer)
         self.root.after_idle(lambda: self._animate_scroll_to_bottom(self.canvas))
 
-    def _append_archive_notice(self):
-        session = self.chat_manager.sessions[self._active_chat_id]
-        folder_name = f"{session.directory.name}/MEMORIA BRUTA"
+    def _append_archive_notice(self, folder_name):
+        folder_name = f"{folder_name}/MEMORIA BRUTA"
         notice = tk.Frame(
             self.message_list,
             bg=COLORS["surface_light"],
@@ -384,7 +383,7 @@ class ChatHistory:
             elif rol in {"error", "saludo"}:
                 self._append_message("assistant", entrada["texto"])
             elif rol == "archive_notice":
-                self._append_archive_notice()
+                self._append_archive_notice(entrada["folder_name"])
             elif rol == "quiz":
                 self._append_generated_quiz(entrada["quiz"])
             elif rol == "stream":

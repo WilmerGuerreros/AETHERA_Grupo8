@@ -190,6 +190,7 @@ class ChatLogic:
         ahora = datetime.now()
         text = f"Fecha: {ahora:%d/%m/%Y} Hora: {ahora:%H:%M}\n{text}"
         self.message_input.delete("1.0", "end")
+        self.chat_store.agregar_mensaje("user", text)
         self._append_message("user", text)
         session = self.chat_manager.sessions[self._active_chat_id]
         if session.title == "Nuevo chat":
@@ -246,7 +247,17 @@ class ChatLogic:
                 emit("quiz_generated", quiz)
             if chat_id is not None:
                 self.chat_manager.save_history(chat_id)
-            emit("complete")
+            respuesta = next(
+                (
+                    message["content"]
+                    for message in reversed(conversation.historial[history_start:])
+                    if message.get("role") == "assistant"
+                    and isinstance(message.get("content"), str)
+                    and message["content"].strip()
+                ),
+                None,
+            )
+            emit("complete", respuesta)
         except Exception as error:
             if chat_id is not None:
                 try:
@@ -343,6 +354,8 @@ class ChatLogic:
         elif event == "quiz_generated":
             store.agregar_quiz(value)
         elif event == "complete":
+            if isinstance(value, str) and value.strip():
+                store.agregar_mensaje("assistant", value)
             if is_active and self.current_page == "Asistente IA":
                 self._attach_stream_quizzes()
             store.finalizar_turno()

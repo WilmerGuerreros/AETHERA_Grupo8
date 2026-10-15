@@ -5,9 +5,55 @@ from pathlib import Path
 
 from agent.llm import LLMEngine
 from core.chat_manager import ChatManager
+from UI.desktop_app import AetheraDesktopApp
 
 
 class ChatSessionTests(unittest.TestCase):
+    def test_interfaz_inicial_lee_solo_las_ultimas_20_de_memoria_bruta(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=Path(directory) / "chats",
+            )
+            session = next(iter(manager.sessions.values()))
+            session.conversation.historial.extend(
+                [
+                    {"role": "user", "content": "Solo en la transcripción JSON"},
+                    {"role": "assistant", "content": "No debe aparecer al iniciar"},
+                ]
+            )
+            for indice in range(25):
+                session.memory.store.escribir(
+                    1,
+                    f"Pregunta bruta {indice}",
+                    f"Respuesta bruta {indice}",
+                )
+
+            store = AetheraDesktopApp._new_chat_store(session)
+            entradas = store.entradas()
+            visibles = [
+                entrada
+                for entrada in entradas
+                if entrada["rol"] in {"user", "assistant"}
+            ]
+
+            self.assertEqual(len(visibles), 40)
+            self.assertEqual(visibles[0]["texto"], "Pregunta bruta 5")
+            self.assertEqual(visibles[-1]["texto"], "Respuesta bruta 24")
+            self.assertNotIn(
+                "Solo en la transcripción JSON",
+                [entrada["texto"] for entrada in visibles],
+            )
+            self.assertEqual(
+                entradas[0],
+                {
+                    "rol": "archive_notice",
+                    "folder_name": session.directory.name,
+                },
+            )
+
     def test_chats_tienen_historial_memoria_y_archivos_independientes(self):
         with tempfile.TemporaryDirectory() as directory:
             motor = LLMEngine("nemotron-3-super:cloud", {})

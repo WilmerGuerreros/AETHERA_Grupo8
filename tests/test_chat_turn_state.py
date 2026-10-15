@@ -94,6 +94,19 @@ class ChatTurnStateTests(unittest.TestCase):
             {"rol": "assistant", "texto": "respuesta final"},
         )
 
+    def test_complete_guarda_la_respuesta_en_la_vista_separada(self):
+        host = _Host([{"role": "user", "content": "Pregunta"}])
+        host._active_chat_id = "activo"
+        host._chat_stores = {"activo": host.chat_store}
+        host.chat_store.iniciar_turno()
+
+        host._handle_chat_event("activo", "complete", "Respuesta nueva")
+
+        self.assertEqual(
+            host.chat_store.entradas()[-1],
+            {"rol": "assistant", "texto": "Respuesta nueva"},
+        )
+
     def test_error_queda_registrado_en_la_conversacion(self):
         host = _Host([{"role": "user", "content": "P"}])
         host.chat_store.iniciar_turno()
