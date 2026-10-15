@@ -124,6 +124,24 @@ class ChatManager:
             raise KeyError(f"No existe el chat: {chat_id}")
         return self.archive_store.store_attachment(chat_id, source)
 
+    def save_quiz_result(
+        self,
+        chat_id: str,
+        quiz: dict[str, Any],
+        answers: dict[str, str],
+        result: dict[str, Any],
+    ) -> Path:
+        """Archiva el resultado del quiz en la carpeta generada de su chat."""
+        with self._lock:
+            if chat_id not in self.sessions:
+                raise KeyError(f"No existe el chat: {chat_id}")
+            return self.archive_store.save_quiz_result(
+                chat_id,
+                quiz,
+                answers,
+                result,
+            )
+
     def save_history(self, chat_id: str) -> None:
         """Guarda la transcripción completa del chat en su propio directorio."""
         with self._lock:
@@ -138,6 +156,7 @@ class ChatManager:
                 metadata["title"],
                 metadata.get("folder"),
             )
+            self.archive_store.generated_files_directory(chat_id)
             memory = Memoria(
                 MemoryStore(directory / "MEMORIA"),
                 modelo=self.motor.modelo,

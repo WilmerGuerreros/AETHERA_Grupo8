@@ -67,11 +67,12 @@
 
 Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.application_data_directory()`:
 
-- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/` — transcripción `CONVERSACION.json` y carpeta `MEMORIA/` con `HISTORIAL/`, `RESUMEN/`, `INDICE/` y `ARCHIVOS ADJUNTOS/`; cada chat mantiene su propia memoria y los PDF adjuntos se copian a su carpeta.
+- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/` — transcripción `CONVERSACION.json` y carpeta `MEMORIA/` con `HISTORIAL/`, `RESUMEN/`, `INDICE/`, `ARCHIVOS ADJUNTOS/` y `ARCHIVOS GENERADOS/`; cada chat mantiene su propia memoria y los PDF adjuntos se copian a su carpeta.
+- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/MEMORIA/ARCHIVOS GENERADOS/QUIZ_<id>_<aleatorio>.json` — un archivo por intento terminado, con las preguntas, respuestas, evaluación por pregunta, puntaje general y retroalimentación final; pertenece al chat desde el que se finalizó el quiz.
 - `CHATS DE AETHERA AI/CHATS.json` — lista de chats y títulos.
 - `CHATS DE AETHERA AI/CHATS ARCHIVADOS/<nombre>_<id-hexadecimal>/MEMORIA/` — memoria conservada al eliminar un chat eligiendo “No, conservar”.
 - `data/calendario.ics` — calendario personal editable.
-- `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`).
+- `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`). La copia completa de cada intento terminado también se archiva en `ARCHIVOS GENERADOS` del chat que lo inició.
 
 En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo.
 

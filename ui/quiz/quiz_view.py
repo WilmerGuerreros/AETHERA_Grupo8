@@ -1,6 +1,7 @@
 """Orquestador de la sección de quizzes."""
 
 import tkinter as tk
+import logging
 from tkinter import ttk
 from typing import Any, Callable, Protocol
 
@@ -19,6 +20,8 @@ class _QuizDesktopHost(Protocol):
     root: Any
     content: Any
     chat: Any
+    chat_manager: Any
+    _active_chat_id: str
     event_queue: Any
     tasks: Any
     current_page: str
@@ -131,6 +134,8 @@ class QuizSection(_QuizDesktopHost):
         window.transient(self.root)
         window.geometry("760x680")
         state = {
+            "chat_id": self._active_chat_id,
+            "conversation": self.chat,
             "indice": attempt["indice"] if attempt else 0,
             "respuestas": attempt["respuestas"] if attempt else {},
             "evaluations": attempt.get("evaluaciones", {}) if attempt else {},
@@ -474,7 +479,11 @@ class QuizSection(_QuizDesktopHost):
         self.tasks.lanzar(
             "evaluar_quiz",
             lambda _tarea: self._evaluate_quiz_worker(
-                quiz, state["respuestas"], window
+                quiz,
+                dict(state["respuestas"]),
+                state["conversation"],
+                state["chat_id"],
+                window,
             ),
         )
 
@@ -483,20 +492,58 @@ class QuizSection(_QuizDesktopHost):
         if after_id:
             window.after_cancel(after_id)
 
-    def _evaluate_quiz_worker(self, quiz, respuestas, window):
+    def _evaluate_quiz_worker(
+        self,
+        quiz,
+        respuestas,
+        conversation,
+        chat_id,
+        window,
+    ):
         try:
             # Determinar origen: barra_lateral es el flujo actual
-            resultado = self.chat.finalizar_quiz(
+            resultado = conversation.finalizar_quiz(
                 quiz,
                 respuestas,
                 origen="barra_lateral",
             )
-            # Adaptar a estructura esperada por UI
-            self.event_queue.put(("quiz_evaluated", (window, quiz, resultado)))
         except Exception as error:
             self.event_queue.put(("quiz_evaluation_error", (window, str(error))))
+            return
 
-    def _show_quiz_results(self, window, quiz, resultado):
+        archive_error = self._archive_quiz_result(
+            chat_id,
+            quiz,
+            respuestas,
+            resultado,
+        )
+        self.event_queue.put(
+            ("quiz_evaluated", (window, quiz, resultado, archive_error))
+        )
+
+    def _archive_quiz_result(self, chat_id, quiz, respuestas, resultado):
+        try:
+            self.chat_manager.save_quiz_result(
+                chat_id,
+                quiz,
+                respuestas,
+                resultado,
+            )
+        except (KeyError, OSError, TypeError, ValueError) as error:
+            logging.exception("No se pudo archivar el resultado del quiz.")
+            return (
+                "No se pudo archivar el resultado en ARCHIVOS GENERADOS: "
+                f"{error}"
+            )
+        return None
+
+    def _show_quiz_results(
+        self,
+        window,
+        quiz,
+        resultado,
+        archive_error=None,
+    ):
         if not window.winfo_exists():
             return
         for child in window.winfo_children():
@@ -541,6 +588,16 @@ class QuizSection(_QuizDesktopHost):
             fg=COLORS["green"],
             font=(FONT, 20, "bold"),
         ).pack(anchor="w", padx=12, pady=(10, 12))
+        if archive_error:
+            tk.Label(
+                content,
+                text=archive_error,
+                bg=COLORS["background"],
+                fg=COLORS["red"],
+                font=(FONT, 10, "bold"),
+                wraplength=650,
+                justify="left",
+            ).pack(anchor="w", padx=12, pady=(0, 12))
         if resultado.get("feedback_final"):
             self._create_formatted_message(
                 content,

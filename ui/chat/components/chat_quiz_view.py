@@ -1,5 +1,6 @@
 """Quiz interactivo incrustado en una respuesta del asistente."""
 
+import logging
 import tkinter as tk
 from typing import Any, Protocol
 
@@ -14,13 +15,17 @@ from core.quizzes import (
 
 class _ChatQuizHost(Protocol):
     chat: Any
+    chat_manager: Any
     event_queue: Any
     tasks: Any
+    _active_chat_id: str
 
 
 class ChatQuizView(_ChatQuizHost):
     def _render_chat_quiz(self, parent, quiz):
         quiz = validar_quiz(quiz)
+        chat_id = self._active_chat_id
+        conversation = self.chat
         try:
             attempt = cargar_intento(quiz)
         except (OSError, ValueError) as error:
@@ -35,6 +40,8 @@ class ChatQuizView(_ChatQuizHost):
             ).pack(fill="x", padx=16, pady=(0, 16))
             return None
         state = {
+            "chat_id": chat_id,
+            "conversation": conversation,
             "index": attempt["indice"] if attempt else 0,
             "answers": attempt["respuestas"] if attempt else {},
             "evaluations": attempt.get("evaluaciones", {}) if attempt else {},
@@ -303,14 +310,24 @@ class ChatQuizView(_ChatQuizHost):
 
         def evaluate():
             try:
-                result = self.chat.finalizar_quiz(
+                result = conversation.finalizar_quiz(
                     quiz,
-                    state["answers"],
+                    dict(state["answers"]),
                     origen="chat",
                 )
-                self.event_queue.put(("chat_quiz_evaluated", (shell, quiz, result)))
             except Exception as error:
                 self.event_queue.put(("chat_quiz_evaluation_error", (shell, str(error))))
+                return
+
+            archive_error = self._archive_chat_quiz_result(
+                chat_id,
+                quiz,
+                dict(state["answers"]),
+                result,
+            )
+            self.event_queue.put(
+                ("chat_quiz_evaluated", (shell, quiz, result, archive_error))
+            )
 
         state["draw_page"] = draw_page
         draw_page()
@@ -494,7 +511,29 @@ class ChatQuizView(_ChatQuizHost):
         state["answer_error"] = f"No se pudo guardar la respuesta: {message}"
         state["draw_page"]()
 
-    def _show_chat_quiz_results(self, shell, quiz, result):
+    def _archive_chat_quiz_result(self, chat_id, quiz, answers, result):
+        try:
+            self.chat_manager.save_quiz_result(
+                chat_id,
+                quiz,
+                answers,
+                result,
+            )
+        except (KeyError, OSError, TypeError, ValueError) as error:
+            logging.exception("No se pudo archivar el resultado del quiz del chat.")
+            return (
+                "No se pudo archivar el resultado en ARCHIVOS GENERADOS: "
+                f"{error}"
+            )
+        return None
+
+    def _show_chat_quiz_results(
+        self,
+        shell,
+        quiz,
+        result,
+        archive_error=None,
+    ):
         if not shell.winfo_exists():
             return
         for child in shell.winfo_children():
@@ -506,6 +545,16 @@ class ChatQuizView(_ChatQuizHost):
             fg=COLORS["green"],
             font=(FONT, 11, "bold"),
         ).pack(anchor="w", padx=14, pady=(12, 8))
+        if archive_error:
+            tk.Label(
+                shell,
+                text=archive_error,
+                bg=COLORS["surface_light"],
+                fg=COLORS["red"],
+                font=(FONT, 9, "bold"),
+                wraplength=520,
+                justify="left",
+            ).pack(anchor="w", padx=14, pady=(0, 8))
         if result.get("feedback_final"):
             self._create_formatted_message(
                 shell,

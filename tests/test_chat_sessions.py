@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +25,7 @@ class ChatSessionTests(unittest.TestCase):
                 "RESUMEN",
                 "INDICE",
                 "ARCHIVOS ADJUNTOS",
+                "ARCHIVOS GENERADOS",
             )
             self.assertNotEqual(primero.directory, segundo.directory)
             for session in (primero, segundo):
@@ -122,6 +124,105 @@ class ChatSessionTests(unittest.TestCase):
             self.assertTrue((archived_memory / "ARCHIVOS ADJUNTOS" / saved.name).is_file())
             self.assertFalse(keep.directory.exists())
             self.assertFalse(manager.sessions)
+
+    def test_quiz_result_is_saved_as_json_in_the_originating_chat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=Path(directory) / "chats",
+            )
+            first = next(iter(manager.sessions.values()))
+            second = manager.create_session()
+            quiz = {
+                "quiz_id": "estadistica_01",
+                "quiz_titulo": "Estadística inferencial",
+                "paginas": [
+                    {
+                        "id": "p1",
+                        "tipo": "alternativa",
+                        "pregunta": "¿Cuál es la media?",
+                        "alternativas": {"A": "2", "B": "3"},
+                        "respuesta_correcta": "A",
+                        "retroalimentacion": {"A": "Correcto.", "B": "Revisa."},
+                    }
+                ],
+            }
+            answers = {"p1": "A"}
+            result = {
+                "porcentaje_total": 100,
+                "retroalimentacion": [
+                    {
+                        "pregunta_id": "p1",
+                        "tipo": "alternativa",
+                        "correcta": True,
+                        "porcentaje": 100,
+                        "retroalimentacion": "Correcto.",
+                    }
+                ],
+                "feedback_final": "Buen trabajo.",
+            }
+
+            saved = manager.save_quiz_result(first.chat_id, quiz, answers, result)
+
+            self.assertEqual(
+                saved.parent,
+                first.directory / "MEMORIA" / "ARCHIVOS GENERADOS",
+            )
+            self.assertTrue(saved.is_file())
+            self.assertNotEqual(saved, manager.save_quiz_result(
+                first.chat_id, quiz, answers, result
+            ))
+            data = json.loads(saved.read_text(encoding="utf-8"))
+            self.assertEqual(data["quiz_id"], quiz["quiz_id"])
+            self.assertEqual(data["respuestas"], answers)
+            self.assertEqual(data["resultado"], result)
+            self.assertEqual(
+                data["preguntas"][0]["pregunta"],
+                quiz["paginas"][0]["pregunta"],
+            )
+            self.assertEqual(
+                data["preguntas"][0]["retroalimentacion_resultado"],
+                "Correcto.",
+            )
+            self.assertEqual(
+                list((second.directory / "MEMORIA" / "ARCHIVOS GENERADOS").glob("*.json")),
+                [],
+            )
+
+    def test_chat_legacy_creates_generated_files_folder_when_restored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            chat_directory = root / "Legacy_legacy01"
+            (chat_directory / "MEMORIA").mkdir(parents=True)
+            (root / "CHATS.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "legacy01",
+                            "title": "Legacy",
+                            "folder": chat_directory.name,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            self.assertTrue(
+                (
+                    manager.sessions["legacy01"].directory
+                    / "MEMORIA"
+                    / "ARCHIVOS GENERADOS"
+                ).is_dir()
+            )
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 import json
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
@@ -20,11 +21,85 @@ class ChatArchiveStore:
         self._directories: dict[str, Path] = {}
 
     def create_directory(self, chat_id: str, title: str = "Nuevo chat") -> Path:
-        """Crea el directorio de archivo y sus cuatro carpetas de memoria."""
+        """Crea el directorio del chat y su estructura de memoria."""
         directory = self.session_directory(chat_id, title)
         memory_root = directory / "MEMORIA"
-        for name in ("HISTORIAL", "RESUMEN", "INDICE", "ARCHIVOS ADJUNTOS"):
+        for name in (
+            "HISTORIAL",
+            "RESUMEN",
+            "INDICE",
+            "ARCHIVOS ADJUNTOS",
+            "ARCHIVOS GENERADOS",
+        ):
             (memory_root / name).mkdir(parents=True, exist_ok=True)
+        return directory
+
+    def save_quiz_result(
+        self,
+        chat_id: str,
+        quiz: dict[str, Any],
+        answers: dict[str, str],
+        result: dict[str, Any],
+    ) -> Path:
+        """Guarda preguntas, respuestas y evaluación bajo la memoria del chat."""
+        if not isinstance(quiz, dict) or not isinstance(quiz.get("paginas"), list):
+            raise ValueError("Los datos del quiz no tienen un formato válido.")
+        if not isinstance(answers, dict) or not isinstance(result, dict):
+            raise ValueError("Las respuestas o el resultado del quiz no son válidos.")
+
+        feedback_by_question = {
+            item["pregunta_id"]: item
+            for item in result.get("retroalimentacion", [])
+            if isinstance(item, dict) and isinstance(item.get("pregunta_id"), str)
+        }
+        questions = []
+        for page in quiz["paginas"]:
+            if not isinstance(page, dict) or not isinstance(page.get("id"), str):
+                raise ValueError("El quiz contiene una pregunta con formato inválido.")
+            evaluation = feedback_by_question.get(page["id"])
+            questions.append(
+                {
+                    **page,
+                    "respuesta_usuario": answers.get(page["id"]),
+                    "resultado": evaluation,
+                    "retroalimentacion_resultado": (
+                        evaluation.get("retroalimentacion")
+                        if evaluation is not None
+                        else None
+                    ),
+                }
+            )
+
+        quiz_id = re.sub(
+            r"[^\w-]+",
+            "_",
+            str(quiz.get("quiz_id", "quiz")),
+            flags=re.UNICODE,
+        ).strip("_-") or "quiz"
+        filename = f"QUIZ_{quiz_id}_{uuid4().hex}.json"
+        payload = {
+            "quiz_id": quiz.get("quiz_id"),
+            "quiz_titulo": quiz.get("quiz_titulo", "Quiz"),
+            "finalizado_en": datetime.now()
+            .astimezone()
+            .isoformat(timespec="seconds"),
+            "preguntas": questions,
+            "respuestas": answers,
+            "resultado": result,
+            "retroalimentacion_final": result.get("feedback_final", ""),
+        }
+        destination = self.generated_files_directory(chat_id) / filename
+        self._write_json(destination, payload)
+        return destination
+
+    def generated_files_directory(self, chat_id: str) -> Path:
+        """Devuelve y crea la carpeta de archivos generados del chat."""
+        directory = (
+            self.session_directory(chat_id)
+            / "MEMORIA"
+            / "ARCHIVOS GENERADOS"
+        )
+        directory.mkdir(parents=True, exist_ok=True)
         return directory
 
     def session_directory(
