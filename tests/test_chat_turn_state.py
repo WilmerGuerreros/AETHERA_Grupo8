@@ -116,6 +116,23 @@ class ChatTurnStateTests(unittest.TestCase):
 
         self.assertEqual(host.chat_store.quices_del_turno(), [quiz])
 
+    def test_eventos_de_un_chat_inactivo_no_contaminan_el_chat_abierto(self):
+        host = _Host([])
+        host._active_chat_id = "activo"
+        host._chat_stores = {
+            "activo": ChatStore([]),
+            "inactivo": ChatStore([]),
+        }
+        host._chat_stores["inactivo"].iniciar_turno()
+
+        host._handle_chat_event("inactivo", "token", "respuesta del otro chat")
+
+        self.assertEqual(host._chat_stores["activo"].stream_texto, "")
+        self.assertEqual(
+            host._chat_stores["inactivo"].stream_texto,
+            "respuesta del otro chat",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,8 +4,8 @@ Reúne en un solo lugar los valores que suelen ajustarse: los modelos de Ollama,
 las opciones de generación y el tamaño de las secciones de memoria.
 """
 
-# Modelo que mantiene la conversación principal con el estudiante.
-MODELO = "nemotron-3-ultra:cloud"
+# Modelo compartido por todas las conversaciones de Aethera.
+MODELO = "nemotron-3-super:cloud"
 
 # Modelo más económico usado para resumir la memoria de largo plazo.
 MODELO_RESUMEN = "nemotron-3-super:cloud"

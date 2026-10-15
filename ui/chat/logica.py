@@ -6,6 +6,7 @@ import re
 import logging
 from datetime import datetime
 
+from core.chat_manager import title_from_message
 from core.documents import extraer_texto_pdf
 from core.quizzes import (
     listar_quices,
@@ -167,6 +168,13 @@ class ChatLogic:
         text = f"Fecha: {ahora:%d/%m/%Y} Hora: {ahora:%H:%M}\n{text}"
         self.message_input.delete("1.0", "end")
         self._append_message("user", text)
+        session = self.chat_manager.sessions[self._active_chat_id]
+        if session.title == "Nuevo chat":
+            self.chat_manager.rename_session(
+                session.chat_id,
+                title_from_message(text),
+            )
+            self._sync_chat_selector()
         self._remove_pdf()
         self.chat_store.iniciar_turno()
         self.send_button.configure(state="disabled")
@@ -180,37 +188,52 @@ class ChatLogic:
         self._pulse_typing_indicator()
         self.tasks.lanzar(
             "turno_chat",
-            lambda _tarea: self._run_chat_turn(text),
+            lambda _tarea, chat_id=session.chat_id, conversation=session.conversation:
+                self._run_chat_turn(chat_id, conversation, text),
             contexto={"texto": text},
         )
 
-    def _run_chat_turn(self, text):
+    def _run_chat_turn(self, chat_id, conversation=None, text=None):
+        if text is None:
+            text = chat_id
+            chat_id = getattr(self, "_active_chat_id", None)
+            conversation = self.chat
+
+        def emit(event, value=None):
+            if chat_id is None:
+                self.event_queue.put((event, value))
+            else:
+                self.event_queue.put(("chat", chat_id, event, value))
+
         try:
-            history_start = len(self.chat.historial)
-            quizzes_before = {quiz["quiz_id"] for quiz in self._listar_quices_seguro()}
-            for event_type, value in self.chat.procesar_turno(text):
+            history_start = len(conversation.historial)
+            for event_type, value in conversation.procesar_turno(text):
                 if event_type == "token":
-                    self.event_queue.put(("token", value))
+                    emit("token", value)
                 elif event_type == "status":
-                    self.event_queue.put(("status", value))
-            # Un mismo quiz puede detectarse por el archivo persistido y por el
-            # resultado de la herramienta; se deduplica por id para no
-            # mostrarlo dos veces en el chat.
+                    emit("status", value)
             quizzes_generados = {}
-            for quiz in self._listar_quices_seguro():
-                if quiz["quiz_id"] not in quizzes_before:
-                    quizzes_generados[quiz["quiz_id"]] = quiz
-            for message in self.chat.historial[history_start:]:
+            for message in conversation.historial[history_start:]:
                 if message.get("role") != "tool" or message.get("name") != "crear_quiz":
                     continue
                 quiz = quiz_desde_resultado_herramienta(message.get("content", ""))
                 if quiz is not None:
-                    quizzes_generados.setdefault(quiz["quiz_id"], quiz)
+                    quizzes_generados[quiz["quiz_id"]] = quiz
             for quiz in quizzes_generados.values():
-                self.event_queue.put(("quiz_generated", quiz))
-            self.event_queue.put(("complete", None))
+                emit("quiz_generated", quiz)
+            if chat_id is not None:
+                self.chat_manager.save_history(chat_id)
+            emit("complete")
         except Exception as error:
-            self.event_queue.put(("error", str(error)))
+            if chat_id is not None:
+                try:
+                    self.chat_manager.save_history(chat_id)
+                except Exception as persistence_error:
+                    error = RuntimeError(
+                        f"{error}\nNo se pudo guardar el historial del chat: "
+                        f"{persistence_error}"
+                    )
+            emit("error", str(error))
 
     def _listar_quices_seguro(self):
         """Lista los quizzes sin que un archivo dañado rompa el chat."""
@@ -223,32 +246,26 @@ class ChatLogic:
     def _process_queue(self):
         try:
             while True:
-                event, value = self.event_queue.get_nowait()
-                if event == "token":
-                    self.chat_store.agregar_token(value)
-                    if self.current_page == "Asistente IA":
-                        self._refresh_stream_bubble()
-                elif event == "status":
-                    self.chat_store.actualizar_estado(value)
-                    self._set_status(value)
-                elif event == "complete":
-                    # Los quizzes se incrustan antes de cerrar el stream: su
-                    # texto (con un quiz embebido) solo vive mientras el turno
-                    # sigue abierto.
-                    if self.current_page == "Asistente IA":
-                        self._attach_stream_quizzes()
-                    self.chat_store.finalizar_turno()
-                    self._finish_chat_turn()
-                elif event == "error":
-                    mensaje = (
-                        "No pude completar la respuesta. Inténtalo de nuevo."
-                        f"\n\nDetalle: {value}"
+                queued = self.event_queue.get_nowait()
+                if len(queued) == 4 and queued[0] == "chat":
+                    _, chat_id, event, value = queued
+                    self._handle_chat_event(chat_id, event, value)
+                    continue
+                event, value = queued
+                if event in {
+                    "token",
+                    "status",
+                    "complete",
+                    "error",
+                    "quiz_generated",
+                }:
+                    self._handle_chat_event(
+                        getattr(self, "_active_chat_id", None),
+                        event,
+                        value,
                     )
-                    self.chat_store.marcar_error(mensaje)
-                    if self.current_page == "Asistente IA":
-                        self._append_message("assistant", mensaje)
-                    self._finish_chat_turn()
-                elif event == "services":
+                    continue
+                if event == "services":
                     self._display_services(*value)
                 elif event == "pdf_loaded":
                     self._handle_pdf_loaded(*value)
@@ -258,8 +275,6 @@ class ChatLogic:
                     self._show_chat_quiz_results(*value)
                 elif event == "chat_quiz_evaluation_error":
                     self._show_chat_quiz_error(*value)
-                elif event == "quiz_generated":
-                    self.chat_store.agregar_quiz(value)
                 elif event == "chat_quiz_answer_evaluated":
                     self._handle_chat_quiz_answer_result(*value)
                 elif event == "chat_quiz_answer_error":
@@ -285,6 +300,45 @@ class ChatLogic:
         except queue.Empty:
             pass
         self._process_after_id = self.root.after(80, self._process_queue)
+
+    def _handle_chat_event(self, chat_id, event, value):
+        stores = getattr(self, "_chat_stores", {})
+        store = stores.get(chat_id)
+        if store is None and chat_id == getattr(self, "_active_chat_id", chat_id):
+            store = getattr(self, "chat_store", None)
+        if store is None:
+            return
+        is_active = chat_id == getattr(self, "_active_chat_id", chat_id)
+        if event == "token":
+            store.agregar_token(value)
+            if is_active and self.current_page == "Asistente IA":
+                self._refresh_stream_bubble()
+        elif event == "status":
+            store.actualizar_estado(value)
+            if is_active:
+                self._set_status(value)
+        elif event == "quiz_generated":
+            store.agregar_quiz(value)
+        elif event == "complete":
+            if is_active and self.current_page == "Asistente IA":
+                self._attach_stream_quizzes()
+            store.finalizar_turno()
+            if is_active:
+                self._finish_chat_turn()
+            if hasattr(self, "_sync_chat_selector"):
+                self._sync_chat_selector()
+        elif event == "error":
+            mensaje = (
+                "No pude completar la respuesta. Inténtalo de nuevo."
+                f"\n\nDetalle: {value}"
+            )
+            store.marcar_error(mensaje)
+            if is_active and self.current_page == "Asistente IA":
+                self._append_message("assistant", mensaje)
+            if is_active:
+                self._finish_chat_turn()
+            if hasattr(self, "_sync_chat_selector"):
+                self._sync_chat_selector()
 
     def _pulse_typing_indicator(self):
         if not self.busy or not hasattr(self, "status_label"):

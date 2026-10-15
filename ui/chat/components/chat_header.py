@@ -1,6 +1,7 @@
 """Título, subtítulo e estado del chat."""
 
 import tkinter as tk
+from tkinter import ttk
 
 from ...tema import COLORS, FONT
 
@@ -39,3 +40,20 @@ class ChatHeader:
         )
         self.chat_status_label.pack(side="right", padx=16)
         self.status_label = self.chat_status_label
+        chat_controls = tk.Frame(intro, bg=COLORS["surface"])
+        chat_controls.pack(fill="x", padx=14, pady=(0, 12))
+        self.chat_selector = ttk.Combobox(
+            chat_controls,
+            state="readonly",
+            style="Aethera.TCombobox",
+            width=34,
+        )
+        self.chat_selector.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.chat_selector.bind("<<ComboboxSelected>>", self._select_chat)
+        self._button(
+            chat_controls,
+            "＋ Nuevo chat",
+            self._create_chat,
+            primary=True,
+        ).pack(side="left")
+        self._sync_chat_selector()

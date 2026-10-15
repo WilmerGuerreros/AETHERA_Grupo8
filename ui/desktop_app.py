@@ -2,12 +2,13 @@
 
 import math
 import queue
+import tempfile
 import time
 import tkinter as tk
 from datetime import date, timedelta
 from tkinter import ttk
 
-from core.conversation import Conversacion
+from core.chat_manager import ChatManager
 from .estado.chat import ChatStore
 from .estado.tareas import CORRIENDO, PENDIENTE, TaskManager
 from .tema import COLORS, FONT
@@ -30,7 +31,14 @@ class AetheraDesktopApp(
     ChatSection,
     QuizSection,
 ):
-    def __init__(self, motor, historial, herramientas, guardar_interaccion):
+    def __init__(
+        self,
+        motor,
+        historial,
+        herramientas,
+        guardar_interaccion,
+        chat_manager=None,
+    ):
         configure_tk_environment()
         self.root = tk.Tk()
         self.root.title("GuIA | Acompañamiento académico")
@@ -79,14 +87,34 @@ class AetheraDesktopApp(
         self.root.bind_all("<MouseWheel>", self._handle_mousewheel)
         self.current_page = "Inicio"
 
-        self.chat = Conversacion(
-            motor,
-            historial,
-            herramientas,
-            guardar_interaccion=guardar_interaccion,
-        )
-        # Estado de presentación que sobrevive a la navegación entre secciones.
-        self.chat_store = ChatStore(self.chat.historial)
+        self._temporary_chat_storage = None
+        if chat_manager is None:
+            self._temporary_chat_storage = tempfile.TemporaryDirectory(
+                prefix="aethera-test-chats-"
+            )
+            system_prompt = next(
+                (
+                    message.get("content", "")
+                    for message in historial
+                    if message.get("role") == "system"
+                ),
+                "",
+            )
+            chat_manager = ChatManager(
+                motor,
+                herramientas,
+                system_prompt,
+                root=self._temporary_chat_storage.name,
+                initial_history=historial,
+                initial_save_interaction=guardar_interaccion,
+            )
+        self.chat_manager = chat_manager
+        self._chat_stores = {
+            chat_id: ChatStore(session.history)
+            for chat_id, session in self.chat_manager.sessions.items()
+        }
+        self._active_chat_id = next(iter(self.chat_manager.sessions))
+        self._activate_chat(self._active_chat_id)
 
         self._configure_styles()
         self._build_shell()
@@ -478,6 +506,77 @@ class AetheraDesktopApp(
         elif page == "Quiz":
             self._show_quiz()
 
+    def _activate_chat(self, chat_id):
+        session = self.chat_manager.sessions[chat_id]
+        self._active_chat_id = chat_id
+        self.chat = session.conversation
+        self.chat_store = self._chat_stores[chat_id]
+
+    def _select_chat(self, _event=None):
+        if not getattr(self, "_chat_ids", None):
+            return
+        index = self.chat_selector.current()
+        if index < 0 or index >= len(self._chat_ids):
+            return
+        chat_id = self._chat_ids[index]
+        if chat_id == self._active_chat_id:
+            return
+        if (
+            self.current_page == "Asistente IA"
+            and not self._flush_chat_quiz_progress_before_navigation()
+        ):
+            self._sync_chat_selector()
+            return
+        self._discard_stream_widgets()
+        self._cancel_chat_typing_indicator()
+        self._attached_pdfs.clear()
+        self._activate_chat(chat_id)
+        if self.current_page == "Asistente IA":
+            self.show_page("Asistente IA")
+
+    def _create_chat(self):
+        if (
+            self.current_page == "Asistente IA"
+            and not self._flush_chat_quiz_progress_before_navigation()
+        ):
+            return
+        self._discard_stream_widgets()
+        self._cancel_chat_typing_indicator()
+        session = self.chat_manager.create_session()
+        self._chat_stores[session.chat_id] = ChatStore(session.history)
+        self._attached_pdfs.clear()
+        self._activate_chat(session.chat_id)
+        self._sync_chat_selector()
+        self.show_page("Asistente IA")
+
+    def _sync_chat_selector(self):
+        if not hasattr(self, "chat_selector") or not self.chat_selector.winfo_exists():
+            return
+        sessions = list(self.chat_manager.sessions.values())
+        self._chat_ids = [session.chat_id for session in sessions]
+        self.chat_selector.configure(
+            values=[
+                f"{session.title}{'  ·  en curso' if self._chat_stores[session.chat_id].ocupado else ''}"
+                for session in sessions
+            ]
+        )
+        if self._active_chat_id in self._chat_ids:
+            self.chat_selector.current(self._chat_ids.index(self._active_chat_id))
+
+    def _cancel_chat_typing_indicator(self):
+        after_id = getattr(self, "_typing_after_id", None)
+        if after_id:
+            try:
+                self.root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+            self._typing_after_id = None
+
+    def _discard_stream_widgets(self):
+        for attribute in ("stream_bubble", "stream_text"):
+            if hasattr(self, attribute):
+                delattr(self, attribute)
+
     def _animate_nav_selection(self, selected_page):
         duration = 0.18
         started = time.monotonic()
@@ -656,10 +755,24 @@ class AetheraDesktopApp(
         except tk.TclError:
             pass
         self.root.destroy()
+        if self._temporary_chat_storage is not None:
+            self._temporary_chat_storage.cleanup()
 
     def run(self):
         self.root.mainloop()
 
 
-def iniciar_app_escritorio(motor, historial, herramientas, guardar_interaccion):
-    AetheraDesktopApp(motor, historial, herramientas, guardar_interaccion).run()
+def iniciar_app_escritorio(
+    motor,
+    historial,
+    herramientas,
+    guardar_interaccion,
+    chat_manager=None,
+):
+    AetheraDesktopApp(
+        motor,
+        historial,
+        herramientas,
+        guardar_interaccion,
+        chat_manager=chat_manager,
+    ).run()

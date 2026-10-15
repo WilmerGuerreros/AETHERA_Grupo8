@@ -34,16 +34,19 @@ python -m venv .venv
 
 Los valores que suelen ajustarse están en `config.py`:
 
-- `MODELO`: modelo principal de conversación.
+- `MODELO`: modelo compartido por todas las conversaciones (`nemotron-3-super:cloud`).
 - `MODELO_RESUMEN`: modelo usado para resumir la memoria.
 - `OPCIONES_LLM`: opciones de generación (temperatura, contexto, etc.).
 - `MAX_MENSAJES_POR_SECCION`: interacciones antes de resumir una sección de memoria.
 
 ## Datos del usuario
 
-Los datos escribibles (historial de chat, calendario personal y quices) viven bajo una
+Los datos escribibles (chats, memoria, calendario personal y quices) viven bajo una
 raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema operativo
-en el ejecutable empaquetado.
+en el ejecutable empaquetado. Cada chat guarda su transcripción y una carpeta `MEMORIA`
+propia con `HISTORIAL`, `RESUMEN`, `INDICE` y `ARCHIVOS ADJUNTOS`. Todas las conversaciones
+comparten el mismo modelo, prompt de sistema y opciones de generación; sus historiales y
+memorias no se comparten.
 
 ## Estructura
 

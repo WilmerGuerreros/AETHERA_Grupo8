@@ -9,6 +9,7 @@
 ## Paquete `data/`
 
 - `data/paths.py`: rutas de recursos y datos persistentes.
+- `data/chat_sessions.py`: índice y transcripciones de cada conversación independiente.
 - `data/memory.py`: lectura y escritura de historiales, resúmenes e índice de memoria.
 - `data/calendar.py`: lectura y escritura del calendario personal.
 - `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
@@ -24,6 +25,7 @@
 - `core/calendar.py`: validación, filtrado, creación y eliminación de eventos.
 - `core/quizzes/`: paquete con la construcción, validación y corrección de quizzes e intentos. Se divide en `schema` (esquema), `session` (intento en memoria), `scoring` (puntajes), `store` (persistencia en Data) y `evaluation` (cierre con Agent); la fachada `__init__.py` expone el contrato estable.
 - `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
+- `core/chat_manager.py`: crea y restaura conversaciones con modelo y prompt compartidos, y memoria aislada por chat.
 - `core/documents.py`: delega en Data la lectura de documentos adjuntos.
 - `core/services.py`: delega en Data la búsqueda de servicios por categoría y distrito y reenvía su resultado o error; no conoce el catálogo ni el recurso.
 - `core/web_search.py`: búsqueda de información pública en la web.
@@ -65,7 +67,8 @@
 
 Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.application_data_directory()`:
 
-- `data/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
+- `CHATS DE AETHERA AI/chat_<id>/` — transcripción `CONVERSACION.json` y carpeta `MEMORIA/` con `HISTORIAL/`, `RESUMEN/`, `INDICE/` y `ARCHIVOS ADJUNTOS/`; cada chat mantiene su propia memoria.
+- `CHATS DE AETHERA AI/CHATS.json` — lista de chats y títulos.
 - `data/calendario.ics` — calendario personal editable.
 - `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`).
 
