@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from ui.estado.chat import ESTADO_LIBRE, ESTADO_PENSANDO, SALUDO, ChatStore
+from UI.estado.chat import ESTADO_LIBRE, ESTADO_PENSANDO, SALUDO, ChatStore
 
 
 def _quiz(quiz_id="quiz_store"):
@@ -138,6 +138,82 @@ class ChatStoreTests(unittest.TestCase):
         self.assertEqual(
             [(entrada["rol"], entrada["texto"]) for entrada in entradas],
             [("user", "créame un quiz"), ("assistant", "Listo.")],
+        )
+
+    def test_restaura_las_ultimas_veinte_interacciones_de_memoria_bruta(self):
+        interacciones = [
+            {"usuario": f"Pregunta {indice}", "aethera": f"Respuesta {indice}"}
+            for indice in range(25)
+        ]
+        store = ChatStore.desde_memoria_bruta(
+            interacciones,
+            nombre_carpeta="Estadística_2d34c0",
+        )
+        entradas = store.entradas()
+
+        self.assertEqual(
+            entradas[0],
+            {"rol": "archive_notice", "folder_name": "Estadística_2d34c0"},
+        )
+        visibles = [entrada for entrada in entradas if entrada["rol"] == "user"]
+        self.assertEqual(len(visibles), 20)
+        self.assertEqual(visibles[0]["texto"], "Pregunta 5")
+        self.assertEqual(visibles[-1]["texto"], "Pregunta 24")
+
+        store.agregar_mensaje("user", "Pregunta actual")
+        store.agregar_mensaje("assistant", "Respuesta actual")
+        entradas_actualizadas = store.entradas()
+        self.assertEqual(
+            entradas_actualizadas[0],
+            {"rol": "archive_notice", "folder_name": "Estadística_2d34c0"},
+        )
+        self.assertEqual(
+            entradas_actualizadas[-2:],
+            [
+                {"rol": "user", "texto": "Pregunta actual"},
+                {"rol": "assistant", "texto": "Respuesta actual"},
+            ],
+        )
+
+    def test_menos_de_veinte_interacciones_no_muestra_aviso_de_archivo(self):
+        interacciones = [
+            {"usuario": f"Pregunta {indice}", "aethera": f"Respuesta {indice}"}
+            for indice in range(3)
+        ]
+
+        entradas = ChatStore.desde_memoria_bruta(
+            interacciones,
+            nombre_carpeta="Chat_abc123",
+        ).entradas()
+
+        self.assertEqual(
+            [(entrada["rol"], entrada["texto"]) for entrada in entradas],
+            [
+                ("user", "Pregunta 0"),
+                ("assistant", "Respuesta 0"),
+                ("user", "Pregunta 1"),
+                ("assistant", "Respuesta 1"),
+                ("user", "Pregunta 2"),
+                ("assistant", "Respuesta 2"),
+            ],
+        )
+
+    def test_mensajes_nuevos_se_anaden_a_la_vista_inicial(self):
+        store = ChatStore.desde_memoria_bruta(
+            [{"usuario": "Desde memoria bruta", "aethera": "Respuesta guardada"}],
+            nombre_carpeta="Chat_abc123",
+        )
+        store.agregar_mensaje("user", "Pregunta de esta ejecución")
+        store.agregar_mensaje("assistant", "Respuesta de esta ejecución")
+
+        self.assertEqual(
+            [entrada["texto"] for entrada in store.entradas() if entrada["rol"] != "archive_notice"],
+            [
+                "Desde memoria bruta",
+                "Respuesta guardada",
+                "Pregunta de esta ejecución",
+                "Respuesta de esta ejecución",
+            ],
         )
 
     def test_el_indicador_solo_se_actualiza_mientras_hay_turno(self):

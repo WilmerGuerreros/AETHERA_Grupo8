@@ -13,7 +13,7 @@ from core.quizzes import (
     finalizar_quiz,
 )
 from data.quizzes import QuizStore
-from ui.chat.logica import ChatLogic
+from UI.chat.logica import ChatLogic
 
 
 def _quiz_de_ejemplo():
@@ -144,6 +144,25 @@ class QuizFlowTests(unittest.TestCase):
             self.assertEqual(QuizManager(store).listar(), [quiz])
             self.assertEqual(len(sesion.contextos), 1)
 
+    def test_finalizar_quiz_reenvia_error_de_persistencia(self):
+        with tempfile.TemporaryDirectory() as directorio:
+            store = QuizStore(directorio)
+            quiz = _quiz_de_ejemplo()
+            QuizManager(store).guardar(quiz)
+
+            with patch.object(
+                store,
+                "guardar_resultado",
+                side_effect=OSError("disco lleno"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "disco lleno"):
+                    finalizar_quiz(
+                        quiz,
+                        respuestas={"p1": "A", "p2": "Respuesta parcial."},
+                        motor=_FakeMotor(),
+                        store=store,
+                    )
+
 
 class _ConversacionQuizTests(unittest.TestCase):
     def test_conversacion_finaliza_quiz_e_inyecta_contexto_en_chat(self):
@@ -245,8 +264,8 @@ class ChatTurnQuizTests(unittest.TestCase):
     def test_listar_quices_seguro_sobrevive_a_un_archivo_danado(self):
         host = ChatLogic()
         with (
-            patch("ui.chat.logica.listar_quices", side_effect=ValueError("dañado")),
-            patch("ui.chat.logica.logging.exception"),
+            patch("UI.chat.logica.listar_quices", side_effect=ValueError("dañado")),
+            patch("UI.chat.logica.logging.exception"),
         ):
             self.assertEqual(host._listar_quices_seguro(), [])
 

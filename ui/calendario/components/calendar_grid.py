@@ -4,7 +4,7 @@ import math
 from datetime import date, datetime, time, timedelta
 
 from ...tema import COLORS, FONT, WEEKDAY_NAMES, estilo_evento, humanizar_etiqueta
-from ...widgets import mezclar_color
+from ...widgets import mezclar_color, texto_con_elipsis
 
 
 class CalendarGrid:
@@ -375,10 +375,8 @@ class CalendarGrid:
             )
             label = event.get("resumen") or "Evento"
             font = (FONT, 9, "bold")
-            available = max(80, x1 - x0 - 22)
-            max_chars = max(12, int(available / 7))
-            if len(label) > max_chars:
-                label = label[: max_chars - 1].rstrip() + "…"
+            available = max(0, x1 - x0 - 24)
+            label = texto_con_elipsis(label, font, available)
             canvas.create_text(
                 x0 + 12,
                 y0 + 7,
@@ -386,19 +384,24 @@ class CalendarGrid:
                 anchor="nw",
                 fill="#f5efff",
                 font=font,
+                width=available,
                 tags=(tag, "calendar_event"),
             )
+            category_font = (FONT, 8)
+            category = (
+                humanizar_etiqueta(event.get("origen", ""))
+                if event.get("editable")
+                else self._format_calendar_category(event.get("categoria", ""))
+            )
+            category = texto_con_elipsis(category, category_font, available)
             canvas.create_text(
                 x0 + 12,
                 y0 + 22,
-                text=(
-                    humanizar_etiqueta(event.get("origen", ""))
-                    if event.get("editable")
-                    else self._format_calendar_category(event.get("categoria", ""))
-                ),
+                text=category,
                 anchor="nw",
                 fill="#d0c8e8",
-                font=(FONT, 8),
+                font=category_font,
+                width=available,
                 tags=(tag, "calendar_event"),
             )
             canvas.tag_bind(

@@ -46,6 +46,11 @@ def quizzes_directory() -> Path:
     return application_data_directory() / "quices"
 
 
+def chat_archives_directory() -> Path:
+    """Devuelve la raíz de los archivos independientes de cada chat."""
+    return application_data_directory() / "CHATS DE AETHERA AI"
+
+
 @dataclass(frozen=True)
 class MemoryPaths:
     """Agrupa las carpetas donde se guarda la memoria del usuario."""
@@ -74,7 +79,7 @@ def memory_paths(raiz: Path | None = None) -> MemoryPaths:
     """
     raiz = Path(raiz) if raiz is not None else application_data_directory() / "memoria"
     return MemoryPaths(
-        historial=raiz / "HISTORIAL",
+        historial=raiz / "MEMORIA BRUTA",
         resumen=raiz / "RESUMEN",
         indice=raiz / "INDICE",
         adjuntos=raiz / "ARCHIVOS ADJUNTOS",

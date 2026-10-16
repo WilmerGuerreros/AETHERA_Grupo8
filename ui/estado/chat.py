@@ -1,10 +1,8 @@
 """Estado de presentación del chat que sobrevive a los cambios de sección.
 
-La transcripción de los turnos completos vive en ``Conversacion.historial`` y
-este modelo solo proyecta lo que ahí no está: la respuesta que se está
-escribiendo, los errores sintéticos y los quizzes generados en el turno. Como
-los widgets se destruyen al navegar, esa información tiene que vivir aquí para
-que la vista pueda reconstruir la conversación en orden.
+La vista inicial se construye desde ``MEMORIA BRUTA`` y se mantiene separada de
+la transcripción completa del agente. Los turnos nuevos, errores y quizzes se
+guardan en este modelo para reconstruir la interfaz al navegar entre secciones.
 
 Capas: este módulo pertenece a la UI (estado de presentación), interpreta
 mensajes ya procesados usando ``core.quizzes`` y no importa ``tkinter`` ni
@@ -33,7 +31,11 @@ def _tiene_texto(contenido: Any) -> bool:
 class ChatStore:
     """Transcripción visible del chat, independiente de los widgets."""
 
-    def __init__(self, historial: list[dict[str, Any]] | None = None):
+    def __init__(
+        self,
+        historial: list[dict[str, Any]] | None = None,
+        older_history_folder: str | None = None,
+    ):
         self._historial: list[dict[str, Any]] = historial if historial is not None else []
         self._lock = threading.RLock()
         self._stream_texto = ""
@@ -44,6 +46,37 @@ class ChatStore:
         self._marca_turno = 0
         self._ocupado = False
         self._estado = ESTADO_LIBRE
+        self._older_history_folder = older_history_folder
+
+    @classmethod
+    def desde_memoria_bruta(
+        cls,
+        interacciones: list[dict[str, str]],
+        nombre_carpeta: str,
+        limit: int = 20,
+    ) -> "ChatStore":
+        """Crea la vista inicial exclusivamente desde interacciones de memoria bruta."""
+        if limit < 1:
+            raise ValueError("El límite de interacciones visibles debe ser positivo.")
+        historial = []
+        for interaccion in interacciones[-limit:]:
+            historial.extend(
+                [
+                    {"role": "user", "content": interaccion["usuario"]},
+                    {"role": "assistant", "content": interaccion["aethera"]},
+                ]
+            )
+        carpeta_historial_anterior = (
+            nombre_carpeta if len(interacciones) > limit else None
+        )
+        return cls(historial, older_history_folder=carpeta_historial_anterior)
+
+    def agregar_mensaje(self, role: str, content: str) -> None:
+        """Añade al historial visible un mensaje producido durante esta sesión."""
+        if role not in {"user", "assistant"}:
+            raise ValueError("El rol del mensaje visible no es válido.")
+        with self._lock:
+            self._historial.append({"role": role, "content": content})
 
     @property
     def ocupado(self) -> bool:
@@ -132,7 +165,15 @@ class ChatStore:
 
         embebidos = self._ids_quiz_embebidos(mensajes)
         emitidos: set[str] = set()
-        salidas: list[dict[str, Any]] = []
+        salidas: list[dict[str, Any]] = (
+            [{"rol": "archive_notice", "folder_name": self._older_history_folder}]
+            if self._older_history_folder is not None
+            else []
+        )
+        mensajes_visibles = enumerate(
+            mensajes,
+            start=1,
+        )
         consumidos = 0
 
         def volcar_hasta(indice: int) -> None:
@@ -145,7 +186,7 @@ class ChatStore:
                     emitidos.add(quiz_id)
                 salidas.append(extra)
 
-        for posicion, mensaje in enumerate(mensajes, start=1):
+        for posicion, mensaje in mensajes_visibles:
             salidas.extend(self._entradas_de_mensaje(mensaje, embebidos, emitidos))
             consumidos = posicion
             volcar_hasta(consumidos)

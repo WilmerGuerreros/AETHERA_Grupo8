@@ -32,18 +32,37 @@ python -m venv .venv
 
 ## Configuración
 
-Los valores que suelen ajustarse están en `config.py`:
+Los valores de configuración compartidos se definen en `data/settings.py` (y `config.py` los reexporta para mantener compatibilidad):
 
-- `MODELO`: modelo principal de conversación.
+- `MODELO`: modelo compartido por todas las conversaciones (`nemotron-3-super:cloud`).
 - `MODELO_RESUMEN`: modelo usado para resumir la memoria.
 - `OPCIONES_LLM`: opciones de generación (temperatura, contexto, etc.).
 - `MAX_MENSAJES_POR_SECCION`: interacciones antes de resumir una sección de memoria.
 
 ## Datos del usuario
 
-Los datos escribibles (historial de chat, calendario personal y quices) viven bajo una
+Los datos escribibles (chats, memoria, calendario personal y quices) viven bajo una
 raíz única: `data/` durante el desarrollo y la carpeta de datos del sistema operativo
-en el ejecutable empaquetado.
+en el ejecutable empaquetado. Cada chat guarda su transcripción y cinco carpetas
+hermanas directamente bajo su directorio: `MEMORIA BRUTA`, `ARCHIVOS ADJUNTOS`,
+`RESUMEN`, `INDICE` y `ARCHIVOS GENERADOS`. Al terminar un quiz, sus preguntas,
+respuestas, resultados y retroalimentación se guardan en un JSON dentro de
+`ARCHIVOS GENERADOS` del chat desde el que se inició. Todas las conversaciones
+comparten el mismo modelo, prompt de sistema y opciones de generación; sus historiales y
+memorias no se comparten. Las carpetas activas usan el nombre del chat y un identificador
+hexadecimal único; al eliminar una conversación se puede borrar su memoria o conservarla
+en `CHATS DE AETHERA AI/CHATS ARCHIVADOS/`.
+
+Al iniciar la aplicación se comprueba y repara la estructura de carpetas de cada chat.
+Los chats registrados permanecen disponibles aunque todavía no tengan memoria bruta; los
+chats que falten en `CHATS.json` y las transcripciones que una versión anterior hubiera
+movido a `CHATS ARCHIVADOS` se recuperan automáticamente. Los chats eliminados
+intencionalmente que solo conservaron sus carpetas de memoria permanecen archivados. Al
+iniciar, la interfaz carga las últimas 20 interacciones (o todas si hay menos) leyendo los
+archivos de `MEMORIA BRUTA`; si hay interacciones más antiguas, al principio del historial
+aparece la ruta de esa carpeta. El historial completo de la conversación del agente se
+conserva aparte. La lista de chats se ordena por actividad reciente y conserva ese orden al
+reiniciar; seleccionar un chat o enviarle un mensaje lo mueve al principio.
 
 ## Estructura
 

@@ -28,9 +28,7 @@ class CalendarSection(CalendarHeader, CalendarGrid, CalendarModal):
         self._calendar_animation_ids.clear()
         start = self.calendar_week_start
         end = start + timedelta(days=6)
-        self.calendar_range_label.configure(
-            text=self._format_calendar_range(start, end)
-        )
+        self._set_calendar_range(self._format_calendar_range(start, end))
         self.calendar_canvas.delete("all")
         try:
             origen = self._calendar_source_options.get(self.calendar_source_var.get())
@@ -80,7 +78,11 @@ class CalendarSection(CalendarHeader, CalendarGrid, CalendarModal):
         self.calendar_scrollbar = ttk.Scrollbar(
             calendar_panel,
             orient="vertical",
-            command=self.calendar_canvas.yview,
+            style="Aethera.Vertical.TScrollbar",
+            command=lambda *args: self._scrollbar_command(
+                self.calendar_canvas,
+                *args,
+            ),
         )
         self.calendar_canvas.configure(
             yscrollcommand=self.calendar_scrollbar.set,

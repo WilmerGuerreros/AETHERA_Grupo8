@@ -1,6 +1,7 @@
 """Utilidades de la interfaz: extracción de PDF y análisis de Markdown."""
 
 import re
+from collections.abc import Iterator
 
 INLINE_MARKDOWN = re.compile(
     r"(\*\*\*.+?\*\*\*|___.+?___|\*\*.+?\*\*|__.+?__|"
@@ -19,6 +20,34 @@ EMOJI_CHAR = re.compile(
     r")"
 )
 MARKDOWN_TABLE_SEPARATOR = re.compile(r":?-{3,}:?")
+MARKDOWN_LIST = re.compile(
+    r"^(\s*)([-*+]|\d+[.)])(?:\s+|(?=\*\*|__|`|~~))(.*)$"
+)
+
+
+def analizar_markdown_en_linea(texto: str) -> Iterator[tuple[str, str | None]]:
+    """Devuelve fragmentos de texto con su estilo Markdown en línea."""
+    for parte in INLINE_MARKDOWN.split(texto):
+        if not parte:
+            continue
+        estilo = None
+        valor = parte
+        if parte.startswith(("***", "___")) and parte.endswith(parte[:3]):
+            valor = parte[3:-3]
+            estilo = "bold_italic"
+        elif parte.startswith(("**", "__")) and parte.endswith(parte[:2]):
+            valor = parte[2:-2]
+            estilo = "bold"
+        elif parte.startswith("~~") and parte.endswith("~~"):
+            valor = parte[2:-2]
+            estilo = "strike"
+        elif parte.startswith("`") and parte.endswith("`"):
+            valor = parte[1:-1]
+            estilo = "code"
+        elif parte.startswith(("*", "_")) and parte.endswith(parte[0]):
+            valor = parte[1:-1]
+            estilo = "italic"
+        yield valor, estilo
 
 
 def _markdown_table_cells(line):

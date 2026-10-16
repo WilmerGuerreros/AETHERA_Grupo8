@@ -2,8 +2,8 @@
 
 import unittest
 
-from ui.chat.logica import ChatLogic
-from ui.estado.chat import ChatStore
+from UI.chat.logica import ChatLogic
+from UI.estado.chat import ChatStore
 
 
 def _quiz():
@@ -94,6 +94,19 @@ class ChatTurnStateTests(unittest.TestCase):
             {"rol": "assistant", "texto": "respuesta final"},
         )
 
+    def test_complete_guarda_la_respuesta_en_la_vista_separada(self):
+        host = _Host([{"role": "user", "content": "Pregunta"}])
+        host._active_chat_id = "activo"
+        host._chat_stores = {"activo": host.chat_store}
+        host.chat_store.iniciar_turno()
+
+        host._handle_chat_event("activo", "complete", "Respuesta nueva")
+
+        self.assertEqual(
+            host.chat_store.entradas()[-1],
+            {"rol": "assistant", "texto": "Respuesta nueva"},
+        )
+
     def test_error_queda_registrado_en_la_conversacion(self):
         host = _Host([{"role": "user", "content": "P"}])
         host.chat_store.iniciar_turno()
@@ -115,6 +128,23 @@ class ChatTurnStateTests(unittest.TestCase):
         host._process_queue()
 
         self.assertEqual(host.chat_store.quices_del_turno(), [quiz])
+
+    def test_eventos_de_un_chat_inactivo_no_contaminan_el_chat_abierto(self):
+        host = _Host([])
+        host._active_chat_id = "activo"
+        host._chat_stores = {
+            "activo": ChatStore([]),
+            "inactivo": ChatStore([]),
+        }
+        host._chat_stores["inactivo"].iniciar_turno()
+
+        host._handle_chat_event("inactivo", "token", "respuesta del otro chat")
+
+        self.assertEqual(host._chat_stores["activo"].stream_texto, "")
+        self.assertEqual(
+            host._chat_stores["inactivo"].stream_texto,
+            "respuesta del otro chat",
+        )
 
 
 if __name__ == "__main__":

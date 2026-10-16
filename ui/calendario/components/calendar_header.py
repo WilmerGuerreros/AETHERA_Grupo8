@@ -1,10 +1,11 @@
 """Controles de encabezado y filtros del calendario."""
 
 import tkinter as tk
+from tkinter import font as tkfont
 
 from core.calendar import categorias_disponibles, origenes_disponibles
 from ...tema import COLORS, MONTH_NAMES, opciones_por_etiqueta
-from ...widgets import AnimatedDropdown
+from ...widgets import AnimatedDropdown, texto_con_elipsis
 
 
 class CalendarHeader:
@@ -93,7 +94,11 @@ class CalendarHeader:
             weight="bold",
             bg=COLORS["surface"],
         )
-        self.calendar_range_label.pack(side="left", padx=18)
+        self.calendar_range_label.pack(side="left", fill="x", expand=True, padx=18)
+        self.calendar_range_label.bind(
+            "<Configure>",
+            self._fit_calendar_range,
+        )
         self.calendar_count_label = self._label(
             toolbar,
             "",
@@ -141,4 +146,77 @@ class CalendarHeader:
             on_select=lambda _value: self._refresh_calendar(),
         )
         self.calendar_category_selector.pack(side="left")
+        self._calendar_filter_area = filter_area
+        self._calendar_toolbar = toolbar
+        self._calendar_toolbar_layout = None
+        self._calendar_toolbar_after_id = None
+        toolbar.bind("<Configure>", self._schedule_calendar_toolbar_layout)
 
+    def _set_calendar_range(self, text):
+        self._calendar_range_text = text
+        self._fit_calendar_range()
+
+    def _fit_calendar_range(self, _event=None):
+        if not hasattr(self, "calendar_range_label"):
+            return
+        text = getattr(self, "_calendar_range_text", "")
+        label = self.calendar_range_label
+        width = label.winfo_width() - 8
+        if width > 0:
+            label.configure(
+                text=texto_con_elipsis(
+                    text,
+                    tkfont.Font(font=label.cget("font")),
+                    width,
+                )
+            )
+
+    def _schedule_calendar_toolbar_layout(self, _event=None):
+        if self._calendar_toolbar_after_id:
+            self.root.after_cancel(self._calendar_toolbar_after_id)
+        self._calendar_toolbar_after_id = self.root.after_idle(
+            self._layout_calendar_toolbar
+        )
+
+    def _layout_calendar_toolbar(self):
+        self._calendar_toolbar_after_id = None
+        if not self._calendar_toolbar.winfo_exists():
+            return
+        narrow = self._calendar_toolbar.winfo_width() < 1010
+        layout = "stacked" if narrow else "inline"
+        if layout != self._calendar_toolbar_layout:
+            if narrow:
+                self.calendar_count_label.pack_forget()
+                self._calendar_filter_area.pack_configure(
+                    side="bottom",
+                    fill="x",
+                    anchor="w",
+                )
+            else:
+                self._calendar_filter_area.pack_configure(
+                    side="right",
+                    fill="none",
+                    anchor="center",
+                )
+                self.calendar_count_label.pack(
+                    side="left",
+                    padx=6,
+                )
+            self._calendar_toolbar_layout = layout
+        self.root.after_idle(self._fit_calendar_filters)
+
+    def _fit_calendar_filters(self):
+        area_width = self._calendar_filter_area.winfo_width()
+        if area_width < 1:
+            return
+        label_width = 70
+        selector_width = min(
+            220,
+            max(110, (area_width - label_width - 38) // 2),
+        )
+        if self._calendar_toolbar_layout == "stacked":
+            self.calendar_source_selector.set_width(selector_width)
+            self.calendar_category_selector.set_width(selector_width)
+        else:
+            self.calendar_source_selector.set_width(145)
+            self.calendar_category_selector.set_width(205)
