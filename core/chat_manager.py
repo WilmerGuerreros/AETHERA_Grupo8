@@ -96,7 +96,7 @@ class ChatManager:
             )
             self._initial_history = None
             self._initial_save_interaction = None
-            self.sessions[chat_id] = session
+            self.sessions = {chat_id: session, **self.sessions}
             self.archive_store.save_metadata(self.sessions.values())
             self.save_history(chat_id)
             log.info("Se creó el chat %s en %s", chat_id, directory)

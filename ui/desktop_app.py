@@ -583,7 +583,6 @@ class AetheraDesktopApp(
         self._chat_stores[session.chat_id] = self._new_chat_store(session)
         self._chat_attachments[session.chat_id] = []
         self._activate_chat(session.chat_id)
-        self._chat_promoted_id = session.chat_id
         self._sync_chat_list()
         self.show_page("Asistente IA")
 
@@ -825,17 +824,9 @@ class AetheraDesktopApp(
             and not self._flush_chat_quiz_progress_before_navigation()
         ):
             return
-        try:
-            self.chat_manager.promote_session(chat_id)
-        except (OSError, TypeError, ValueError, KeyError) as error:
-            self._show_chat_notice(
-                f"No se pudo actualizar el orden de conversaciones: {error}"
-            )
-            return
         self._discard_stream_widgets()
         self._cancel_chat_typing_indicator()
         self._activate_chat(chat_id)
-        self._chat_promoted_id = chat_id
         self._sync_chat_list()
         if self.current_page == "Asistente IA":
             self.show_page("Asistente IA")

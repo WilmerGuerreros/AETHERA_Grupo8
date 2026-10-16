@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from agent.llm import LLMEngine
 from core.chat_manager import ChatManager
@@ -188,12 +189,12 @@ class ChatSessionTests(unittest.TestCase):
             segundo = manager.create_session()
             tercero = manager.create_session()
 
-            manager.promote_session(original_ids[0])
+            manager.promote_session(segundo.chat_id)
 
             expected_oldest_to_newest = [
-                segundo.chat_id,
                 tercero.chat_id,
                 original_ids[0],
+                segundo.chat_id,
             ]
             self.assertEqual(list(manager.sessions), expected_oldest_to_newest)
             self.assertEqual(
@@ -209,6 +210,64 @@ class ChatSessionTests(unittest.TestCase):
             restored = ChatManager(manager.motor, {}, "Prompt.", root=root)
 
             self.assertEqual(list(restored.sessions), expected_oldest_to_newest)
+
+    def test_crear_chat_no_lo_promueve_sobre_chats_con_actividad(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            activo = next(iter(manager.sessions.values()))
+            activo.memory.guardar("mensaje previo", "respuesta previa")
+            nuevo = manager.create_session()
+
+            self.assertEqual(
+                list(manager.sessions),
+                [nuevo.chat_id, activo.chat_id],
+            )
+            self.assertEqual(
+                [
+                    item["id"]
+                    for item in json.loads(
+                        (root / "CHATS.json").read_text(encoding="utf-8")
+                    )
+                ],
+                [nuevo.chat_id, activo.chat_id],
+            )
+
+    def test_seleccionar_chat_no_cambia_el_orden_de_actividad(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            mas_antiguo = next(iter(manager.sessions.values()))
+            reciente = manager.create_session()
+            manager.promote_session(reciente.chat_id)
+            orden_previo = list(manager.sessions)
+
+            app = SimpleNamespace(
+                _active_chat_id=reciente.chat_id,
+                current_page="Inicio",
+                chat_manager=manager,
+                _discard_stream_widgets=lambda: None,
+                _cancel_chat_typing_indicator=lambda: None,
+                _activate_chat=lambda chat_id: setattr(
+                    app, "_active_chat_id", chat_id
+                ),
+                _sync_chat_list=lambda: None,
+                show_page=lambda _page: None,
+            )
+            AetheraDesktopApp._activate_from_list(app, mas_antiguo.chat_id)
+
+            self.assertEqual(list(manager.sessions), orden_previo)
+            self.assertEqual(app._active_chat_id, mas_antiguo.chat_id)
 
     def test_delete_archive_and_attachment_storage_are_scoped_to_chat(self):
         with tempfile.TemporaryDirectory() as directory:
