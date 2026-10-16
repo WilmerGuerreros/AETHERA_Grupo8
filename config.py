@@ -19,3 +19,4 @@ OPCIONES_LLM = {
 
 # Cantidad de interacciones que se acumulan antes de resumir y sellar una sección.
 MAX_MENSAJES_POR_SECCION = 20
+#a futuro el resumen del chat debería ser automático según el tamaño de la conversación.

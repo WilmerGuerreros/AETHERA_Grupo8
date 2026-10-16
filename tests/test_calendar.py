@@ -6,6 +6,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+from agent.tools.buscar_eventos import buscar_eventos as herramienta_buscar_eventos
 import core.calendar as core_calendar
 import core.workload as core_workload
 from core.calendar import (
@@ -322,6 +323,7 @@ class CalendarioCoreTests(unittest.TestCase):
         )
         self.assertEqual(core_calendar.origenes_disponibles(), origenes_disponibles())
 
+
     def test_core_no_conoce_el_formato_ni_las_rutas(self):
         codigo = inspect.getsource(core_calendar)
 
@@ -354,6 +356,17 @@ class CalendarioCoreTests(unittest.TestCase):
         self.assertNotIn("evaluation_week", codigo)
         self.assertNotIn("leer_recurso", codigo)
         self.assertNotIn("csv", codigo)
+
+
+class HerramientaBuscarEventosTests(unittest.TestCase):
+    def test_descripcion_incluye_categorias_y_origenes_disponibles(self):
+        descripcion = herramienta_buscar_eventos.__doc__
+
+        self.assertIsNotNone(descripcion)
+        for categoria in categorias_disponibles():
+            self.assertIn(categoria, descripcion)
+        for origen in origenes_disponibles():
+            self.assertIn(origen, descripcion)
 
 
 if __name__ == "__main__":

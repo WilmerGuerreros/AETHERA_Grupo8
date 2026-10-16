@@ -3,6 +3,9 @@
 import inspect
 import unittest
 
+from agent.tools.servicios_ayuda import (
+    buscar_servicios_ayuda as herramienta_buscar_servicios_ayuda,
+)
 from core.services import buscar_servicios_ayuda
 from data.services import (
     CategoriaDesconocida,
@@ -166,6 +169,17 @@ class BuscarServiciosCoreTests(unittest.TestCase):
 
         for categoria in SERVICIOS_POR_CATEGORIA:
             self.assertNotIn(categoria, codigo)
+
+
+class HerramientaServiciosTests(unittest.TestCase):
+    def test_descripcion_incluye_categorias_y_distritos_disponibles(self):
+        descripcion = herramienta_buscar_servicios_ayuda.__doc__
+
+        self.assertIsNotNone(descripcion)
+        for categoria in categorias_disponibles():
+            self.assertIn(categoria, descripcion)
+        for distrito in distritos_disponibles():
+            self.assertIn(distrito, descripcion)
 
 
 if __name__ == "__main__":
