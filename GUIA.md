@@ -4,6 +4,7 @@
 
 - `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
 - `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
+- `settings.py`: valores de configuración del modelo y de la memoria; no administra archivos.
 
 ## Paquete `data/`
 
@@ -16,7 +17,6 @@
 - `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
 - `data/quizzes_domain/`: esquema, validación, sesiones, puntuación y reglas de persistencia de quizzes.
 - `data/workload.py`: lectura, normalización y reglas de cálculo de carga académica.
-- `data/settings.py`: valores de configuración compartidos.
 - `data/documents.py`: extracción de texto de documentos PDF.
 - `data/resources.py`: lectura de CSV, JSON y texto de recursos de referencia.
 - `data/services.py`: catálogo de categorías y lectura/filtrado del mapa de servicios (D6); lanza excepciones explícitas si la categoría, el distrito o un servicio no existen.
@@ -90,6 +90,6 @@ En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquet
 2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1`.
 3. El ejecutable se crea en `dist\AETHERA 2.0.exe`; comparte ese archivo junto con `dist\GUIA.md`.
 
-El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `data/settings.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
+El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `settings.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
 
 Si la aplicación muestra «No module named 'tkinter'», cierra todas las ventanas de Aethera y vuelve a generar el ejecutable con el script anterior; no compartas una compilación anterior. El script configura Tcl/Tk desde la instalación de Python usada para compilar.

@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from data.memory import MemoryStore
 from data.memory_context import MemoryContext
-from data.settings import MAX_MENSAJES_POR_SECCION, MODELO_RESUMEN
+from settings import MAX_MENSAJES_POR_SECCION, MODELO_RESUMEN
 
 
 def _resumir_con_agente(contenido: str, modelo: str) -> str:

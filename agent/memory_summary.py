@@ -3,7 +3,7 @@
 import ollama
 
 from agent.prompts import MEMORY_SUMMARY_SYSTEM_PROMPT
-from data.settings import MODELO_RESUMEN
+from settings import MODELO_RESUMEN
 
 
 def generar_resumen(contenido_historial: str, modelo: str | None = None) -> str:

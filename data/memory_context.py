@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 
 from data.memory import MemoryStore
-from data.settings import MAX_MENSAJES_POR_SECCION, MODELO_RESUMEN
+from settings import MAX_MENSAJES_POR_SECCION, MODELO_RESUMEN
 
 log = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ python -m venv .venv
 
 ## Configuración
 
-Los valores de configuración compartidos se definen en `data/settings.py`:
+Los valores de configuración compartidos se definen en `settings.py`:
 
 - `MODELO`: modelo compartido por todas las conversaciones (`nemotron-3-ultra:cloud`).
 - `MODELO_RESUMEN`: modelo usado para resumir la memoria.

@@ -3,7 +3,7 @@
 import logging
 
 from data.paths import emoji_font_path
-from data.settings import MODELO, OPCIONES_LLM
+from settings import MODELO, OPCIONES_LLM
 
 
 def configuracion_motor() -> tuple[str, dict[str, object]]:
