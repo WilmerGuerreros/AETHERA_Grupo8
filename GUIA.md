@@ -4,7 +4,6 @@
 
 - `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
 - `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
-- `config.py`: fachada de compatibilidad; los ajustes compartidos se definen en `data/settings.py`.
 
 ## Paquete `data/`
 
