@@ -122,9 +122,9 @@ class CalendarStore:
     ) -> str:
         """Añade un evento al calendario personal y devuelve su UID.
 
-        ``titulo``, ``descripcion`` y las fechas ya vienen validados por
-        ``core``; aquí solo se serializa y se persiste. Si se omite ``fin``,
-        el evento dura un solo día.
+        ``titulo``, ``descripcion`` y las fechas llegan validados por las
+        operaciones de Data; aquí se serializa y persiste el evento. Si se
+        omite ``fin``, el evento dura un solo día.
         """
         if fin is None:
             fin = inicio

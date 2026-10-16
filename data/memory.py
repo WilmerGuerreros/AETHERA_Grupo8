@@ -17,6 +17,10 @@ class MemoryStore:
     def __init__(self, raiz: Path | str | None = None) -> None:
         self.rutas: MemoryPaths = memory_paths(raiz).ensure()
 
+    def reubicar(self, raiz: Path | str) -> None:
+        """Actualiza las rutas cuando se renombra la carpeta del chat."""
+        self.rutas = memory_paths(Path(raiz)).ensure()
+
     # --- historial ---
 
     def nombre_historial(self, numero_seccion: int) -> str:

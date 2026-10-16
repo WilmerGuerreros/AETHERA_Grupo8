@@ -1,6 +1,7 @@
 """Persistencia de los metadatos y transcripciones de cada chat."""
 
 import json
+import logging
 import re
 import shutil
 from datetime import datetime
@@ -8,7 +9,33 @@ from pathlib import Path
 from typing import Any, Iterable
 from uuid import uuid4
 
+from data.memory import MemoryStore
 from data.paths import chat_archives_directory
+
+log = logging.getLogger(__name__)
+TITULO_CHAT_NUEVO = "Nuevo chat"
+TITULO_CHAT_RECUPERADO = "Chat recuperado"
+LONGITUD_MAXIMA_TITULO_CHAT = 60
+
+
+def normalizar_titulo_chat(titulo: str) -> str:
+    """Aplica la política de limpieza y longitud a los títulos de chat."""
+    return " ".join(titulo.split()).strip()[:LONGITUD_MAXIMA_TITULO_CHAT]
+
+
+def title_from_message(message: str) -> str:
+    """Genera un título breve a partir del primer mensaje visible."""
+    text = message.strip()
+    if text.startswith("Fecha:"):
+        _, separator, text = text.partition("\n")
+        if not separator:
+            return TITULO_CHAT_NUEVO
+    for line in text.splitlines():
+        if line.startswith("document: "):
+            continue
+        if line.strip():
+            return normalizar_titulo_chat(line)
+    return TITULO_CHAT_NUEVO
 
 
 class ChatArchiveStore:
@@ -28,7 +55,9 @@ class ChatArchiveStore:
         self._metadata_path = self.root / "CHATS.json"
         self._directories: dict[str, Path] = {}
 
-    def create_directory(self, chat_id: str, title: str = "Nuevo chat") -> Path:
+    def create_directory(
+        self, chat_id: str, title: str = TITULO_CHAT_NUEVO
+    ) -> Path:
         """Crea el directorio del chat y su estructura de memoria."""
         directory = self.session_directory(chat_id, title)
         self.ensure_chat_structure(chat_id)
@@ -84,6 +113,106 @@ class ChatArchiveStore:
         directory.replace(destination)
         self._directories.pop(chat_id, None)
         return destination
+
+    def restore_archived_conversations(self) -> None:
+        """Recupera chats sin metadatos y transcripciones archivadas automáticamente."""
+        entries = self.load_metadata()
+        known_ids = {entry["id"] for entry in entries}
+        updated = False
+
+        for directory in sorted(self.root.iterdir()):
+            if (
+                not directory.is_dir()
+                or directory.name == "CHATS ARCHIVADOS"
+                or not any(
+                    (directory / name).exists()
+                    for name in (*self.MEMORY_DIRECTORIES, "CONVERSACION.json")
+                )
+            ):
+                continue
+            chat_id = self._chat_id_from_directory(directory)
+            if chat_id is None or chat_id in known_ids:
+                continue
+            entries.append(
+                {
+                    "id": chat_id,
+                    "title": directory.name.rsplit("_", 1)[0].replace("_", " ")
+                    or TITULO_CHAT_RECUPERADO,
+                    "folder": directory.name,
+                }
+            )
+            known_ids.add(chat_id)
+            updated = True
+            log.info("Se recuperó el chat sin metadatos %s", directory)
+
+        archive_root = self.root / "CHATS ARCHIVADOS"
+        archived_directories = (
+            sorted(archive_root.iterdir()) if archive_root.is_dir() else ()
+        )
+        for archived_directory in archived_directories:
+            if not archived_directory.is_dir():
+                continue
+            transcript_path = archived_directory / "CONVERSACION.json"
+            if not transcript_path.is_file():
+                continue
+
+            chat_id = self._chat_id_from_directory(archived_directory)
+            if chat_id is None:
+                log.warning(
+                    "No se pudo recuperar el chat archivado con nombre inválido: %s",
+                    archived_directory,
+                )
+                continue
+            if chat_id in known_ids:
+                continue
+
+            try:
+                history = json.loads(transcript_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                log.exception(
+                    "No se pudo leer la transcripción archivada: %s",
+                    transcript_path,
+                )
+                continue
+            if not isinstance(history, list) or any(
+                not isinstance(message, dict) for message in history
+            ):
+                log.warning(
+                    "Se omitió una transcripción archivada con formato inválido: %s",
+                    transcript_path,
+                )
+                continue
+
+            directory = self.root / archived_directory.name
+            if directory.exists():
+                log.warning(
+                    "No se pudo recuperar el chat %s: ya existe la carpeta %s.",
+                    chat_id,
+                    directory,
+                )
+                continue
+
+            archived_directory.replace(directory)
+            self._directories[chat_id] = directory
+            title = archived_directory.name.rsplit("_", 1)[0].replace("_", " ")
+            entries.append(
+                {
+                    "id": chat_id,
+                    "title": title or TITULO_CHAT_RECUPERADO,
+                    "folder": directory.name,
+                }
+            )
+            known_ids.add(chat_id)
+            updated = True
+            log.info("Se recuperó el chat %s desde %s", chat_id, archived_directory)
+
+        if updated:
+            self._write_json(self._metadata_path, entries)
+
+    @staticmethod
+    def _chat_id_from_directory(directory: Path) -> str | None:
+        _, separator, chat_id = directory.name.rpartition("_")
+        return chat_id if separator and chat_id.isalnum() else None
 
     def import_legacy_memory(self, chat_id: str, source_root: Path) -> None:
         """Importa memoria antigua y la distribuye en las carpetas nuevas."""
@@ -275,6 +404,35 @@ class ChatArchiveStore:
             for session in sessions
         ]
         self._write_json(self._metadata_path, entries)
+
+    @staticmethod
+    def restore_raw_history(
+        memory_store: MemoryStore,
+        history: list[dict[str, Any]],
+    ) -> None:
+        """Reconstruye memoria bruta desde una transcripción sin historial bruto."""
+        if any(memory_store.rutas.historial.glob("HISTORIAL_*.txt")):
+            return
+
+        usuario_pendiente: str | None = None
+        for message in history:
+            role = message.get("role")
+            content = message.get("content")
+            if role == "user" and isinstance(content, str):
+                if usuario_pendiente is not None:
+                    memory_store.escribir(1, usuario_pendiente, "")
+                usuario_pendiente = content
+            elif (
+                role == "assistant"
+                and not message.get("tool_calls")
+                and isinstance(content, str)
+                and usuario_pendiente is not None
+            ):
+                memory_store.escribir(1, usuario_pendiente, content)
+                usuario_pendiente = None
+
+        if usuario_pendiente is not None:
+            memory_store.escribir(1, usuario_pendiente, "")
 
     def load_history(self, chat_id: str) -> list[dict[str, Any]] | None:
         """Carga la transcripción de un chat, si ya existe."""

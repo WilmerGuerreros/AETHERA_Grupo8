@@ -118,11 +118,12 @@ class ChatSessionTests(unittest.TestCase):
 
     def test_renombrar_usa_slug_y_codigo_hexadecimal_sin_colisiones(self):
         with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
             manager = ChatManager(
                 LLMEngine("nemotron-3-super:cloud", {}),
                 {},
                 "Prompt.",
-                root=Path(directory) / "chats",
+                root=root,
             )
             first = next(iter(manager.sessions.values()))
             second = manager.create_session()
@@ -130,23 +131,84 @@ class ChatSessionTests(unittest.TestCase):
             second.memory.guardar("Persistencia de chat dos", "Respuesta dos")
             manager.rename_session(first.chat_id, "Planificación de Álgebra")
             manager.rename_session(second.chat_id, "Planificación de Álgebra")
+            first.memory.guardar("Turno después del renombrado", "Respuesta nueva")
 
             self.assertIn("Planificación_de_Álgebra", first.directory.name)
             self.assertTrue(first.directory.name.endswith(first.chat_id))
             self.assertTrue(second.directory.name.endswith(second.chat_id))
             self.assertNotEqual(first.directory, second.directory)
             self.assertTrue((first.directory / "CONVERSACION.json").exists())
+            self.assertTrue(
+                (
+                    first.directory
+                    / "MEMORIA BRUTA"
+                    / "HISTORIAL_0001.txt"
+                ).is_file()
+            )
+            self.assertFalse(
+                (
+                    root
+                    / f"Nuevo_chat_{first.chat_id}"
+                    / "MEMORIA BRUTA"
+                    / "HISTORIAL_0001.txt"
+                ).exists()
+            )
 
             restored = ChatManager(
                 manager.motor,
                 {},
                 "Prompt.",
-                root=Path(directory) / "chats",
+                root=root,
             )
             self.assertEqual(
                 restored.sessions[first.chat_id].directory.name,
                 first.directory.name,
             )
+            first_interactions = restored.sessions[
+                first.chat_id
+            ].memory.store.leer_interacciones(1)
+            self.assertEqual(
+                first_interactions[-1],
+                {
+                    "usuario": "Turno después del renombrado",
+                    "aethera": "Respuesta nueva",
+                },
+            )
+
+    def test_orden_de_chats_por_uso_reciente_se_conserva_tras_reiniciar(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            original_ids = list(manager.sessions)
+            segundo = manager.create_session()
+            tercero = manager.create_session()
+
+            manager.promote_session(original_ids[0])
+
+            expected_oldest_to_newest = [
+                segundo.chat_id,
+                tercero.chat_id,
+                original_ids[0],
+            ]
+            self.assertEqual(list(manager.sessions), expected_oldest_to_newest)
+            self.assertEqual(
+                [
+                    item["id"]
+                    for item in json.loads(
+                        (root / "CHATS.json").read_text(encoding="utf-8")
+                    )
+                ],
+                expected_oldest_to_newest,
+            )
+
+            restored = ChatManager(manager.motor, {}, "Prompt.", root=root)
+
+            self.assertEqual(list(restored.sessions), expected_oldest_to_newest)
 
     def test_delete_archive_and_attachment_storage_are_scoped_to_chat(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -327,7 +389,133 @@ class ChatSessionTests(unittest.TestCase):
                 self.assertTrue((restored_session.directory / folder).is_dir())
             self.assertIn("Hola", restored_session.memory.store.leer_historial(1))
 
-    def test_vaciar_memoria_bruta_y_resumen_retira_chat_y_archiva_sus_datos(self):
+    def test_chat_nuevo_vacio_sigue_disponible_despues_de_reiniciar(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            session = next(iter(manager.sessions.values()))
+
+            restored = ChatManager(manager.motor, {}, "Prompt.", root=root)
+
+            self.assertIn(session.chat_id, restored.sessions)
+            self.assertEqual(restored.sessions[session.chat_id].title, "Nuevo chat")
+            self.assertFalse(
+                (root / "CHATS ARCHIVADOS" / session.directory.name).exists()
+            )
+
+    def test_recupera_transcripciones_que_se_archivaron_automaticamente(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            archive_directory = (
+                root
+                / "CHATS ARCHIVADOS"
+                / "Repaso_de_Cálculo_0123456789abcdef0123456789abcdef"
+            )
+            archive_directory.mkdir(parents=True)
+            (archive_directory / "CONVERSACION.json").write_text(
+                json.dumps(
+                    [
+                        {"role": "system", "content": "Prompt antiguo"},
+                        {"role": "user", "content": "Pregunta recuperada"},
+                        {"role": "assistant", "content": "Respuesta recuperada"},
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            restored = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+            chat_id = "0123456789abcdef0123456789abcdef"
+
+            self.assertIn(chat_id, restored.sessions)
+            self.assertEqual(restored.sessions[chat_id].title, "Repaso de Cálculo")
+            self.assertTrue(
+                (restored.sessions[chat_id].directory / "CONVERSACION.json").is_file()
+            )
+            self.assertEqual(
+                restored.sessions[chat_id].memory.store.leer_interacciones(1),
+                [
+                    {
+                        "usuario": "Pregunta recuperada",
+                        "aethera": "Respuesta recuperada",
+                    }
+                ],
+            )
+            self.assertFalse(archive_directory.exists())
+            metadata = json.loads((root / "CHATS.json").read_text(encoding="utf-8"))
+            self.assertIn(chat_id, {item["id"] for item in metadata})
+            restored_again = ChatManager(
+                restored.motor,
+                {},
+                "Prompt.",
+                root=root,
+            )
+            self.assertEqual(set(restored_again.sessions), {chat_id})
+
+    def test_recupera_chat_activo_que_falta_en_el_indice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            chat_directory = root / "Álgebra_lineal_abcdef0123456789"
+            raw_directory = chat_directory / "MEMORIA BRUTA"
+            raw_directory.mkdir(parents=True)
+            (raw_directory / "HISTORIAL_0001.txt").write_text(
+                "Usuario: Pregunta existente\nAethera: Respuesta existente",
+                encoding="utf-8",
+            )
+
+            restored = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            self.assertIn("abcdef0123456789", restored.sessions)
+            self.assertEqual(
+                restored.sessions["abcdef0123456789"].title,
+                "Álgebra lineal",
+            )
+            metadata = json.loads((root / "CHATS.json").read_text(encoding="utf-8"))
+            self.assertIn(
+                "abcdef0123456789",
+                {item["id"] for item in metadata},
+            )
+
+    def test_archivo_de_memoria_intencional_no_se_reactiva(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "chats"
+            archive_directory = (
+                root
+                / "CHATS ARCHIVADOS"
+                / "Chat_eliminado_abcdef0123456789"
+            )
+            raw_directory = archive_directory / "MEMORIA BRUTA"
+            raw_directory.mkdir(parents=True)
+            (raw_directory / "HISTORIAL_0001.txt").write_text(
+                "Usuario: Memoria preservada\nAethera: Respuesta preservada",
+                encoding="utf-8",
+            )
+
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=root,
+            )
+
+            self.assertTrue(archive_directory.is_dir())
+            self.assertNotIn("abcdef0123456789", manager.sessions)
+
+    def test_chat_con_memoria_vacia_y_transcripcion_no_se_archiva(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "chats"
             manager = ChatManager(
@@ -352,12 +540,17 @@ class ChatSessionTests(unittest.TestCase):
                 root=root,
             )
 
-            self.assertNotIn(session.chat_id, restored.sessions)
-            archived = root / "CHATS ARCHIVADOS" / session.directory.name
-            self.assertTrue((archived / "CONVERSACION.json").is_file())
-            self.assertTrue((archived / "MEMORIA BRUTA").is_dir())
+            self.assertIn(session.chat_id, restored.sessions)
+            history = restored.sessions[session.chat_id].history
+            self.assertIn(
+                {"role": "user", "content": "Turno no persistido en memoria"},
+                history,
+            )
+            self.assertFalse(
+                (root / "CHATS ARCHIVADOS" / session.directory.name).exists()
+            )
             metadata = json.loads((root / "CHATS.json").read_text(encoding="utf-8"))
-            self.assertNotIn(session.chat_id, {item["id"] for item in metadata})
+            self.assertIn(session.chat_id, {item["id"] for item in metadata})
 
     def test_existing_nested_memory_layout_is_migrated_to_sibling_folders(self):
         with tempfile.TemporaryDirectory() as directory:

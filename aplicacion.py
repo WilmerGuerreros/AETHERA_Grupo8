@@ -8,13 +8,14 @@ interfaz de escritorio.
 from agent.llm import LLMEngine
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import REGISTRO_HERRAMIENTAS
-from config import MODELO, OPCIONES_LLM
 from core.chat_manager import ChatManager
+from core.configuration import configuracion_motor
 
 
 def iniciar_aplicacion() -> None:
     """Ensambla dependencias compartidas y abre la interfaz de escritorio."""
-    motor = LLMEngine(MODELO, dict(OPCIONES_LLM))
+    modelo, opciones = configuracion_motor()
+    motor = LLMEngine(modelo, opciones)
     chats = ChatManager(
         motor,
         REGISTRO_HERRAMIENTAS,

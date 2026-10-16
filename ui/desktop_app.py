@@ -79,6 +79,7 @@ class AetheraDesktopApp(
         self._service_render_services = []
         self._pdf_request_id = 0
         self._attached_pdfs = []
+        self._chat_promoted_id = None
         self._pdf_status_text = "Sin documento adjunto"
         self._pdf_status_color = COLORS["muted"]
         self._widget_color_animations = {}
@@ -124,7 +125,7 @@ class AetheraDesktopApp(
             chat_id: []
             for chat_id in self.chat_manager.sessions
         }
-        self._active_chat_id = next(iter(self.chat_manager.sessions))
+        self._active_chat_id = next(reversed(self.chat_manager.sessions))
         self._activate_chat(self._active_chat_id)
 
         self._configure_styles()
@@ -582,6 +583,7 @@ class AetheraDesktopApp(
         self._chat_stores[session.chat_id] = self._new_chat_store(session)
         self._chat_attachments[session.chat_id] = []
         self._activate_chat(session.chat_id)
+        self._chat_promoted_id = session.chat_id
         self._sync_chat_list()
         self.show_page("Asistente IA")
 
@@ -600,9 +602,18 @@ class AetheraDesktopApp(
                 bg=COLORS["surface_light"] if selected else COLORS["surface"],
                 height=44,
                 cursor="hand2",
+                highlightthickness=0,
+                highlightbackground=COLORS["border"],
             )
             row.pack(fill="x", padx=6, pady=2)
             row.pack_propagate(False)
+            selection_marker = tk.Frame(
+                row,
+                bg=COLORS["accent_light"],
+                width=3,
+                height=0,
+            )
+            selection_marker.place(x=0, rely=0.5, anchor="w")
             indicator = tk.Label(
                 row,
                 text="●" if self._chat_stores[chat_id].ocupado else "",
@@ -671,28 +682,60 @@ class AetheraDesktopApp(
                     lambda event, selected_id=chat_id:
                         self._show_chat_actions(selected_id, event),
                 )
-            for widget in (row, title_label):
+            for widget in (row, indicator, title_label, actions):
                 widget.bind(
                     "<Enter>",
                     lambda _event, target=row, active=selected:
-                        self._set_chat_row_hover(target, active, True),
+                        self._schedule_chat_row_hover(target, active),
+                    add="+",
                 )
                 widget.bind(
                     "<Leave>",
                     lambda _event, target=row, active=selected:
-                        self._set_chat_row_hover(target, active, False),
+                        self._schedule_chat_row_hover(target, active),
+                    add="+",
                 )
             self._animate_card_in(row)
+            self._animate_chat_selection(selection_marker, selected)
+            if chat_id == self._chat_promoted_id:
+                self._animate_chat_promotion(row, selected)
+        self._chat_promoted_id = None
+
+    def _schedule_chat_row_hover(self, row, selected):
+        self.root.after_idle(
+            lambda: self._set_chat_row_hover(
+                row,
+                selected,
+                self._chat_row_contains_pointer(row),
+            )
+        )
+
+    def _chat_row_contains_pointer(self, row):
+        try:
+            widget = self.root.winfo_containing(*self.root.winfo_pointerxy())
+            while widget is not None:
+                if widget is row:
+                    return True
+                widget = widget.master
+        except tk.TclError:
+            return False
+        return False
 
     def _set_chat_row_hover(self, row, selected, hovered):
+        if not row.winfo_exists():
+            return
         color = (
-            "#26365a"
+            "#303e68"
             if selected or hovered
             else COLORS["surface"]
         )
-        self._animate_widget_color(row, "bg", color, steps=22)
+        self._animate_widget_color(row, "bg", color, steps=10)
         for child in row.winfo_children():
-            self._animate_widget_color(child, "bg", color, steps=22)
+            if isinstance(child, tk.Button) or (
+                isinstance(child, tk.Frame) and child.winfo_width() <= 4
+            ):
+                continue
+            self._animate_widget_color(child, "bg", color, steps=10)
         title = next(
             (
                 child
@@ -706,21 +749,61 @@ class AetheraDesktopApp(
                 title,
                 "fg",
                 COLORS["text"] if selected or hovered else COLORS["muted"],
-                steps=22,
+                steps=10,
             )
+
+    def _animate_chat_selection(self, marker, selected):
+        steps = 9
+        duration_ms = 150
+
+        def step(index):
+            if not marker.winfo_exists():
+                return
+            progress = min(1.0, index / steps)
+            eased = 1 - (1 - progress) ** 3
+            marker.place_configure(height=round(28 * eased) if selected else 0)
+            if index < steps:
+                self.root.after(
+                    duration_ms // steps,
+                    lambda: step(index + 1),
+                )
+
+        step(0)
+
+    def _animate_chat_promotion(self, row, selected):
+        if not row.winfo_exists():
+            return
+        row.configure(highlightthickness=1)
+        self._animate_widget_color(
+            row,
+            "highlightbackground",
+            COLORS["accent_light"],
+            steps=10,
+        )
+
+        def settle():
+            if row.winfo_exists():
+                self._animate_widget_color(
+                    row,
+                    "highlightbackground",
+                    COLORS["accent"] if selected else COLORS["border"],
+                    steps=12,
+                )
+
+        self.root.after(210, settle)
 
     def _animate_chat_action_button(self, button, hovered, base=None):
         self._animate_widget_color(
             button,
             "fg",
             COLORS["accent_light"] if hovered else COLORS["muted"],
-            steps=22,
+            steps=10,
         )
         self._animate_widget_color(
             button,
             "bg",
             "#35466f" if hovered else base or COLORS["surface"],
-            steps=22,
+            steps=10,
         )
 
     def _fit_chat_title(self, label, title):
@@ -742,9 +825,17 @@ class AetheraDesktopApp(
             and not self._flush_chat_quiz_progress_before_navigation()
         ):
             return
+        try:
+            self.chat_manager.promote_session(chat_id)
+        except (OSError, TypeError, ValueError, KeyError) as error:
+            self._show_chat_notice(
+                f"No se pudo actualizar el orden de conversaciones: {error}"
+            )
+            return
         self._discard_stream_widgets()
         self._cancel_chat_typing_indicator()
         self._activate_chat(chat_id)
+        self._chat_promoted_id = chat_id
         self._sync_chat_list()
         if self.current_page == "Asistente IA":
             self.show_page("Asistente IA")

@@ -12,11 +12,23 @@ from agent.llm import LLMEngine
 from agent.tools.registro import Herramienta
 from core.conversation import Conversacion
 from core.memory import Memoria
-from data.chat_sessions import ChatArchiveStore
+from data.chat_sessions import (
+    TITULO_CHAT_NUEVO,
+    ChatArchiveStore,
+    normalizar_titulo_chat,
+    title_from_message as _title_from_message,
+)
 from data.memory import MemoryStore
-from data.paths import application_data_directory
+from data.paths import memory_paths
 
 log = logging.getLogger(__name__)
+
+__all__ = ["ChatManager", "ChatSession", "title_from_message"]
+
+
+def title_from_message(message: str) -> str:
+    """Solicita a Data el título derivado del primer mensaje."""
+    return _title_from_message(message)
 
 
 @dataclass
@@ -51,6 +63,7 @@ class ChatManager:
         self.sessions: dict[str, ChatSession] = {}
         self._initial_history = initial_history
         self._initial_save_interaction = initial_save_interaction
+        self.archive_store.restore_archived_conversations()
         self._load_sessions()
         if not self.sessions:
             self.create_session(importar_memoria_anterior=root is None)
@@ -59,11 +72,11 @@ class ChatManager:
         """Crea un chat y su estructura de memoria aislada."""
         with self._lock:
             chat_id = uuid.uuid4().hex
-            directory = self.archive_store.create_directory(chat_id, "Nuevo chat")
+            directory = self.archive_store.create_directory(chat_id, TITULO_CHAT_NUEVO)
             if importar_memoria_anterior:
                 self.archive_store.import_legacy_memory(
                     chat_id,
-                    application_data_directory() / "memoria",
+                    memory_paths().historial.parent,
                 )
             memory = Memoria(
                 MemoryStore(directory),
@@ -75,7 +88,7 @@ class ChatManager:
                 history = self._history_with_memory(memory)
             session = self._build_session(
                 chat_id,
-                "Nuevo chat",
+                TITULO_CHAT_NUEVO,
                 directory,
                 history,
                 memory,
@@ -93,16 +106,30 @@ class ChatManager:
         """Actualiza el nombre visible de un chat."""
         with self._lock:
             session = self.sessions[chat_id]
-            clean_title = " ".join(title.split()).strip()
+            clean_title = normalizar_titulo_chat(title)
             if not clean_title:
                 return
-            clean_title = clean_title[:60]
             session.directory = self.archive_store.rename_directory(
                 chat_id,
                 clean_title,
             )
+            session.memory.store.reubicar(session.directory)
             session.title = clean_title
             self.archive_store.save_metadata(self.sessions.values())
+
+    def promote_session(self, chat_id: str) -> None:
+        """Mueve el chat al final del índice para que aparezca primero."""
+        with self._lock:
+            if chat_id not in self.sessions:
+                raise KeyError(f"No existe el chat: {chat_id}")
+            previous_order = list(self.sessions.items())
+            self.sessions[chat_id] = self.sessions.pop(chat_id)
+            try:
+                self.archive_store.save_metadata(self.sessions.values())
+            except (OSError, TypeError, ValueError):
+                self.sessions.clear()
+                self.sessions.update(previous_order)
+                raise
 
     def delete_session(self, chat_id: str, keep_memory: bool) -> None:
         """Elimina el chat, opcionalmente conservando su memoria archivada."""
@@ -155,16 +182,11 @@ class ChatManager:
                 metadata.get("folder"),
             )
             self.archive_store.ensure_chat_structure(chat_id)
-            if self.archive_store.memory_is_empty(chat_id):
-                archived = self.archive_store.archive_chat_directory(chat_id)
-                log.info(
-                    "Se retiró el chat vacío %s y se conservó en %s",
-                    chat_id,
-                    archived,
-                )
-                continue
-            memory = Memoria(MemoryStore(directory), modelo=self.motor.modelo)
+            memory_store = MemoryStore(directory)
             history = self.archive_store.load_history(chat_id)
+            if history is not None:
+                self.archive_store.restore_raw_history(memory_store, history)
+            memory = Memoria(memory_store, modelo=self.motor.modelo)
             if history is None:
                 history = self._history_with_memory(memory)
             else:
@@ -220,17 +242,3 @@ class ChatManager:
 
     def _history_with_memory(self, memory: Memoria) -> list[dict[str, Any]]:
         return self._apply_system_prompt(memory.contexto_inicial()[1:])
-
-def title_from_message(message: str) -> str:
-    """Genera un título breve a partir del primer mensaje visible."""
-    text = message.strip()
-    if text.startswith("Fecha:"):
-        _, separator, text = text.partition("\n")
-        if not separator:
-            return "Nuevo chat"
-    for line in text.splitlines():
-        if line.startswith("document: "):
-            continue
-        if line.strip():
-            return " ".join(line.split())[:60]
-    return "Nuevo chat"

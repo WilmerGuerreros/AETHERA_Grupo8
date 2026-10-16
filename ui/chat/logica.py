@@ -189,16 +189,24 @@ class ChatLogic:
         )
         ahora = datetime.now()
         text = f"Fecha: {ahora:%d/%m/%Y} Hora: {ahora:%H:%M}\n{text}"
+        session = self.chat_manager.sessions[self._active_chat_id]
+        try:
+            self.chat_manager.promote_session(session.chat_id)
+        except (OSError, TypeError, ValueError, KeyError) as error:
+            self._show_chat_notice(
+                f"No se pudo actualizar el orden de conversaciones: {error}"
+            )
+            return
         self.message_input.delete("1.0", "end")
         self.chat_store.agregar_mensaje("user", text)
         self._append_message("user", text)
-        session = self.chat_manager.sessions[self._active_chat_id]
         if session.title == "Nuevo chat":
             self.chat_manager.rename_session(
                 session.chat_id,
                 title_from_message(text),
             )
-            self._sync_chat_list()
+        self._chat_promoted_id = session.chat_id
+        self._sync_chat_list()
         self._remove_pdf()
         self.chat_store.iniciar_turno()
         self.send_button.configure(state="disabled")

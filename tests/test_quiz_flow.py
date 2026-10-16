@@ -144,6 +144,25 @@ class QuizFlowTests(unittest.TestCase):
             self.assertEqual(QuizManager(store).listar(), [quiz])
             self.assertEqual(len(sesion.contextos), 1)
 
+    def test_finalizar_quiz_reenvia_error_de_persistencia(self):
+        with tempfile.TemporaryDirectory() as directorio:
+            store = QuizStore(directorio)
+            quiz = _quiz_de_ejemplo()
+            QuizManager(store).guardar(quiz)
+
+            with patch.object(
+                store,
+                "guardar_resultado",
+                side_effect=OSError("disco lleno"),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "disco lleno"):
+                    finalizar_quiz(
+                        quiz,
+                        respuestas={"p1": "A", "p2": "Respuesta parcial."},
+                        motor=_FakeMotor(),
+                        store=store,
+                    )
+
 
 class _ConversacionQuizTests(unittest.TestCase):
     def test_conversacion_finaliza_quiz_e_inyecta_contexto_en_chat(self):

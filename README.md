@@ -32,7 +32,7 @@ python -m venv .venv
 
 ## Configuración
 
-Los valores que suelen ajustarse están en `config.py`:
+Los valores de configuración compartidos se definen en `data/settings.py` (y `config.py` los reexporta para mantener compatibilidad):
 
 - `MODELO`: modelo compartido por todas las conversaciones (`nemotron-3-super:cloud`).
 - `MODELO_RESUMEN`: modelo usado para resumir la memoria.
@@ -54,11 +54,15 @@ hexadecimal único; al eliminar una conversación se puede borrar su memoria o c
 en `CHATS DE AETHERA AI/CHATS ARCHIVADOS/`.
 
 Al iniciar la aplicación se comprueba y repara la estructura de carpetas de cada chat.
-Si `MEMORIA BRUTA` y `RESUMEN` no contienen datos, el chat se retira de la lista activa
-y su carpeta completa se conserva en `CHATS ARCHIVADOS`. Al iniciar, la interfaz carga
-sus últimas 20 interacciones (o todas si hay menos) leyendo exclusivamente los archivos
-de `MEMORIA BRUTA`; si hay interacciones más antiguas, al principio del historial aparece
-la ruta de esa carpeta. El historial completo de la conversación del agente se conserva aparte.
+Los chats registrados permanecen disponibles aunque todavía no tengan memoria bruta; los
+chats que falten en `CHATS.json` y las transcripciones que una versión anterior hubiera
+movido a `CHATS ARCHIVADOS` se recuperan automáticamente. Los chats eliminados
+intencionalmente que solo conservaron sus carpetas de memoria permanecen archivados. Al
+iniciar, la interfaz carga las últimas 20 interacciones (o todas si hay menos) leyendo los
+archivos de `MEMORIA BRUTA`; si hay interacciones más antiguas, al principio del historial
+aparece la ruta de esa carpeta. El historial completo de la conversación del agente se
+conserva aparte. La lista de chats se ordena por actividad reciente y conserva ese orden al
+reiniciar; seleccionar un chat o enviarle un mensaje lo mueve al principio.
 
 ## Estructura
 

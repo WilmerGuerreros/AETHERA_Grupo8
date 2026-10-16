@@ -11,8 +11,8 @@ from data.paths import quizzes_directory
 
 
 # Metadatos internos que la aplicación agrega al archivo del quiz. No forman
-# parte del esquema validable, así que se ocultan al leerlos para no romper la
-# validación de ``core.quizzes.validar_quiz``.
+# parte del esquema validable, así que se ocultan al leerlos antes de aplicar
+# la validación de ``data.quizzes_domain.schema.validar_quiz``.
 _METADATOS_INTERNOS = ("avance", "resultado_final")
 
 

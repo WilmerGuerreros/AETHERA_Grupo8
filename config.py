@@ -1,21 +1,15 @@
-"""Configuración central de Aethera.
+"""Compatibilidad para lectores antiguos; la configuración vive en Data."""
 
-Reúne en un solo lugar los valores que suelen ajustarse: los modelos de Ollama,
-las opciones de generación y el tamaño de las secciones de memoria.
-"""
+from data.settings import (
+    MAX_MENSAJES_POR_SECCION,
+    MODELO,
+    MODELO_RESUMEN,
+    OPCIONES_LLM,
+)
 
-# Modelo compartido por todas las conversaciones de Aethera.
-MODELO = "nemotron-3-super:cloud"
-
-# Modelo más económico usado para resumir la memoria de largo plazo.
-MODELO_RESUMEN = "nemotron-3-super:cloud"
-
-# Opciones que se envían a Ollama en cada generación de la conversación.
-OPCIONES_LLM = {
-    "temperature": 0.3,
-    "num_ctx": 200000,#solo para cloud.
-    "think": "medium",
-}
-
-# Cantidad de interacciones que se acumulan antes de resumir y sellar una sección.
-MAX_MENSAJES_POR_SECCION = 20
+__all__ = [
+    "MAX_MENSAJES_POR_SECCION",
+    "MODELO",
+    "MODELO_RESUMEN",
+    "OPCIONES_LLM",
+]
