@@ -231,7 +231,11 @@ class CalendarModal:
             description_scrollbar = ttk.Scrollbar(
                 description_frame,
                 orient="vertical",
-                command=description.yview,
+                style="Aethera.Vertical.TScrollbar",
+                command=lambda *args: self._scrollbar_command(
+                    description,
+                    *args,
+                ),
             )
             description.configure(yscrollcommand=description_scrollbar.set)
             description_scrollbar.pack(side="right", fill="y")

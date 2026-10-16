@@ -6,6 +6,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+from agent.tools.buscar_eventos import buscar_eventos as herramienta_buscar_eventos
 import core.calendar as core_calendar
 import core.workload as core_workload
 from core.calendar import (
@@ -134,16 +135,18 @@ class CalendarStoreTests(unittest.TestCase):
             self.store.eliminar("no-existe@aethera")
 
     def test_eliminar_identificador_ambiguo(self):
-        self.personal.write_text(
-            "BEGIN:VCALENDAR\r\n"
-            "BEGIN:VEVENT\r\nUID:dup@aethera\r\n"
-            "DTSTART;VALUE=DATE:20261201\r\nDTEND;VALUE=DATE:20261202\r\n"
-            "SUMMARY:A\r\nEND:VEVENT\r\n"
-            "BEGIN:VEVENT\r\nUID:dup@aethera\r\n"
-            "DTSTART;VALUE=DATE:20261203\r\nDTEND;VALUE=DATE:20261204\r\n"
-            "SUMMARY:B\r\nEND:VEVENT\r\n"
-            "END:VCALENDAR\r\n",
-            encoding="utf-8",
+        self.personal.write_bytes(
+            (
+                "BEGIN:VCALENDAR\r\n"
+                "VERSION:2.0\r\n"
+                "BEGIN:VEVENT\r\nUID:dup@aethera\r\n"
+                "DTSTART;VALUE=DATE:20261201\r\nDTEND;VALUE=DATE:20261202\r\n"
+                "SUMMARY:A\r\nEND:VEVENT\r\n"
+                "BEGIN:VEVENT\r\nUID:dup@aethera\r\n"
+                "DTSTART;VALUE=DATE:20261203\r\nDTEND;VALUE=DATE:20261204\r\n"
+                "SUMMARY:B\r\nEND:VEVENT\r\n"
+                "END:VCALENDAR\r\n"
+            ).encode("utf-8"),
         )
 
         with self.assertRaises(EventoAmbiguo):
@@ -322,6 +325,7 @@ class CalendarioCoreTests(unittest.TestCase):
         )
         self.assertEqual(core_calendar.origenes_disponibles(), origenes_disponibles())
 
+
     def test_core_no_conoce_el_formato_ni_las_rutas(self):
         codigo = inspect.getsource(core_calendar)
 
@@ -354,6 +358,32 @@ class CalendarioCoreTests(unittest.TestCase):
         self.assertNotIn("evaluation_week", codigo)
         self.assertNotIn("leer_recurso", codigo)
         self.assertNotIn("csv", codigo)
+
+    def test_core_reenvia_errores_de_carga_academica(self):
+        resultado = core_workload.evaluar_riesgo_sobrecarga(umbral=0)
+
+        self.assertEqual(
+            resultado,
+            {"error": "El umbral debe ser un entero mayor que cero."},
+        )
+
+    def test_core_quizzes_es_fachada_de_reglas_en_data(self):
+        import core.quizzes.schema as core_schema
+        import data.quizzes_domain.schema as data_schema
+
+        self.assertEqual(core_schema.validar_quiz, data_schema.validar_quiz)
+        self.assertNotIn("_QUIZ_ID_PATTERN =", inspect.getsource(core_schema))
+
+
+class HerramientaBuscarEventosTests(unittest.TestCase):
+    def test_descripcion_incluye_categorias_y_origenes_disponibles(self):
+        descripcion = herramienta_buscar_eventos.__doc__
+
+        self.assertIsNotNone(descripcion)
+        for categoria in categorias_disponibles():
+            self.assertIn(categoria, descripcion)
+        for origen in origenes_disponibles():
+            self.assertIn(origen, descripcion)
 
 
 if __name__ == "__main__":

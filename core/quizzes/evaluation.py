@@ -4,6 +4,10 @@ import logging
 from typing import Any
 
 from data.quizzes import QuizStore
+from data.quizzes_domain.constants import (
+    ORIGEN_FINALIZACION_CHAT,
+    ORIGEN_FINALIZACION_PANEL,
+)
 
 from .schema import validar_quiz
 from .scoring import construir_resultado_evaluacion, preparar_respuestas_desarrollo
@@ -61,7 +65,7 @@ def finalizar_quiz(
     respuestas: dict[str, str] | None = None,
     motor: Any | None = None,
     historial_chat: list[dict[str, Any]] | None = None,
-    origen: str = "barra_lateral",
+    origen: str = ORIGEN_FINALIZACION_PANEL,
     store: QuizStore | None = None,
     agent_session: Any | None = None,
 ) -> dict[str, Any]:
@@ -90,19 +94,22 @@ def finalizar_quiz(
         store,
     )
 
-    # Persistir el resultado final como metadato interno del quiz. Si el
-    # guardado falla, igual se devuelve el resultado a la UI.
+    # La persistencia forma parte del resultado: si falla, el error se reporta
+    # a la UI en lugar de presentar un cierre que no quedó guardado.
     try:
         _resolver_store(store).guardar_resultado(
             quiz_obj["quiz_id"],
             resultado["porcentaje_total"],
             resultado["retroalimentacion"],
         )
-    except (OSError, ValueError):
+    except (OSError, ValueError) as error:
         logging.exception("No se pudo guardar el resultado final del quiz.")
+        raise RuntimeError(
+            f"No se pudo guardar el resultado final del quiz: {error}"
+        ) from error
 
     # Solo el chat inyecta el resultado como contexto silencioso del agente.
-    if origen == "chat" and agent_session is not None:
+    if origen == ORIGEN_FINALIZACION_CHAT and agent_session is not None:
         try:
             mensaje = (
                 f"[QUIZ] {quiz_obj['quiz_titulo']} - Resultado: "
@@ -110,7 +117,10 @@ def finalizar_quiz(
             )
             if hasattr(agent_session, "agregar_contexto"):
                 agent_session.agregar_contexto(mensaje)
-        except Exception:
+        except (AttributeError, OSError, RuntimeError, TypeError, ValueError) as error:
             logging.exception("No se pudo inyectar el resultado del quiz al agente.")
+            raise RuntimeError(
+                f"No se pudo actualizar el contexto del chat: {error}"
+            ) from error
 
     return resultado

@@ -133,7 +133,11 @@ class ServicesSection:
         self.services_scrollbar = ttk.Scrollbar(
             self.services_result,
             orient="vertical",
-            command=self.services_canvas.yview,
+            style="Aethera.Vertical.TScrollbar",
+            command=lambda *args: self._scrollbar_command(
+                self.services_canvas,
+                *args,
+            ),
         )
         self.service_cards_container = tk.Frame(
             self.services_canvas,

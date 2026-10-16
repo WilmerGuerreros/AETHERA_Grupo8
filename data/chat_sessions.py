@@ -1,0 +1,518 @@
+"""Persistencia de los metadatos y transcripciones de cada chat."""
+
+import json
+import logging
+import re
+import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Iterable
+from uuid import uuid4
+
+from data.memory import MemoryStore
+from data.paths import chat_archives_directory
+
+log = logging.getLogger(__name__)
+TITULO_CHAT_NUEVO = "Nuevo chat"
+TITULO_CHAT_RECUPERADO = "Chat recuperado"
+LONGITUD_MAXIMA_TITULO_CHAT = 60
+
+
+def normalizar_titulo_chat(titulo: str) -> str:
+    """Aplica la política de limpieza y longitud a los títulos de chat."""
+    return " ".join(titulo.split()).strip()[:LONGITUD_MAXIMA_TITULO_CHAT]
+
+
+def title_from_message(message: str) -> str:
+    """Genera un título breve a partir del primer mensaje visible."""
+    text = message.strip()
+    if text.startswith("Fecha:"):
+        _, separator, text = text.partition("\n")
+        if not separator:
+            return TITULO_CHAT_NUEVO
+    for line in text.splitlines():
+        if line.startswith("document: "):
+            continue
+        if line.strip():
+            return normalizar_titulo_chat(line)
+    return TITULO_CHAT_NUEVO
+
+
+class ChatArchiveStore:
+    """Almacena chats en directorios separados bajo la raíz de datos de Aethera."""
+
+    MEMORY_DIRECTORIES = (
+        "MEMORIA BRUTA",
+        "ARCHIVOS ADJUNTOS",
+        "RESUMEN",
+        "INDICE",
+        "ARCHIVOS GENERADOS",
+    )
+
+    def __init__(self, root: Path | str | None = None) -> None:
+        self.root = Path(root) if root is not None else chat_archives_directory()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._metadata_path = self.root / "CHATS.json"
+        self._directories: dict[str, Path] = {}
+
+    def create_directory(
+        self, chat_id: str, title: str = TITULO_CHAT_NUEVO
+    ) -> Path:
+        """Crea el directorio del chat y su estructura de memoria."""
+        directory = self.session_directory(chat_id, title)
+        self.ensure_chat_structure(chat_id)
+        return directory
+
+    def ensure_chat_structure(self, chat_id: str) -> None:
+        """Crea las cinco carpetas hermanas y migra el esquema anterior."""
+        directory = self.session_directory(chat_id)
+        legacy_memory = directory / "MEMORIA"
+        mappings = {
+            "HISTORIAL": "MEMORIA BRUTA",
+            "MEMORIA BRUTA": "MEMORIA BRUTA",
+            "RESUMEN": "RESUMEN",
+            "INDICE": "INDICE",
+            "ARCHIVOS ADJUNTOS": "ARCHIVOS ADJUNTOS",
+            "ARCHIVOS GENERADOS": "ARCHIVOS GENERADOS",
+        }
+        if legacy_memory.is_dir():
+            for old_name, new_name in mappings.items():
+                source = legacy_memory / old_name
+                if source.is_dir():
+                    self._merge_directory(source, directory / new_name)
+            if legacy_memory.exists():
+                self._merge_directory(legacy_memory, directory / "MEMORIA BRUTA")
+
+        for old_name, new_name in mappings.items():
+            source = directory / old_name
+            destination = directory / new_name
+            if source != destination and source.is_dir():
+                self._merge_directory(source, destination)
+
+        for name in self.MEMORY_DIRECTORIES:
+            (directory / name).mkdir(parents=True, exist_ok=True)
+
+    def memory_is_empty(self, chat_id: str) -> bool:
+        """Indica si memoria bruta y resúmenes carecen de archivos con datos."""
+        directory = self.session_directory(chat_id)
+        return not any(
+            self._contains_nonempty_file(directory / name)
+            for name in ("MEMORIA BRUTA", "RESUMEN")
+        )
+
+    def archive_chat_directory(self, chat_id: str) -> Path:
+        """Saca un chat de la lista activa preservando todo bajo CHATS ARCHIVADOS."""
+        directory = self.session_directory(chat_id)
+        archive_root = self.root / "CHATS ARCHIVADOS"
+        archive_root.mkdir(parents=True, exist_ok=True)
+        destination = archive_root / directory.name
+        if destination.exists():
+            destination = archive_root / (
+                f"{directory.name}_archivado_{uuid4().hex[:8]}"
+            )
+        directory.replace(destination)
+        self._directories.pop(chat_id, None)
+        return destination
+
+    def restore_archived_conversations(self) -> None:
+        """Recupera chats sin metadatos y transcripciones archivadas automáticamente."""
+        entries = self.load_metadata()
+        known_ids = {entry["id"] for entry in entries}
+        updated = False
+
+        for directory in sorted(self.root.iterdir()):
+            if (
+                not directory.is_dir()
+                or directory.name == "CHATS ARCHIVADOS"
+                or not any(
+                    (directory / name).exists()
+                    for name in (*self.MEMORY_DIRECTORIES, "CONVERSACION.json")
+                )
+            ):
+                continue
+            chat_id = self._chat_id_from_directory(directory)
+            if chat_id is None or chat_id in known_ids:
+                continue
+            entries.append(
+                {
+                    "id": chat_id,
+                    "title": directory.name.rsplit("_", 1)[0].replace("_", " ")
+                    or TITULO_CHAT_RECUPERADO,
+                    "folder": directory.name,
+                }
+            )
+            known_ids.add(chat_id)
+            updated = True
+            log.info("Se recuperó el chat sin metadatos %s", directory)
+
+        archive_root = self.root / "CHATS ARCHIVADOS"
+        archived_directories = (
+            sorted(archive_root.iterdir()) if archive_root.is_dir() else ()
+        )
+        for archived_directory in archived_directories:
+            if not archived_directory.is_dir():
+                continue
+            transcript_path = archived_directory / "CONVERSACION.json"
+            if not transcript_path.is_file():
+                continue
+
+            chat_id = self._chat_id_from_directory(archived_directory)
+            if chat_id is None:
+                log.warning(
+                    "No se pudo recuperar el chat archivado con nombre inválido: %s",
+                    archived_directory,
+                )
+                continue
+            if chat_id in known_ids:
+                continue
+
+            try:
+                history = json.loads(transcript_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                log.exception(
+                    "No se pudo leer la transcripción archivada: %s",
+                    transcript_path,
+                )
+                continue
+            if not isinstance(history, list) or any(
+                not isinstance(message, dict) for message in history
+            ):
+                log.warning(
+                    "Se omitió una transcripción archivada con formato inválido: %s",
+                    transcript_path,
+                )
+                continue
+
+            directory = self.root / archived_directory.name
+            if directory.exists():
+                log.warning(
+                    "No se pudo recuperar el chat %s: ya existe la carpeta %s.",
+                    chat_id,
+                    directory,
+                )
+                continue
+
+            archived_directory.replace(directory)
+            self._directories[chat_id] = directory
+            title = archived_directory.name.rsplit("_", 1)[0].replace("_", " ")
+            entries.append(
+                {
+                    "id": chat_id,
+                    "title": title or TITULO_CHAT_RECUPERADO,
+                    "folder": directory.name,
+                }
+            )
+            known_ids.add(chat_id)
+            updated = True
+            log.info("Se recuperó el chat %s desde %s", chat_id, archived_directory)
+
+        if updated:
+            self._write_json(self._metadata_path, entries)
+
+    @staticmethod
+    def _chat_id_from_directory(directory: Path) -> str | None:
+        _, separator, chat_id = directory.name.rpartition("_")
+        return chat_id if separator and chat_id.isalnum() else None
+
+    def import_legacy_memory(self, chat_id: str, source_root: Path) -> None:
+        """Importa memoria antigua y la distribuye en las carpetas nuevas."""
+        source_root = Path(source_root)
+        directory = self.session_directory(chat_id)
+        if not source_root.is_dir() or source_root.resolve() == directory.resolve():
+            return
+        self.ensure_chat_structure(chat_id)
+        mappings = {
+            "HISTORIAL": "MEMORIA BRUTA",
+            "MEMORIA BRUTA": "MEMORIA BRUTA",
+            "RESUMEN": "RESUMEN",
+            "INDICE": "INDICE",
+            "ARCHIVOS ADJUNTOS": "ARCHIVOS ADJUNTOS",
+            "ARCHIVOS GENERADOS": "ARCHIVOS GENERADOS",
+        }
+        for old_name, new_name in mappings.items():
+            source = source_root / old_name
+            if source.is_dir():
+                self._copy_directory(source, directory / new_name)
+
+    def save_quiz_result(
+        self,
+        chat_id: str,
+        quiz: dict[str, Any],
+        answers: dict[str, str],
+        result: dict[str, Any],
+    ) -> Path:
+        """Guarda preguntas, respuestas y evaluación bajo la memoria del chat."""
+        if not isinstance(quiz, dict) or not isinstance(quiz.get("paginas"), list):
+            raise ValueError("Los datos del quiz no tienen un formato válido.")
+        if not isinstance(answers, dict) or not isinstance(result, dict):
+            raise ValueError("Las respuestas o el resultado del quiz no son válidos.")
+
+        feedback_by_question = {
+            item["pregunta_id"]: item
+            for item in result.get("retroalimentacion", [])
+            if isinstance(item, dict) and isinstance(item.get("pregunta_id"), str)
+        }
+        questions = []
+        for page in quiz["paginas"]:
+            if not isinstance(page, dict) or not isinstance(page.get("id"), str):
+                raise ValueError("El quiz contiene una pregunta con formato inválido.")
+            evaluation = feedback_by_question.get(page["id"])
+            questions.append(
+                {
+                    **page,
+                    "respuesta_usuario": answers.get(page["id"]),
+                    "resultado": evaluation,
+                    "retroalimentacion_resultado": (
+                        evaluation.get("retroalimentacion")
+                        if evaluation is not None
+                        else None
+                    ),
+                }
+            )
+
+        quiz_id = re.sub(
+            r"[^\w-]+",
+            "_",
+            str(quiz.get("quiz_id", "quiz")),
+            flags=re.UNICODE,
+        ).strip("_-") or "quiz"
+        filename = f"QUIZ_{quiz_id}_{uuid4().hex}.json"
+        payload = {
+            "quiz_id": quiz.get("quiz_id"),
+            "quiz_titulo": quiz.get("quiz_titulo", "Quiz"),
+            "finalizado_en": datetime.now()
+            .astimezone()
+            .isoformat(timespec="seconds"),
+            "preguntas": questions,
+            "respuestas": answers,
+            "resultado": result,
+            "retroalimentacion_final": result.get("feedback_final", ""),
+        }
+        destination = self.generated_files_directory(chat_id) / filename
+        self._write_json(destination, payload)
+        return destination
+
+    def generated_files_directory(self, chat_id: str) -> Path:
+        """Devuelve y crea la carpeta de archivos generados del chat."""
+        self.ensure_chat_structure(chat_id)
+        return self.session_directory(chat_id) / "ARCHIVOS GENERADOS"
+
+    def session_directory(
+        self,
+        chat_id: str,
+        title: str | None = None,
+        folder: str | None = None,
+    ) -> Path:
+        """Devuelve o migra el directorio legible y único de un chat."""
+        if not chat_id.isalnum():
+            raise ValueError("El identificador del chat no es válido.")
+        if chat_id in self._directories and folder is None and title is None:
+            return self._directories[chat_id]
+        directory_name = folder or self._directory_name(title or "chat", chat_id)
+        if Path(directory_name).name != directory_name or directory_name in {".", ".."}:
+            raise ValueError("El nombre de carpeta del chat no es válido.")
+        directory = self.root / directory_name
+        legacy_directory = self.root / f"chat_{chat_id}"
+        if not directory.exists() and legacy_directory.is_dir():
+            legacy_directory.replace(directory)
+        self._directories[chat_id] = directory
+        return directory
+
+    def rename_directory(self, chat_id: str, title: str) -> Path:
+        """Renombra la carpeta conservando el código hexadecimal del chat."""
+        current = self.session_directory(chat_id)
+        destination = self.root / self._directory_name(title, chat_id)
+        if current != destination:
+            if destination.exists():
+                raise FileExistsError(f"Ya existe la carpeta del chat: {destination}")
+            current.replace(destination)
+        self._directories[chat_id] = destination
+        return destination
+
+    def archive_memory(self, chat_id: str) -> Path | None:
+        """Mueve las cinco carpetas del chat a ``CHATS ARCHIVADOS``."""
+        directory = self.session_directory(chat_id)
+        self.ensure_chat_structure(chat_id)
+        archive_root = self.root / "CHATS ARCHIVADOS"
+        archive_root.mkdir(parents=True, exist_ok=True)
+        archive_directory = archive_root / directory.name
+        archive_directory.mkdir(parents=True, exist_ok=False)
+        moved = False
+        for name in (
+            "MEMORIA BRUTA",
+            "ARCHIVOS ADJUNTOS",
+            "RESUMEN",
+            "INDICE",
+            "ARCHIVOS GENERADOS",
+        ):
+            source = directory / name
+            if source.exists():
+                source.replace(archive_directory / name)
+                moved = True
+        return archive_directory if moved else None
+
+    def delete_directory(self, chat_id: str) -> None:
+        """Elimina la carpeta activa y sus archivos adjuntos/transcripción."""
+        directory = self.session_directory(chat_id)
+        if directory.exists():
+            shutil.rmtree(directory)
+        self._directories.pop(chat_id, None)
+
+    def store_attachment(self, chat_id: str, source: str | Path) -> Path:
+        """Copia un adjunto a la memoria del chat con nombre único."""
+        source_path = Path(source)
+        if not source_path.is_file():
+            raise FileNotFoundError(f"No se encontró el archivo adjunto: {source_path}")
+        self.ensure_chat_structure(chat_id)
+        memory = self.session_directory(chat_id) / "ARCHIVOS ADJUNTOS"
+        safe_name = re.sub(r"[^\w.-]+", "_", source_path.name).strip("._")
+        if not safe_name:
+            safe_name = "adjunto"
+        destination = memory / f"{uuid4().hex}_{safe_name}"
+        shutil.copy2(source_path, destination)
+        return destination
+
+    def load_metadata(self) -> list[dict[str, str]]:
+        """Carga la lista de chats o devuelve una lista vacía si es nueva."""
+        if not self._metadata_path.exists():
+            return []
+        data = json.loads(self._metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise ValueError(f"El índice de chats no tiene un formato válido: {self._metadata_path}")
+        entries = []
+        for item in data:
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("id"), str)
+                or not isinstance(item.get("title"), str)
+            ):
+                raise ValueError(f"El índice de chats contiene una entrada inválida: {self._metadata_path}")
+            entry = {"id": item["id"], "title": item["title"]}
+            if isinstance(item.get("folder"), str):
+                entry["folder"] = item["folder"]
+            entries.append(entry)
+        return entries
+
+    def save_metadata(self, sessions: Iterable[Any]) -> None:
+        """Guarda de forma atómica el índice de chats disponibles."""
+        entries = [
+            {
+                "id": session.chat_id,
+                "title": session.title,
+                "folder": session.directory.name,
+            }
+            for session in sessions
+        ]
+        self._write_json(self._metadata_path, entries)
+
+    @staticmethod
+    def restore_raw_history(
+        memory_store: MemoryStore,
+        history: list[dict[str, Any]],
+    ) -> None:
+        """Reconstruye memoria bruta desde una transcripción sin historial bruto."""
+        if any(memory_store.rutas.historial.glob("HISTORIAL_*.txt")):
+            return
+
+        usuario_pendiente: str | None = None
+        for message in history:
+            role = message.get("role")
+            content = message.get("content")
+            if role == "user" and isinstance(content, str):
+                if usuario_pendiente is not None:
+                    memory_store.escribir(1, usuario_pendiente, "")
+                usuario_pendiente = content
+            elif (
+                role == "assistant"
+                and not message.get("tool_calls")
+                and isinstance(content, str)
+                and usuario_pendiente is not None
+            ):
+                memory_store.escribir(1, usuario_pendiente, content)
+                usuario_pendiente = None
+
+        if usuario_pendiente is not None:
+            memory_store.escribir(1, usuario_pendiente, "")
+
+    def load_history(self, chat_id: str) -> list[dict[str, Any]] | None:
+        """Carga la transcripción de un chat, si ya existe."""
+        path = self.session_directory(chat_id) / "CONVERSACION.json"
+        if not path.exists():
+            return None
+        history = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(history, list) or any(
+            not isinstance(message, dict) for message in history
+        ):
+            raise ValueError(f"La transcripción del chat no es válida: {path}")
+        return history
+
+    @staticmethod
+    def _directory_name(title: str, chat_id: str) -> str:
+        slug = re.sub(r"[^\w-]+", "_", title, flags=re.UNICODE).strip("_-")
+        slug = slug[:60] or "chat"
+        return f"{slug}_{chat_id}"
+
+    def save_history(self, chat_id: str, history: list[dict[str, Any]]) -> None:
+        """Guarda la transcripción JSON en la carpeta de su chat."""
+        self._write_json(
+            self.session_directory(chat_id) / "CONVERSACION.json",
+            history,
+        )
+
+    @staticmethod
+    def _write_json(path: Path, data: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = path.with_suffix(path.suffix + ".tmp")
+        temporary_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+
+    @classmethod
+    def _merge_directory(cls, source: Path, destination: Path) -> None:
+        """Mueve un directorio, preservando archivos ante colisiones."""
+        if not destination.exists():
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.replace(destination)
+            return
+
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in source.iterdir():
+            target = destination / item.name
+            if target.exists() and item.is_dir() and target.is_dir():
+                cls._merge_directory(item, target)
+            elif target.exists():
+                target = destination / (
+                    f"{item.stem}_migrado_{uuid4().hex[:8]}{item.suffix}"
+                )
+                item.replace(target)
+            else:
+                item.replace(target)
+        source.rmdir()
+
+    @classmethod
+    def _copy_directory(cls, source: Path, destination: Path) -> None:
+        """Copia una carpeta importada sin borrar el original ni colisiones."""
+        destination.mkdir(parents=True, exist_ok=True)
+        for item in source.iterdir():
+            target = destination / item.name
+            if item.is_dir():
+                if target.exists() and not target.is_dir():
+                    target = destination / (
+                        f"{item.name}_migrado_{uuid4().hex[:8]}"
+                    )
+                cls._copy_directory(item, target)
+            else:
+                if target.exists():
+                    target = destination / (
+                        f"{item.stem}_migrado_{uuid4().hex[:8]}{item.suffix}"
+                    )
+                shutil.copy2(item, target)
+
+    @staticmethod
+    def _contains_nonempty_file(directory: Path) -> bool:
+        return directory.is_dir() and any(
+            path.is_file() and path.stat().st_size > 0
+            for path in directory.rglob("*")
+        )

@@ -4,14 +4,19 @@
 
 - `main.py`: punto de entrada; delega el arranque en `aplicacion.py`.
 - `aplicacion.py`: punto de composición; crea el motor, la memoria y el registro de herramientas y los inyecta en la interfaz. Es el único lugar que conoce todas las capas.
-- `config.py`: configuración central (modelos de Ollama, opciones de generación y tamaño de las secciones de memoria).
+- `settings.py`: valores de configuración del modelo y de la memoria; no administra archivos.
 
 ## Paquete `data/`
 
 - `data/paths.py`: rutas de recursos y datos persistentes.
+- `data/chat_sessions.py`: índice y transcripciones independientes, recuperación de conversaciones y políticas de títulos y carpetas.
 - `data/memory.py`: lectura y escritura de historiales, resúmenes e índice de memoria.
+- `data/memory_context.py`: reglas para recuperar el contexto y administrar secciones de memoria.
 - `data/calendar.py`: lectura y escritura del calendario personal.
+- `data/calendar_operations.py`: reglas de consulta, validación y edición de calendarios.
 - `data/quizzes.py`: lectura y escritura de quizzes e intentos JSON.
+- `data/quizzes_domain/`: esquema, validación, sesiones, puntuación y reglas de persistencia de quizzes.
+- `data/workload.py`: lectura, normalización y reglas de cálculo de carga académica.
 - `data/documents.py`: extracción de texto de documentos PDF.
 - `data/resources.py`: lectura de CSV, JSON y texto de recursos de referencia.
 - `data/services.py`: catálogo de categorías y lectura/filtrado del mapa de servicios (D6); lanza excepciones explícitas si la categoría, el distrito o un servicio no existen.
@@ -20,10 +25,12 @@
 ## Paquete `core/`
 
 - `core/conversation.py`: coordina los turnos conversacionales y ofrece el historial actual a Core al solicitar la evaluación final de un quiz.
-- `core/workload.py`: agrupación semanal y cálculo del riesgo de sobrecarga.
-- `core/calendar.py`: validación, filtrado, creación y eliminación de eventos.
-- `core/quizzes/`: paquete con la construcción, validación y corrección de quizzes e intentos. Se divide en `schema` (esquema), `session` (intento en memoria), `scoring` (puntajes), `store` (persistencia en Data) y `evaluation` (cierre con Agent); la fachada `__init__.py` expone el contrato estable.
-- `core/memory.py`: coordinación del contexto, las secciones y los resúmenes; usa Agent para resumir y Data para persistir.
+- `core/workload.py`, `core/calendar.py`: fachadas que delegan reglas y operaciones en Data, y convierten fallos en mensajes utilizables por la UI.
+- `core/quizzes/`: fachadas para las reglas de Data y coordinación de evaluación con Agent (`evaluation`); `__init__.py` mantiene el contrato público.
+- `core/configuration.py`: fachada de configuración hacia Data para el punto de composición.
+- `core/chat_manager.py`, `core/conversation.py`: coordinación de Data con Agent; las políticas y los datos persistentes pertenecen a Data.
+- `core/memory.py`: fachada de memoria que conecta las reglas de Data con el generador de resúmenes de Agent.
+- `core/chat_manager.py`: crea y restaura conversaciones con modelo y prompt compartidos, y memoria aislada por chat.
 - `core/documents.py`: delega en Data la lectura de documentos adjuntos.
 - `core/services.py`: delega en Data la búsqueda de servicios por categoría y distrito y reenvía su resultado o error; no conoce el catálogo ni el recurso.
 - `core/web_search.py`: búsqueda de información pública en la web.
@@ -57,7 +64,7 @@
 - `ui/tema.py`: colores, tipografías y etiquetas compartidas (`COLORS`, `FONT`, `EVENT_STYLES`, `SERVICE_*`, `WEEKDAYS`, `MONTH_NAMES`).
 - `ui/widgets.py`: widgets reutilizables (`RoundedFrame`, `RoundedButton`, `AnimatedDropdown`) y sus ayudas de dibujo.
 - `ui/utilidades.py`: análisis de Markdown para presentar mensajes del chat.
-- `ui/calendario/`: orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos); las reglas están en `core/calendar.py`.
+- `ui/calendario/`: orquestación (`calendar_view.py`) y componentes (`components/`: encabezado, cuadrícula y diálogos); las reglas están en `data/calendar_operations.py`.
 - `ui/chat/`: coordinación de la vista (`chat_view.py`), lógica (`logica.py`) y componentes (`components/`: encabezado, historial, entrada y quiz).
 - `ui/quiz/`: presentación de quizzes e intentos; las selecciones y evaluaciones se delegan a Core mediante eventos.
 
@@ -65,18 +72,24 @@
 
 Todos los datos escribibles viven bajo la raíz única que devuelve `data.paths.application_data_directory()`:
 
-- `data/memoria/` — historial, resúmenes, índice y archivos adjuntos del chat.
+- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/` — transcripción `CONVERSACION.json` y cinco carpetas hermanas: `MEMORIA BRUTA/`, `ARCHIVOS ADJUNTOS/`, `RESUMEN/`, `INDICE/` y `ARCHIVOS GENERADOS/`; cada chat mantiene su propia memoria y los PDF adjuntos se copian a su carpeta.
+- `CHATS DE AETHERA AI/<nombre>_<id-hexadecimal>/ARCHIVOS GENERADOS/QUIZ_<id>_<aleatorio>.json` — un archivo por intento terminado, con las preguntas, respuestas, evaluación por pregunta, puntaje general y retroalimentación final; pertenece al chat desde el que se finalizó el quiz.
+- `CHATS DE AETHERA AI/CHATS.json` — lista de chats y títulos.
+- `CHATS DE AETHERA AI/CHATS ARCHIVADOS/<nombre>_<id-hexadecimal>/` — las cinco carpetas de memoria conservadas al eliminar un chat eligiendo “No, conservar”.
+- `CHATS DE AETHERA AI/CHATS.json` conserva el orden de uso reciente; seleccionar un chat o enviarle un mensaje lo mueve al principio de la lista.
+- Al iniciar, se repara la estructura de carpetas que falte en cada chat. Los chats activos no se retiran por tener la memoria vacía; los chats que falten en `CHATS.json` y las transcripciones completas que una versión anterior hubiera movido a `CHATS ARCHIVADOS/` se recuperan automáticamente. Los chats eliminados intencionalmente que solo conservaron sus carpetas de memoria permanecen archivados.
+- Al iniciar, la interfaz carga las últimas 20 interacciones de `MEMORIA BRUTA/` (o todas si hay menos), sin usar la transcripción JSON del agente para reconstruir la vista. Si existen interacciones más antiguas, muestra al principio del historial la ubicación de esa carpeta; la transcripción completa del agente se conserva aparte.
 - `data/calendario.ics` — calendario personal editable.
-- `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`).
+- `data/quices/` — quices generados en JSON (UTF-8). El campo `avance` guarda el índice y las respuestas como una lista de objetos con `pregunta_id` y `respuesta`; al finalizar, `resultado_final` guarda `porcentaje_total` y `retroalimentacion` (un elemento por pregunta con `pregunta_id`, `tipo`, `correcta`, `porcentaje` y `retroalimentacion`). La copia completa de cada intento terminado también se archiva en `ARCHIVOS GENERADOS` del chat que lo inició.
 
 En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquetado es la carpeta de datos del sistema operativo.
 
 ## Crear y compartir el ejecutable en Windows
 
 1. Instala Python 3.10 o posterior y Ollama en el equipo de desarrollo.
-2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1`.
-3. El ejecutable se crea en `dist\Aethera.exe`; comparte ese archivo junto con esta guía.
+2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1`.
+3. El ejecutable se crea en `dist\AETHERA 2.0.exe`; comparte ese archivo junto con `dist\GUIA.md`.
 
-El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `config.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
+El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `settings.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
 
 Si la aplicación muestra «No module named 'tkinter'», cierra todas las ventanas de Aethera y vuelve a generar el ejecutable con el script anterior; no compartas una compilación anterior. El script configura Tcl/Tk desde la instalación de Python usada para compilar.

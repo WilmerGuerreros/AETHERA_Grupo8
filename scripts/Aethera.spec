@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-project_root = Path(SPECPATH).resolve()
+project_root = Path(SPECPATH).resolve().parent
 resource_files = (
     "D6_services_map.geojson",
     "D7_calendar.csv",
@@ -34,7 +34,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Aethera",
+    name="AETHERA 2.0",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
