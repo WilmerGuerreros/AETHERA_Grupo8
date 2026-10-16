@@ -167,10 +167,22 @@ class ChatManager:
             )
 
     def save_history(self, chat_id: str) -> None:
-        """Guarda la transcripción completa del chat en su propio directorio."""
+        """Guarda la transcripción completa del chat en su propio directorio.
+
+        Data solo recibe estructuras JSON; si algo no es serializable, aquí se
+        captura el fallo y se reenvía como error para que la interfaz lo muestre.
+        """
         with self._lock:
             session = self.sessions[chat_id]
-            self.archive_store.save_history(chat_id, session.history)
+            try:
+                self.archive_store.save_history(chat_id, session.history)
+            except (OSError, TypeError, ValueError) as error:
+                log.exception(
+                    "No se pudo guardar la transcripción del chat %s.", chat_id
+                )
+                raise RuntimeError(
+                    f"No se pudo guardar la conversación en disco: {error}"
+                ) from error
 
     def _load_sessions(self) -> None:
         metadata_entries = self.archive_store.load_metadata()

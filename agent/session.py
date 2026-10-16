@@ -4,6 +4,22 @@ from typing import Any
 from .tools.registro import Herramienta
 
 
+def _llamada_plana(tool_call: Any) -> dict[str, Any]:
+    """Convierte una llamada a herramienta en un dict serializable en JSON.
+
+    Ollama devuelve objetos ``Message.ToolCall`` (modelos pydantic) que
+    ``json.dumps`` no sabe serializar; el historial se mantiene como texto
+    plano para poder guardarlo en disco.
+    """
+    funcion = tool_call["function"]
+    return {
+        "function": {
+            "name": funcion["name"],
+            "arguments": dict(funcion["arguments"] or {}),
+        }
+    }
+
+
 class AgentSession:
     def __init__(
         self,
@@ -57,7 +73,10 @@ class AgentSession:
                     texto_completo += contenido
                 
                 if 'tool_calls' in msg and msg['tool_calls']:
-                    herramientas_solicitadas.extend(msg['tool_calls'])
+                    herramientas_solicitadas.extend(
+                        _llamada_plana(tool_call)
+                        for tool_call in msg['tool_calls']
+                    )
                 
             mensaje_asistente = {'role': 'assistant', 'content': texto_completo}
             if herramientas_solicitadas:

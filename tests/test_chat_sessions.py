@@ -611,6 +611,28 @@ class ChatSessionTests(unittest.TestCase):
             metadata = json.loads((root / "CHATS.json").read_text(encoding="utf-8"))
             self.assertIn(session.chat_id, {item["id"] for item in metadata})
 
+    def test_error_al_guardar_historial_se_reporta_como_error_claro(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = ChatManager(
+                LLMEngine("nemotron-3-super:cloud", {}),
+                {},
+                "Prompt.",
+                root=Path(directory) / "chats",
+            )
+            session = next(iter(manager.sessions.values()))
+
+            def guardado_roto(_chat_id, _history):
+                raise TypeError("Object of type ToolCall is not JSON serializable")
+
+            manager.archive_store.save_history = guardado_roto
+
+            with self.assertRaises(RuntimeError) as capturado:
+                manager.save_history(session.chat_id)
+            self.assertIn(
+                "No se pudo guardar la conversación",
+                str(capturado.exception),
+            )
+
     def test_existing_nested_memory_layout_is_migrated_to_sibling_folders(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "chats"
