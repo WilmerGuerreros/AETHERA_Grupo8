@@ -22,7 +22,7 @@ def iniciar_aplicacion() -> None:
         SYSTEM_PROMPT,
     )
 
-    from ui.desktop_app import iniciar_app_escritorio
+    from UI.desktop_app import iniciar_app_escritorio
 
     iniciar_app_escritorio(
         motor,
