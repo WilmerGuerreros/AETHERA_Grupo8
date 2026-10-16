@@ -2,8 +2,8 @@
 
 import unittest
 
-import UI.dashboard as dashboard
-from UI.dashboard import DashboardSection
+import ui.dashboard as dashboard
+from ui.dashboard import DashboardSection
 
 
 class ProximosEventosTests(unittest.TestCase):

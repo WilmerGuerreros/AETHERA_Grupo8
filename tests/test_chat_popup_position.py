@@ -1,6 +1,6 @@
 import unittest
 
-from UI.desktop_app import AetheraDesktopApp
+from ui.desktop_app import AetheraDesktopApp
 
 
 class ChatPopupPositionTests(unittest.TestCase):

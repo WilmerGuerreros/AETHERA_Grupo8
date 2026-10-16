@@ -1,12 +1,13 @@
 """Widgets reutilizables con esquinas redondeadas y animaciones."""
 
+import logging
 import math
-import os
-from pathlib import Path
 
 import tkinter as tk
 from tkinter import font as tkfont
 from PIL import Image, ImageDraw, ImageFont, ImageTk
+
+from core.configuration import fuente_emoji_color
 
 from .tema import COLORS, FONT
 
@@ -37,15 +38,28 @@ def texto_con_elipsis(texto, fuente, ancho):
     return texto + elipsis
 
 
+_TAMANOS_FUENTE_EMOJI = (109, 128, 64, 256, 512)
+
+
+def _cargar_fuente_emoji(ruta, tamano):
+    """Carga la fuente de emoji; las de solo mapa de bits admiten un único tamaño."""
+    for candidato in (tamano, *_TAMANOS_FUENTE_EMOJI):
+        try:
+            return ImageFont.truetype(str(ruta), candidato)
+        except OSError:
+            continue
+    return None
+
+
 def imagen_emoji_color(emoji, master, size=24):
-    """Renderiza un emoji de color usando la fuente emoji del sistema."""
-    windows_directory = Path(os.environ.get("WINDIR", r"C:\Windows"))
-    font_path = windows_directory / "Fonts" / "seguiemj.ttf"
-    if not font_path.is_file():
-        raise FileNotFoundError(
-            f"No se encontró la fuente de emoji a color: {font_path}"
-        )
-    font = ImageFont.truetype(str(font_path), size * 2)
+    """Renderiza un emoji de color; ``None`` si el sistema no tiene fuente útil."""
+    font_path = fuente_emoji_color()
+    if not font_path:
+        return None
+    font = _cargar_fuente_emoji(font_path, size * 2)
+    if font is None:
+        logging.warning("La fuente de emoji a color no es usable: %s", font_path)
+        return None
     bounds = font.getbbox(emoji)
     padding = 4
     image = Image.new(

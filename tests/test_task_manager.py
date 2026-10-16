@@ -3,7 +3,7 @@
 import threading
 import unittest
 
-from UI.estado.tareas import CORRIENDO, ERROR, LISTO, TaskManager
+from ui.estado.tareas import CORRIENDO, ERROR, LISTO, TaskManager
 
 
 class TaskManagerTests(unittest.TestCase):

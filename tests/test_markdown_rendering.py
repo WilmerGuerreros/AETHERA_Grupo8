@@ -1,7 +1,7 @@
 import unittest
 
-from UI.utilidades import MARKDOWN_LIST, analizar_markdown_en_linea
-from UI.chat.components.chat_history import ChatHistory
+from ui.utilidades import MARKDOWN_LIST, analizar_markdown_en_linea
+from ui.chat.components.chat_history import ChatHistory
 
 
 class MarkdownRenderingTests(unittest.TestCase):

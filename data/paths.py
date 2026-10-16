@@ -11,6 +11,44 @@ APPLICATION_ROOT = Path(
 )
 
 
+def emoji_font_candidates() -> list[Path]:
+    """Lista las rutas posibles de una fuente de emoji a color por plataforma."""
+    if sys.platform == "win32":
+        windows_directory = Path(os.environ.get("WINDIR", r"C:\Windows"))
+        return [windows_directory / "Fonts" / "seguiemj.ttf"]
+    if sys.platform == "darwin":
+        return [
+            Path("/System/Library/Fonts/Apple Color Emoji.ttc"),
+            Path("/Library/Fonts/Apple Color Emoji.ttc"),
+        ]
+    candidates = [
+        Path("/usr/share/fonts/noto/NotoColorEmoji.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"),
+        Path("/usr/share/fonts/google-noto-emoji/NotoColorEmoji.ttf"),
+        Path("/usr/local/share/fonts/NotoColorEmoji.ttf"),
+        Path.home() / ".local" / "share" / "fonts" / "NotoColorEmoji.ttf",
+        Path.home() / ".fonts" / "NotoColorEmoji.ttf",
+    ]
+    search_roots = (
+        Path("/usr/share/fonts"),
+        Path("/usr/local/share/fonts"),
+        Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        / "fonts",
+    )
+    for root in search_roots:
+        if root.is_dir():
+            candidates.extend(sorted(root.glob("**/NotoColorEmoji.ttf")))
+    return candidates
+
+
+def emoji_font_path() -> Path | None:
+    """Devuelve la ruta de la fuente de emoji a color instalada, o ``None``."""
+    for candidate in emoji_font_candidates():
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def resource_path(*parts: str) -> Path:
     """Devuelve la ruta de un recurso de solo lectura incluido con la aplicación."""
     return APPLICATION_ROOT.joinpath("data", "resources", *parts)

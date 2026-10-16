@@ -58,7 +58,7 @@ def _burbujas_asistente_vacias(app):
 @unittest.skipUnless(DISPLAY_DISPONIBLE, "requiere un display para Tk")
 class NavegacionConProcesosTests(unittest.TestCase):
     def setUp(self):
-        from UI.desktop_app import AetheraDesktopApp
+        from ui.desktop_app import AetheraDesktopApp
 
         self.app = AetheraDesktopApp(
             _MotorFalso(),

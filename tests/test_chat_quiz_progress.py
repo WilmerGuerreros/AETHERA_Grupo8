@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from UI.chat.components.chat_quiz_view import ChatQuizView
+from ui.chat.components.chat_quiz_view import ChatQuizView
 
 
 class FakeWidget:
@@ -46,7 +46,7 @@ class ChatQuizProgressTests(unittest.TestCase):
         }
         self.host._active_chat_quiz_sessions = [(shell, quiz, self.state)]
 
-    @patch("UI.chat.components.chat_quiz_view.guardar_progreso_quiz")
+    @patch("ui.chat.components.chat_quiz_view.guardar_progreso_quiz")
     def test_flushes_unsaved_draft_before_navigation(self, save_progress):
         save_progress.side_effect = lambda _quiz, _index, answers: answers.copy()
 
@@ -64,7 +64,7 @@ class ChatQuizProgressTests(unittest.TestCase):
         self.assertEqual(self.state["answers"], {"p1": "Borrador sin guardar"})
 
     @patch(
-        "UI.chat.components.chat_quiz_view.guardar_progreso_quiz",
+        "ui.chat.components.chat_quiz_view.guardar_progreso_quiz",
         side_effect=OSError("disco no disponible"),
     )
     def test_blocks_navigation_and_shows_error_when_flush_fails(self, _save_progress):

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from agent.llm import LLMEngine
 from core.chat_manager import ChatManager
-from UI.desktop_app import AetheraDesktopApp
+from ui.desktop_app import AetheraDesktopApp
 
 
 class ChatSessionTests(unittest.TestCase):

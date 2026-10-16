@@ -2,8 +2,8 @@
 
 import unittest
 
-from UI.chat.logica import ChatLogic
-from UI.estado.chat import ChatStore
+from ui.chat.logica import ChatLogic
+from ui.estado.chat import ChatStore
 
 
 def _quiz():

@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from UI.estado.chat import ESTADO_LIBRE, ESTADO_PENSANDO, SALUDO, ChatStore
+from ui.estado.chat import ESTADO_LIBRE, ESTADO_PENSANDO, SALUDO, ChatStore
 
 
 def _quiz(quiz_id="quiz_store"):
