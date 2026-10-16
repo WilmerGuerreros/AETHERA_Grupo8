@@ -1,9 +1,10 @@
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+$projectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $projectRoot
 
-$python = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+$python = Join-Path $projectRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $python)) {
-    py -3 -m venv (Join-Path $PSScriptRoot ".venv")
+    py -3 -m venv (Join-Path $projectRoot ".venv")
     if ($LASTEXITCODE -ne 0) {
         throw "No se pudo crear el entorno virtual. Instala Python 3 y vuelve a intentarlo."
     }
@@ -14,7 +15,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "No se pudo actualizar pip."
 }
 
-& $python -m pip install -r (Join-Path $PSScriptRoot "requirements.txt")
+& $python -m pip install -r (Join-Path $projectRoot "requirements.txt")
 if ($LASTEXITCODE -ne 0) {
     throw "No se pudieron instalar las dependencias de Aethera."
 }
@@ -43,5 +44,5 @@ if ($LASTEXITCODE -ne 0) {
     throw "Falló la creación del ejecutable."
 }
 
-Copy-Item (Join-Path $PSScriptRoot "GUIA.md") (Join-Path $PSScriptRoot "dist\GUIA.md") -Force
-Write-Host "Ejecutable creado en dist\Aethera.exe"
+Copy-Item (Join-Path $projectRoot "GUIA.md") (Join-Path $projectRoot "dist\GUIA.md") -Force
+Write-Host "Ejecutable creado en $(Join-Path $projectRoot 'dist\Aethera.exe')"

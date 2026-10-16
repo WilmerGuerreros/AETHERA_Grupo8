@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-project_root = Path(SPECPATH).resolve()
+project_root = Path(SPECPATH).resolve().parent
 resource_files = (
     "D6_services_map.geojson",
     "D7_calendar.csv",
