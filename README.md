@@ -1,3 +1,17 @@
+# Declaración de modelos y herramientas de IA
+
+Los modelo utilizado actualmente son Nemotron 3 (versión Super y Ultra) de NVidia, ejecutado en nube.
+
+Las herramientas de IA utilizadas para el desarrollo son:
+- OpenCode
+- GitHub Copilot: integrado en Visual Studio Code.
+
+Los modelos utilizados en las herramientas de IA son:
+- Big Pickle
+- Nemotron 3.5 ligthning
+- GPT 6 luna
+- Gemma4:31b
+
 # Aethera
 
 Agente de acompañamiento académico que ayuda a estudiantes a organizar su carga de
