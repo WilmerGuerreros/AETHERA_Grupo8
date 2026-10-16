@@ -182,9 +182,20 @@ class ChatInput:
             add="+",
         )
         self._sync_pdf_controls()
+        # El botón se empaqueta antes que el campo de texto para reservar su
+        # espacio: si no, el ancho natural del Text (80 caracteres) lo desplaza
+        # fuera del composer y el botón queda reducido a un píxel.
+        self.send_button = self._button(
+            composer,
+            "Enviar  ↑",
+            self._send_message,
+            primary=True,
+        )
+        self.send_button.pack(side="right", padx=10, pady=10)
         self.message_input = tk.Text(
             composer,
             height=3,
+            width=1,
             wrap="word",
             bg=COLORS["surface"],
             fg=COLORS["text"],
@@ -203,8 +214,5 @@ class ChatInput:
             add="+",
         )
         self.message_input.bind("<Control-Return>", self._send_from_shortcut)
-        send_button = self._button(composer, "Enviar  ↑", self._send_message, primary=True)
-        send_button.pack(side="right", padx=10, pady=10)
-        self.send_button = send_button
         if self.busy:
             self.send_button.configure(state="disabled")
