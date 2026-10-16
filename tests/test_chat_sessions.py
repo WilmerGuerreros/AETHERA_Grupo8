@@ -40,8 +40,17 @@ class ChatSessionTests(unittest.TestCase):
             ]
 
             self.assertEqual(len(visibles), 40)
-            self.assertEqual(visibles[0]["texto"], "Pregunta bruta 5")
-            self.assertEqual(visibles[-1]["texto"], "Respuesta bruta 24")
+            self.assertEqual(
+                [(entrada["rol"], entrada["texto"]) for entrada in visibles],
+                [
+                    mensaje
+                    for indice in range(5, 25)
+                    for mensaje in (
+                        ("user", f"Pregunta bruta {indice}"),
+                        ("assistant", f"Respuesta bruta {indice}"),
+                    )
+                ],
+            )
             self.assertNotIn(
                 "Solo en la transcripción JSON",
                 [entrada["texto"] for entrada in visibles],

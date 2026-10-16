@@ -13,7 +13,7 @@ from core.quizzes import (
     finalizar_quiz,
 )
 from data.quizzes import QuizStore
-from ui.chat.logica import ChatLogic
+from UI.chat.logica import ChatLogic
 
 
 def _quiz_de_ejemplo():
@@ -245,8 +245,8 @@ class ChatTurnQuizTests(unittest.TestCase):
     def test_listar_quices_seguro_sobrevive_a_un_archivo_danado(self):
         host = ChatLogic()
         with (
-            patch("ui.chat.logica.listar_quices", side_effect=ValueError("dañado")),
-            patch("ui.chat.logica.logging.exception"),
+            patch("UI.chat.logica.listar_quices", side_effect=ValueError("dañado")),
+            patch("UI.chat.logica.logging.exception"),
         ):
             self.assertEqual(host._listar_quices_seguro(), [])
 
