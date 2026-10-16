@@ -45,4 +45,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item (Join-Path $projectRoot "GUIA.md") (Join-Path $projectRoot "dist\GUIA.md") -Force
-Write-Host "Ejecutable creado en $(Join-Path $projectRoot 'dist\Aethera.exe')"
+Write-Host "Ejecutable creado en $(Join-Path $projectRoot 'dist\AETHERA 2.0.exe')"

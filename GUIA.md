@@ -88,8 +88,8 @@ En desarrollo la raíz es `data/` dentro del proyecto; en el ejecutable empaquet
 ## Crear y compartir el ejecutable en Windows
 
 1. Instala Python 3.10 o posterior y Ollama en el equipo de desarrollo.
-2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1`.
-3. El ejecutable se crea en `dist\Aethera.exe`; comparte ese archivo junto con esta guía.
+2. Desde PowerShell, en la carpeta del proyecto, ejecuta: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1`.
+3. El ejecutable se crea en `dist\AETHERA 2.0.exe`; comparte ese archivo junto con `dist\GUIA.md`.
 
 El ejecutable incluye los recursos de calendario y servicios y guarda la memoria del usuario en su carpeta local de datos. Para conversar necesita Ollama instalado y ejecutándose, conexión a Internet y acceso al modelo configurado en `data/settings.py`; el modelo no se incluye en el ejecutable. El paquete de Windows debe construirse en Windows.
 

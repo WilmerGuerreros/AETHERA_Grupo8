@@ -34,7 +34,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="Aethera",
+    name="AETHERA 2.0",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

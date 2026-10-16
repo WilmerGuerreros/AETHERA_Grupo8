@@ -82,7 +82,7 @@ Para el detalle módulo a módulo consulta [GUIA.md](GUIA.md).
 ## Empaquetar para Windows
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_windows.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
 ```
 
-El ejecutable se genera en `dist\Aethera.exe`.
+El ejecutable se genera en `dist\AETHERA 2.0.exe`. Comparte ese archivo junto con `dist\GUIA.md`.
