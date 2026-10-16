@@ -1,7 +1,7 @@
 """Valores de configuración del modelo y de la memoria.
 
 Reúne los modelos de Ollama, sus opciones de generación y el tamaño de las
-secciones de memoria. No administra archivos: eso corresponde a ``data``.
+secciones de memoria. 
 """
 
 MODELO = "nemotron-3-ultra:cloud"
