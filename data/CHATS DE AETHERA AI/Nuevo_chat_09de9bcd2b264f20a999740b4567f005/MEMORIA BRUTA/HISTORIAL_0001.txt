@@ -1,0 +1,16 @@
+
+============================================================
+Fecha: 2026-10-14 23:04:18
+============================================================
+Usuario: Fecha: 14/10/2026 Hora: 23:04
+hola! qué tal?
+Aethera: ¡Hola! Estoy muy bien, gracias. Soy GuIA, tu agente inteligente de acompañamiento académico personalizado. Mi misión es ayudarte a reducir el estrés académico organizando tus estudios, preparándote para exámenes y amortiguando la sobrecarga de evaluaciones universitarias.
+
+Para poder ayudarte de manera efectiva, necesito entender tu situación actual. ¿Podrías contarme:
+
+1. ¿En qué carrera o programa académico estás?
+2. ¿Tienes acceso a tus sílabos o planes de estudio actuales?
+3. ¿Hay algún examen, entrega o evaluación específica que te esté generando preocupación?
+4. ¿Cómo describirías tu carga académica actual (ligera, moderada, alta, muy alta)?
+
+Recuerda que trabajo con un enfoque cualitativo y socrático: te haré preguntas para guiar tu reflexión y ayudarte a desarrollar tu propia autonomía en la gestión académica, sin crear dependencia. ¡Estoy aquí para acompañarte en tu proceso de aprendizaje!
